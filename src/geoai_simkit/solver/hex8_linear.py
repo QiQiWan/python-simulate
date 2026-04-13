@@ -18,7 +18,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 from geoai_simkit.core.model import BoundaryCondition, LoadDefinition
 from geoai_simkit.solver.linear_algebra import LinearSolverContext, _optional_import, solve_linear_system
-from geoai_simkit.solver.warp_hex8 import resolve_warp_hex8_config, try_warp_hex8_linear_assembly
+from geoai_simkit.solver.warp_hex8 import build_block_sparse_pattern, resolve_warp_hex8_config, try_warp_hex8_linear_assembly
 
 
 GAUSS = (-1.0 / np.sqrt(3.0), 1.0 / np.sqrt(3.0))
@@ -297,6 +297,7 @@ def solve_linear_hex8(
             ndof=ndof,
             requested_device=str(compute_device),
             config=warp_cfg,
+            block_pattern=build_block_sparse_pattern(submesh.elements),
         )
         assembly_info.update({
             'backend': str(warp_info.backend),
@@ -374,30 +375,71 @@ def solve_linear_hex8(
     free = np.setdiff1d(all_dofs, fixed_dofs_arr)
     u = np.zeros(ndof, dtype=float)
     if free.size:
-        F_eff = F[free].copy()
-        if fixed_dofs_arr.size:
-            if sparse_ok:
-                F_eff -= K[free][:, fixed_dofs_arr] @ fixed_values_arr
-            else:
-                F_eff -= K[np.ix_(free, fixed_dofs_arr)] @ fixed_values_arr
-        Kff = K[free][:, free] if sparse_ok else K[np.ix_(free, free)]
         linear_context = LinearSolverContext()
         solver_meta = dict(solver_metadata or {})
         solver_meta.setdefault('block_size', 3)
         solver_meta.setdefault('preconditioner', 'block-jacobi')
         solver_meta.setdefault('ordering', 'rcm')
         solver_meta.setdefault('warp_full_gpu_linear_solve', str(compute_device).lower().startswith('cuda'))
-        u[free], solve_info = solve_linear_system(
-            Kff,
-            F_eff,
-            prefer_sparse=prefer_sparse,
-            thread_count=thread_count,
-            assume_symmetric=True,
-            context=linear_context,
-            metadata=solver_meta,
-            block_size=3,
-            compute_device=compute_device,
-        )
+        if hasattr(K, 'to_csr') and bool(solver_meta.get('warp_full_gpu_linear_solve', False)):
+            try:
+                u, solve_info = solve_linear_system(
+                    K,
+                    F,
+                    prefer_sparse=prefer_sparse,
+                    thread_count=thread_count,
+                    assume_symmetric=True,
+                    context=linear_context,
+                    metadata=solver_meta,
+                    block_size=3,
+                    compute_device=compute_device,
+                    fixed_dofs=fixed_dofs_arr,
+                    fixed_values=fixed_values_arr,
+                )
+                u = np.asarray(u, dtype=float).reshape(-1)
+                if u.size != ndof:
+                    raise ValueError(f'full-system solve returned size {u.size}, expected {ndof}')
+            except Exception as exc:
+                assembly_info.setdefault('warnings', []).append(f'GPU full-system linear solve fallback: {exc}')
+                solver_meta = dict(solver_meta)
+                solver_meta['warp_full_gpu_linear_solve'] = False
+                F_eff = F[free].copy()
+                if fixed_dofs_arr.size:
+                    if sparse_ok:
+                        F_eff -= K[free][:, fixed_dofs_arr] @ fixed_values_arr
+                    else:
+                        F_eff -= K[np.ix_(free, fixed_dofs_arr)] @ fixed_values_arr
+                Kff = K[free][:, free] if sparse_ok else K[np.ix_(free, free)]
+                u[free], solve_info = solve_linear_system(
+                    Kff,
+                    F_eff,
+                    prefer_sparse=prefer_sparse,
+                    thread_count=thread_count,
+                    assume_symmetric=True,
+                    context=linear_context,
+                    metadata=solver_meta,
+                    block_size=3,
+                    compute_device=compute_device,
+                )
+        else:
+            F_eff = F[free].copy()
+            if fixed_dofs_arr.size:
+                if sparse_ok:
+                    F_eff -= K[free][:, fixed_dofs_arr] @ fixed_values_arr
+                else:
+                    F_eff -= K[np.ix_(free, fixed_dofs_arr)] @ fixed_values_arr
+            Kff = K[free][:, free] if sparse_ok else K[np.ix_(free, free)]
+            u[free], solve_info = solve_linear_system(
+                Kff,
+                F_eff,
+                prefer_sparse=prefer_sparse,
+                thread_count=thread_count,
+                assume_symmetric=True,
+                context=linear_context,
+                metadata=solver_meta,
+                block_size=3,
+                compute_device=compute_device,
+            )
         assembly_info['linear_solver'] = solve_info.backend
         assembly_info['linear_ordering'] = solve_info.ordering
         assembly_info['linear_preconditioner'] = solve_info.preconditioner

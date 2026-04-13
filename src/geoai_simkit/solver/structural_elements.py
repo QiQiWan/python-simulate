@@ -6,6 +6,7 @@ import numpy as np
 
 from geoai_simkit.core.model import LoadDefinition, StructuralElementDefinition
 from geoai_simkit.solver.hex8_linear import Hex8Submesh
+from geoai_simkit.solver.warp_hex8 import BlockSparsePattern, accumulate_block_values, build_node_block_sparse_pattern
 
 
 @dataclass(slots=True)
@@ -32,6 +33,17 @@ class StructuralDofMap:
 @dataclass(slots=True)
 class StructuralAssemblyResult:
     K: np.ndarray
+    F: np.ndarray
+    count: int
+    warnings: list[str]
+    dof_map: StructuralDofMap
+
+
+@dataclass(slots=True)
+class StructuralHybridAssemblyResult:
+    pattern: BlockSparsePattern
+    trans_block_values: np.ndarray
+    tail_K: np.ndarray | object
     F: np.ndarray
     count: int
     warnings: list[str]
@@ -387,3 +399,117 @@ def assemble_structural_stiffness(
         else:
             warnings.append(f"Unsupported structure kind '{item.kind}' on '{item.name}'")
     return StructuralAssemblyResult(K=K, F=F, count=count, warnings=warnings, dof_map=dof_map)
+
+
+
+def assemble_structural_hybrid_response(
+    structures: list[StructuralElementDefinition],
+    submesh: Hex8Submesh,
+    dof_map: StructuralDofMap | None = None,
+    *,
+    pattern: BlockSparsePattern | None = None,
+) -> StructuralHybridAssemblyResult:
+    sp = None
+    try:
+        import scipy.sparse as sp  # type: ignore
+    except Exception:
+        sp = None
+    if dof_map is None:
+        dof_map = build_structural_dof_map(structures, submesh)
+    n_nodes = int(submesh.points.shape[0])
+    trans_ndof = int(dof_map.trans_ndof)
+    ndof = int(dof_map.total_ndof)
+    conn_rows: list[np.ndarray] = []
+    for item in structures:
+        try:
+            local_nodes = np.asarray([submesh.local_by_global[int(g)] for g in item.point_ids], dtype=np.int32)
+        except KeyError:
+            continue
+        if local_nodes.size:
+            conn_rows.append(local_nodes.reshape(1, -1))
+    if pattern is None:
+        pattern = build_node_block_sparse_pattern(conn_rows or [np.empty((0, 2), dtype=np.int32)], n_nodes=n_nodes)
+    trans_block_values = np.zeros((max(1, pattern.rows.shape[0]), 3, 3), dtype=float)
+    tail_K = sp.lil_matrix((ndof, ndof), dtype=float) if sp is not None else np.zeros((ndof, ndof), dtype=float)
+    F = np.zeros(ndof, dtype=float)
+    count = 0
+    warnings: list[str] = []
+
+    def _add_tail(edofs: np.ndarray, Ke: np.ndarray, trans_local: set[int]) -> None:
+        for i in range(Ke.shape[0]):
+            li = int(i)
+            gi = int(edofs[i])
+            for j in range(Ke.shape[1]):
+                if li in trans_local and int(j) in trans_local:
+                    continue
+                gj = int(edofs[j])
+                val = float(Ke[i, j])
+                if abs(val) < 1.0e-18:
+                    continue
+                if sp is not None:
+                    tail_K[gi, gj] += val
+                else:
+                    tail_K[gi, gj] += val
+
+    for item in structures:
+        try:
+            local_nodes = [submesh.local_by_global[int(g)] for g in item.point_ids]
+        except KeyError:
+            warnings.append(f"Structure '{item.name}' skipped because some point IDs are not active in the current submesh")
+            continue
+        coords = submesh.points[np.asarray(local_nodes, dtype=np.int64)]
+        kind = item.kind.lower()
+        if kind == 'truss2':
+            E = float(item.parameters.get('E', 2.1e11))
+            A = float(item.parameters.get('A', 1.0e-3))
+            Ke = truss2_stiffness(coords[0], coords[1], E, A)
+            accumulate_block_values(pattern, trans_block_values, np.asarray(local_nodes, dtype=np.int64), Ke, block_size=3)
+            N0 = float(item.parameters.get('prestress', 0.0))
+            if abs(N0) > 0.0:
+                n = _unit(coords[1] - coords[0])
+                edofs = np.hstack([_trans_dofs(local_nodes[0]), _trans_dofs(local_nodes[1])])
+                F[edofs] += np.hstack([-N0 * n, N0 * n])
+            count += 1
+        elif kind in {'beam2', 'frame3d'}:
+            E = float(item.parameters.get('E', 2.1e11))
+            A = float(item.parameters.get('A', 1.0e-3))
+            Iy = float(item.parameters.get('Iy', 1.0e-6))
+            Iz = float(item.parameters.get('Iz', 1.0e-6))
+            J = float(item.parameters.get('J', max(Iy + Iz, 1.0e-8)))
+            nu = float(item.parameters.get('nu', 0.3))
+            G = item.parameters.get('G')
+            if G is not None:
+                G = float(G)
+            up = np.asarray(item.parameters.get('up', [0.0, 0.0, 1.0]), dtype=float)
+            Ke = frame3d_stiffness(coords[0], coords[1], E, A, Iy, Iz, J, nu=nu, G=G, up_hint=up)
+            edofs = _edofs_nodes(local_nodes, dof_map, rotational=True)
+            trans_local = {0, 1, 2, 6, 7, 8}
+            trans_Ke = Ke[np.ix_([0, 1, 2, 6, 7, 8], [0, 1, 2, 6, 7, 8])]
+            accumulate_block_values(pattern, trans_block_values, np.asarray(local_nodes, dtype=np.int64), trans_Ke, block_size=3)
+            _add_tail(edofs, Ke, trans_local)
+            N0 = float(item.parameters.get('prestress', 0.0))
+            if abs(N0) > 0.0:
+                n = _unit(coords[1] - coords[0])
+                F[edofs[:3]] += -N0 * n
+                F[edofs[6:9]] += N0 * n
+            count += 1
+        elif kind == 'shellquad4':
+            E = float(item.parameters.get('E', 3.2e10))
+            nu = float(item.parameters.get('nu', 0.2))
+            t = float(item.parameters.get('thickness', 0.8))
+            sf = float(item.parameters.get('shear_factor', 5.0 / 6.0))
+            dp = float(item.parameters.get('drilling_penalty', 1.0e-4))
+            Ke = shellquad4_stiffness(coords, E, nu, t, shear_factor=sf, drilling_penalty=dp)
+            edofs = _edofs_nodes(local_nodes, dof_map, rotational=True)
+            trans_idx: list[int] = []
+            for a in range(4):
+                trans_idx.extend([6 * a + 0, 6 * a + 1, 6 * a + 2])
+            trans_Ke = Ke[np.ix_(trans_idx, trans_idx)]
+            accumulate_block_values(pattern, trans_block_values, np.asarray(local_nodes, dtype=np.int64), trans_Ke, block_size=3)
+            _add_tail(edofs, Ke, set(trans_idx))
+            count += 1
+        else:
+            warnings.append(f"Unsupported structure kind '{item.kind}' on '{item.name}'")
+    if sp is not None and hasattr(tail_K, 'tocsr'):
+        tail_K = tail_K.tocsr()
+    return StructuralHybridAssemblyResult(pattern=pattern, trans_block_values=trans_block_values, tail_K=tail_K, F=F, count=count, warnings=warnings, dof_map=dof_map)

@@ -6,11 +6,21 @@ import numpy as np
 
 from geoai_simkit.core.model import InterfaceDefinition
 from geoai_simkit.solver.hex8_linear import Hex8Submesh
+from geoai_simkit.solver.warp_hex8 import BlockSparsePattern, accumulate_block_values, build_node_block_sparse_pattern
 
 
 @dataclass(slots=True)
 class InterfaceAssemblyResult:
     K: np.ndarray
+    Fint: np.ndarray
+    count: int
+    warnings: list[str]
+
+
+@dataclass(slots=True)
+class InterfaceBlockAssemblyResult:
+    pattern: BlockSparsePattern
+    block_values: np.ndarray
     Fint: np.ndarray
     count: int
     warnings: list[str]
@@ -137,3 +147,62 @@ def assemble_interface_response(
             count += 1
         state_store[item.name] = updated_states
     return InterfaceAssemblyResult(K=K, Fint=Fint, count=count, warnings=warnings), state_store
+
+
+
+def assemble_interface_block_response(
+    interfaces: list[InterfaceDefinition],
+    submesh: Hex8Submesh,
+    u_nodes: np.ndarray,
+    state_store: dict[str, list[InterfaceElementState]] | None = None,
+    *,
+    pattern: BlockSparsePattern | None = None,
+) -> tuple[InterfaceBlockAssemblyResult, dict[str, list[InterfaceElementState]]]:
+    n_nodes = int(submesh.points.shape[0])
+    trans_ndof = n_nodes * 3
+    pair_rows: list[list[int]] = []
+    for item in interfaces:
+        slave_ids_g = list(item.slave_point_ids)
+        master_ids_g = list(item.master_point_ids)
+        if len(slave_ids_g) != len(master_ids_g):
+            continue
+        for sg, mg in zip(slave_ids_g, master_ids_g, strict=False):
+            if int(sg) in submesh.local_by_global and int(mg) in submesh.local_by_global:
+                pair_rows.append([submesh.local_by_global[int(sg)], submesh.local_by_global[int(mg)]])
+    if pattern is None:
+        conn = np.asarray(pair_rows, dtype=np.int32) if pair_rows else np.empty((0, 2), dtype=np.int32)
+        pattern = build_node_block_sparse_pattern([conn], n_nodes=n_nodes)
+    block_values = np.zeros((max(1, pattern.rows.shape[0]), 3, 3), dtype=float)
+    Fint = np.zeros(trans_ndof, dtype=float)
+    warnings: list[str] = []
+    count = 0
+    if state_store is None:
+        state_store = {}
+
+    for item in interfaces:
+        slave_ids_g = list(item.slave_point_ids)
+        master_ids_g = list(item.master_point_ids)
+        if len(slave_ids_g) != len(master_ids_g):
+            warnings.append(f"Interface '{item.name}' skipped because slave/master point ID counts differ")
+            continue
+        local_states = state_store.get(item.name, [InterfaceElementState() for _ in slave_ids_g])
+        updated_states: list[InterfaceElementState] = []
+        for idx, (sg, mg) in enumerate(zip(slave_ids_g, master_ids_g, strict=False)):
+            try:
+                ls = submesh.local_by_global[int(sg)]
+                lm = submesh.local_by_global[int(mg)]
+            except KeyError:
+                warnings.append(f"Interface '{item.name}' pair ({sg}, {mg}) skipped because one point is not active")
+                continue
+            xs = submesh.points[ls]
+            xm = submesh.points[lm]
+            us = u_nodes[ls]
+            um = u_nodes[lm]
+            Ki, fi, st = interface_pair_response(xs, xm, us, um, item.parameters, local_states[idx])
+            edofs = _edofs_pair(ls, lm)
+            Fint[edofs] += fi
+            accumulate_block_values(pattern, block_values, np.array([ls, lm], dtype=np.int64), Ki, block_size=3)
+            updated_states.append(st)
+            count += 1
+        state_store[item.name] = updated_states
+    return InterfaceBlockAssemblyResult(pattern=pattern, block_values=block_values, Fint=Fint, count=count, warnings=warnings), state_store

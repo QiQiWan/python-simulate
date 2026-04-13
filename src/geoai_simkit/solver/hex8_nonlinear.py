@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import time
+
 import numpy as np
 
 from geoai_simkit.core.model import (
@@ -23,16 +25,19 @@ from geoai_simkit.solver.hex8_linear import (
     element_stiffness_hex8,
     select_bc_nodes,
 )
-from geoai_simkit.solver.interface_elements import InterfaceElementState, assemble_interface_response
+from geoai_simkit.solver.interface_elements import InterfaceElementState, assemble_interface_block_response, assemble_interface_response
 from geoai_simkit.solver.linear_algebra import LinearSolverContext, _optional_import, solve_linear_system
 from geoai_simkit.solver.structural_elements import (
     StructuralAssemblyResult,
     StructuralDofMap,
+    StructuralHybridAssemblyResult,
     apply_structural_loads,
+    assemble_structural_hybrid_response,
     assemble_structural_stiffness,
     build_structural_dof_map,
 )
-from geoai_simkit.solver.warp_hex8 import resolve_warp_hex8_config, try_warp_hex8_linear_assembly
+from geoai_simkit.solver.warp_hex8 import build_block_sparse_pattern, build_node_block_sparse_pattern, block_values_matvec, block_values_to_csr, resolve_warp_hex8_config, try_warp_hex8_linear_assembly
+from geoai_simkit.solver.warp_nonlinear import try_warp_nonlinear_continuum_assembly
 
 
 GAUSS_POINTS = [(xi, eta, zeta) for xi in GAUSS for eta in GAUSS for zeta in GAUSS]
@@ -94,9 +99,12 @@ class NonlinearHex8Solver:
         self._linear_D = [mat.elastic_matrix() for mat in self.materials if isinstance(mat, LinearElastic)] if self._all_linear_elastic else []
         self._sparse_rows_template = np.repeat(self._element_edofs, 24, axis=1).reshape(-1).astype(np.int64, copy=False)
         self._sparse_cols_template = np.tile(self._element_edofs, (1, 24)).reshape(-1).astype(np.int64, copy=False)
+        self._block_pattern = build_block_sparse_pattern(self.submesh.elements)
         self._constant_continuum_cache_key: tuple[int, bool, str, tuple[tuple[str, str], ...]] | None = None
         self._constant_continuum_K: Any | None = None
         self._constant_continuum_backend: dict[str, object] = {'backend': 'unset', 'used_warp': False, 'warnings': []}
+        self._current_compute_device: str = 'cpu'
+        self._current_solver_metadata: dict[str, Any] = {}
 
     def _build_gp_cache(self) -> list[list[tuple[np.ndarray, float]]]:
         cache: dict[tuple[float, ...], list[tuple[np.ndarray, float]]] = {}
@@ -125,7 +133,8 @@ class NonlinearHex8Solver:
             return {'backend': 'disabled', 'used_warp': False, 'warnings': []}
         meta = dict(solver_metadata or {})
         meta_key = tuple(sorted((str(k), str(v)) for k, v in meta.items() if isinstance(v, (str, int, float, bool))))
-        cache_key = (int(total_ndof), bool(prefer_sparse), str(compute_device), meta_key)
+        pattern_key = (bytes(np.asarray(self._block_pattern.rows, dtype=np.int32)), bytes(np.asarray(self._block_pattern.cols, dtype=np.int32)))
+        cache_key = (int(total_ndof), bool(prefer_sparse), str(compute_device), meta_key, pattern_key)
         if self._constant_continuum_cache_key == cache_key and self._constant_continuum_K is not None:
             return dict(self._constant_continuum_backend)
 
@@ -146,6 +155,7 @@ class NonlinearHex8Solver:
                 ndof=trans_ndof,
                 requested_device=str(compute_device),
                 config=warp_cfg,
+                block_pattern=self._block_pattern,
             )
             backend = {
                 'backend': str(warp_info.backend),
@@ -186,7 +196,11 @@ class NonlinearHex8Solver:
                 backend = {'backend': 'cpu-constant-linear-sparse', 'used_warp': False, 'warnings': list(backend.get('warnings', []))}
 
         if total_ndof > trans_ndof:
-            if self._sp is not None and getattr(self._sp, 'issparse', lambda *_: False)(K_trans):
+            if hasattr(K_trans, 'to_csr'):
+                K_base = K_trans.to_csr()
+                zero_tail = self._sp.csr_matrix((total_ndof - trans_ndof, total_ndof - trans_ndof), dtype=float) if self._sp is not None else None
+                self._constant_continuum_K = self._sp.bmat([[K_base, None], [None, zero_tail]], format='csr') if self._sp is not None else K_base
+            elif self._sp is not None and getattr(self._sp, 'issparse', lambda *_: False)(K_trans):
                 zero_tail = self._sp.csr_matrix((total_ndof - trans_ndof, total_ndof - trans_ndof), dtype=float)
                 self._constant_continuum_K = self._sp.bmat([[K_trans, None], [None, zero_tail]], format='csr')
             else:
@@ -281,9 +295,10 @@ class NonlinearHex8Solver:
     ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray]:
         trans_ndof = int(self.submesh.points.shape[0] * 3)
         Fint = np.zeros(total_ndof, dtype=float)
-        K_base = self._constant_continuum_K[:trans_ndof, :trans_ndof]
+        K_const = self._constant_continuum_K.to_csr() if hasattr(self._constant_continuum_K, 'to_csr') else self._constant_continuum_K
+        K_base = K_const[:trans_ndof, :trans_ndof]
         Fint[:trans_ndof] = np.asarray(K_base @ du_step_trans, dtype=float)
-        K = self._constant_continuum_K if assemble_tangent else None
+        K = K_const if assemble_tangent else None
 
         trial_states: list[list[MaterialState]] = []
         cell_stress = np.zeros((self.submesh.elements.shape[0], 6), dtype=float)
@@ -375,9 +390,25 @@ class NonlinearHex8Solver:
         total_ndof: int,
         *,
         assemble_tangent: bool = True,
+        compute_device: str = 'cpu',
+        solver_metadata: dict[str, Any] | None = None,
     ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray]:
         if self._all_linear_elastic and self._constant_continuum_K is not None:
             return self._assemble_linear_continuum_response(du_step_trans, base_states, total_ndof, assemble_tangent=assemble_tangent)
+        warp_K, warp_Fint, warp_states, warp_cell_stress, warp_cell_yield, warp_cell_eqp, warp_info = try_warp_nonlinear_continuum_assembly(
+            points=self.submesh.points,
+            elements=self.submesh.elements,
+            materials=self.materials,
+            du_step_trans=du_step_trans,
+            base_states=base_states,
+            total_ndof=total_ndof,
+            assemble_tangent=assemble_tangent,
+            requested_device=str(compute_device),
+            solver_metadata=solver_metadata,
+            block_pattern=self._block_pattern,
+        )
+        if warp_states is not None and warp_Fint is not None and warp_cell_stress is not None and warp_cell_yield is not None and warp_cell_eqp is not None:
+            return warp_K, warp_Fint, warp_states, warp_cell_stress, warp_cell_yield, warp_cell_eqp
         return self._assemble_generic_continuum_response(du_step_trans, base_states, total_ndof, assemble_tangent=assemble_tangent)
 
     def _evaluate_state(
@@ -396,31 +427,72 @@ class NonlinearHex8Solver:
         warnings: list[str] = []
         du_step = u_guess - u_step_base
         Kc, Fint_c, trial_states, cell_stress, cell_yield, cell_eqp = self._assemble_continuum_response(
-            du_step[: n_nodes * 3], base_states, ndof, assemble_tangent=assemble_tangent
+            du_step[: n_nodes * 3],
+            base_states,
+            ndof,
+            assemble_tangent=assemble_tangent,
+            compute_device=self._current_compute_device,
+            solver_metadata=self._current_solver_metadata,
         )
         Fint = Fint_c.copy()
         K = Kc
         use_sparse = bool(assemble_tangent and self._sp is not None and K is not None and self._sp.issparse(K))
+        trans_ndof = n_nodes * 3
+
+        def _materialize_current() -> None:
+            nonlocal K, use_sparse
+            if K is not None and hasattr(K, 'to_csr'):
+                K = K.to_csr()
+            use_sparse = bool(assemble_tangent and self._sp is not None and K is not None and self._sp.issparse(K))
 
         if struct_K is not None:
-            Fint += struct_K @ u_guess
-            if assemble_tangent:
-                if use_sparse:
-                    K = K + self._sp.csr_matrix(struct_K)
-                else:
-                    K = K + struct_K
+            if isinstance(struct_K, StructuralHybridAssemblyResult):
+                trans_vals = np.asarray(struct_K.trans_block_values, dtype=float)
+                if trans_vals.size and np.any(np.abs(trans_vals) > 0.0):
+                    Fint[:trans_ndof] += block_values_matvec(struct_K.pattern, trans_vals, u_guess[:trans_ndof], block_size=3, ndof=trans_ndof)
+                    if assemble_tangent:
+                        if hasattr(K, 'add_host_values') and bool(self._current_solver_metadata.get('warp_unified_block_merge', True)):
+                            K = K.add_host_values(trans_vals)
+                        else:
+                            _materialize_current()
+                            K = K + block_values_to_csr(struct_K.pattern, trans_vals, ndof=trans_ndof)
+                tail_K = struct_K.tail_K
+                tail_nnz = getattr(tail_K, 'nnz', None)
+                has_tail = bool(tail_nnz) if tail_nnz is not None else bool(np.any(np.abs(np.asarray(tail_K, dtype=float)) > 0.0))
+                if has_tail:
+                    Fint += tail_K @ u_guess
+                    if assemble_tangent:
+                        _materialize_current()
+                        K = K + tail_K
+            else:
+                if assemble_tangent and K is not None and hasattr(K, 'to_csr'):
+                    _materialize_current()
+                Fint += struct_K @ u_guess
+                if assemble_tangent:
+                    if use_sparse:
+                        K = K + self._sp.csr_matrix(struct_K)
+                    else:
+                        K = K + struct_K
 
         iface_trial = _clone_interface_states(local_interface_states)
         if interfaces:
-            u_nodes_guess = u_guess[: n_nodes * 3].reshape(n_nodes, 3)
-            int_asm, iface_trial = assemble_interface_response(interfaces, self.submesh, u_nodes_guess, iface_trial)
-            Fint[: n_nodes * 3] += int_asm.Fint
-            warnings.extend(int_asm.warnings)
-            if assemble_tangent:
-                if use_sparse:
-                    K = K + self._sp.csr_matrix(int_asm.K)
-                else:
-                    K[: n_nodes * 3, : n_nodes * 3] += int_asm.K
+            u_nodes_guess = u_guess[: trans_ndof].reshape(n_nodes, 3)
+            if hasattr(K, 'add_host_values') and bool(self._current_solver_metadata.get('warp_interface_enabled', False)):
+                int_blk, iface_trial = assemble_interface_block_response(interfaces, self.submesh, u_nodes_guess, iface_trial, pattern=self._block_pattern)
+                Fint[: trans_ndof] += int_blk.Fint
+                warnings.extend(int_blk.warnings)
+                if assemble_tangent and np.any(np.abs(int_blk.block_values) > 0.0):
+                    K = K.add_host_values(int_blk.block_values)
+            else:
+                int_asm, iface_trial = assemble_interface_response(interfaces, self.submesh, u_nodes_guess, iface_trial)
+                Fint[: trans_ndof] += int_asm.Fint
+                warnings.extend(int_asm.warnings)
+                if assemble_tangent:
+                    _materialize_current()
+                    if use_sparse:
+                        K = K + self._sp.csr_matrix(int_asm.K)
+                    else:
+                        K[: trans_ndof, : trans_ndof] += int_asm.K
         return K, Fint, trial_states, cell_stress, cell_yield, cell_eqp, iface_trial, warnings
 
     @staticmethod
@@ -511,6 +583,8 @@ class NonlinearHex8Solver:
         warnings: list[str] = []
         convergence_history: list[dict[str, float | int | str]] = []
         solver_meta = dict(solver_metadata or {})
+        self._current_compute_device = str(compute_device)
+        self._current_solver_metadata = solver_meta
         solver_meta.setdefault('block_size', 3)
         solver_meta.setdefault('preconditioner', 'block-jacobi')
         solver_meta.setdefault('ordering', 'rcm')
@@ -522,6 +596,23 @@ class NonlinearHex8Solver:
             interface_states = {}
         structures = structures or []
         interfaces = interfaces or []
+        solver_meta.setdefault('warp_interface_enabled', str(compute_device).lower().startswith('cuda'))
+        solver_meta.setdefault('warp_structural_enabled', str(compute_device).lower().startswith('cuda'))
+        solver_meta.setdefault('warp_unified_block_merge', True)
+
+        pattern_parts: list[np.ndarray] = [np.asarray(self.submesh.elements, dtype=np.int32)]
+        for iface in interfaces:
+            pairs: list[list[int]] = []
+            for sg, mg in zip(iface.slave_point_ids, iface.master_point_ids, strict=False):
+                if int(sg) in self.submesh.local_by_global and int(mg) in self.submesh.local_by_global:
+                    pairs.append([self.submesh.local_by_global[int(sg)], self.submesh.local_by_global[int(mg)]])
+            if pairs:
+                pattern_parts.append(np.asarray(pairs, dtype=np.int32))
+        for item in structures:
+            local_nodes = [self.submesh.local_by_global[int(g)] for g in item.point_ids if int(g) in self.submesh.local_by_global]
+            if local_nodes:
+                pattern_parts.append(np.asarray([local_nodes], dtype=np.int32))
+        self._block_pattern = build_node_block_sparse_pattern(pattern_parts, n_nodes=n_nodes)
 
         dof_map = build_structural_dof_map(structures, self.submesh)
         ndof = dof_map.total_ndof
@@ -539,10 +630,13 @@ class NonlinearHex8Solver:
         F_total = self._build_external_force(loads, ndof, dof_map)
 
         if structures:
-            struct_asm: StructuralAssemblyResult | None = assemble_structural_stiffness(structures, self.submesh, dof_map=dof_map)
+            if bool(solver_meta.get('warp_structural_enabled', False)):
+                struct_asm = assemble_structural_hybrid_response(structures, self.submesh, dof_map=dof_map, pattern=self._block_pattern)
+            else:
+                struct_asm = assemble_structural_stiffness(structures, self.submesh, dof_map=dof_map)
             warnings.extend(struct_asm.warnings)
             F_total += struct_asm.F
-            struct_K = struct_asm.K
+            struct_K = struct_asm
         else:
             struct_K = None
 
@@ -556,6 +650,38 @@ class NonlinearHex8Solver:
         load_increment = 1.0 / total_steps
         cutbacks = 0
         step_id = 0
+        nonlinear_iterations = max(1, int(max_iterations))
+
+        def _emit_progress(payload: dict[str, Any]) -> None:
+            if progress_callback is None:
+                return
+            try:
+                progress_callback(dict(payload))
+            except Exception:
+                pass
+
+        def _stage_fraction(lam_base: float, lam_goal: float, iteration_index: int = 0, phase_fraction: float = 0.0) -> float:
+            increment = max(1.0e-12, float(lam_goal) - float(lam_base))
+            if iteration_index <= 0:
+                inner = max(0.0, min(0.99, float(phase_fraction)))
+            else:
+                inner = ((max(1, int(iteration_index)) - 1) + max(0.0, min(0.999, float(phase_fraction)))) / float(nonlinear_iterations)
+            return min(0.999, max(float(lam_base), float(lam_base) + increment * inner))
+
+        def _emit_phase(phase: str, message: str, *, lam_base: float | None = None, lam_goal: float | None = None, step: int | None = None, iteration: int | None = None, phase_fraction: float = 0.0, **extra: Any) -> None:
+            payload: dict[str, Any] = {'phase': phase, 'message': message}
+            if step is not None:
+                payload['step'] = int(step)
+            if iteration is not None:
+                payload['iteration'] = int(iteration)
+            if lam_goal is not None:
+                payload['lambda'] = float(lam_goal)
+            if lam_base is not None and lam_goal is not None:
+                payload['fraction'] = _stage_fraction(lam_base, lam_goal, int(iteration or 0), phase_fraction)
+            payload.update(extra)
+            _emit_progress(payload)
+
+        _emit_phase('solver-setup', f'Preparing nonlinear solver: nodes={n_nodes}, cells={self.submesh.elements.shape[0]}, dof={ndof}, device={compute_device}', lam_base=0.0, lam_goal=1.0, phase_fraction=0.01)
 
         while current_lambda < 1.0 - 1.0e-12:
             if cancel_check and cancel_check():
@@ -563,6 +689,7 @@ class NonlinearHex8Solver:
                 break
             lam_target = min(1.0, current_lambda + load_increment)
             step_id += 1
+            _emit_phase('step-start', f'Starting nonlinear load step {step_id}/{total_steps} at lambda={lam_target:.4f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, phase_fraction=0.02, load_increment=float(load_increment))
             fixed_dofs, fixed_values = self._dirichlet_data(bcs, scale=lam_target, dof_map=dof_map)
             free = np.setdiff1d(all_dofs, fixed_dofs)
             base_states = _clone_gp_states(gp_states)
@@ -582,6 +709,11 @@ class NonlinearHex8Solver:
                 if cancel_check and cancel_check():
                     warnings.append('Solve canceled by user.')
                     break
+                if it == 1 and step_id == 1 and str(compute_device).lower().startswith('cuda'):
+                    _emit_phase('gpu-prepare', 'Preparing GPU nonlinear kernels / first-launch cache. The first iteration may take longer.', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.01)
+                _emit_phase('iteration-start', f'Iteration {it} started', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.02)
+                _emit_phase('assembly-start', 'Assembling continuum/interface response', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.05)
+                assembly_started = time.perf_counter()
                 K, Fint, trial_states, cell_stress, cell_yield, cell_eqp, iface_trial, iter_warnings = self._evaluate_state(
                     u_guess,
                     u_step_base,
@@ -593,7 +725,9 @@ class NonlinearHex8Solver:
                     n_nodes,
                     assemble_tangent=True,
                 )
+                assembly_seconds = time.perf_counter() - assembly_started
                 warnings.extend(iter_warnings)
+                _emit_phase('assembly-done', f'Assembly finished in {assembly_seconds:.2f}s', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.32, assembly_seconds=float(assembly_seconds), warning_count=len(iter_warnings))
                 residual = target - Fint
                 if fixed_dofs.size:
                     residual[fixed_dofs] = 0.0
@@ -609,6 +743,8 @@ class NonlinearHex8Solver:
                     'force_norm': fnorm,
                     'ratio': metric,
                     'load_increment': float(load_increment),
+                    'fraction': _stage_fraction(current_lambda, lam_target, it, 0.40),
+                    'message': f'Nonlinear iteration {it}: ratio={metric:.3e}',
                 }
                 convergence_history.append(entry)
                 if progress_callback is not None:
@@ -630,31 +766,62 @@ class NonlinearHex8Solver:
                     gp_states = trial_states
                     interface_states = iface_trial
                     current_lambda = lam_target
+                    _emit_phase('step-converged', f'Step {step_id} converged at iteration {it} with ratio={metric:.3e}', lam_base=max(0.0, current_lambda - max(load_increment, 1.0e-12)), lam_goal=current_lambda, step=step_id, iteration=it, phase_fraction=0.99, ratio=float(metric))
                     if it <= 3 and load_increment < 0.5:
                         load_increment = min(1.0 - current_lambda, load_increment * 1.25)
                     break
                 if free.size == 0:
                     break
-                if self._sp is not None and getattr(self._sp, 'issparse', lambda *_: False)(K):
-                    Kff = K[free][:, free]
-                else:
-                    Kff = K[np.ix_(free, free)]
-                du_free, solve_info = solve_linear_system(
-                    Kff,
-                    residual[free],
-                    prefer_sparse=prefer_sparse,
-                    thread_count=thread_count,
-                    assume_symmetric=None if interfaces else True,
-                    context=linear_context,
-                    metadata=solver_meta,
-                    block_size=3,
-                    compute_device=compute_device,
-                )
+                gpu_block_ok = hasattr(K, 'to_csr') and bool(solver_meta.get('warp_full_gpu_linear_solve', False))
+                _emit_phase('linear-solve-start', 'Solving linearized system', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.48, gpu_block=bool(gpu_block_ok))
+                linear_started = time.perf_counter()
+                if gpu_block_ok:
+                    try:
+                        du_full, solve_info = solve_linear_system(
+                            K,
+                            residual,
+                            prefer_sparse=prefer_sparse,
+                            thread_count=thread_count,
+                            assume_symmetric=True,
+                            context=linear_context,
+                            metadata=solver_meta,
+                            block_size=3,
+                            compute_device=compute_device,
+                            fixed_dofs=fixed_dofs,
+                            fixed_values=fixed_values,
+                        )
+                        du_full = np.asarray(du_full, dtype=float).reshape(-1)
+                        if du_full.size != residual.size:
+                            raise ValueError(f'full-system solve returned size {du_full.size}, expected {residual.size}')
+                        du_free = du_full[free]
+                    except Exception as exc:
+                        warnings.append(f'GPU full-system linear solve fallback: {exc}')
+                        gpu_block_ok = False
+                if not gpu_block_ok:
+                    if self._sp is not None and getattr(self._sp, 'issparse', lambda *_: False)(K):
+                        Kff = K[free][:, free]
+                    else:
+                        Kff = K[np.ix_(free, free)]
+                    du_free, solve_info = solve_linear_system(
+                        Kff,
+                        residual[free],
+                        prefer_sparse=prefer_sparse,
+                        thread_count=thread_count,
+                        assume_symmetric=None if interfaces else True,
+                        context=linear_context,
+                        metadata=solver_meta,
+                        block_size=3,
+                        compute_device=compute_device,
+                    )
+                    du_full = np.zeros_like(u_guess)
+                    du_full[free] = du_free
+                linear_seconds = time.perf_counter() - linear_started
+                _emit_phase('linear-solve-done', f'Linear solve finished in {linear_seconds:.2f}s using {solve_info.backend}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.78, linear_backend=str(solve_info.backend), linear_seconds=float(linear_seconds))
                 warnings.extend(solve_info.warnings)
                 convergence_history[-1]['linear_backend'] = solve_info.backend
-                du_full = np.zeros_like(u_guess)
-                du_full[free] = du_free
                 if line_search:
+                    _emit_phase('line-search-start', 'Running line search', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.82)
+                    ls_started = time.perf_counter()
                     u_next, alpha = self._line_search(
                         u_guess,
                         du_full,
@@ -671,6 +838,8 @@ class NonlinearHex8Solver:
                         ndof,
                         n_nodes,
                     )
+                    ls_seconds = time.perf_counter() - ls_started
+                    _emit_phase('line-search-done', f'Line search finished in {ls_seconds:.2f}s with alpha={alpha:.2f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.94, line_search_alpha=float(alpha), line_search_seconds=float(ls_seconds))
                     convergence_history[-1]['line_search_alpha'] = float(alpha)
                     u_guess = u_next
                 else:
@@ -683,9 +852,11 @@ class NonlinearHex8Solver:
                     cutbacks += 1
                     load_increment *= 0.5
                     warnings.append(f'Nonlinear step cutback triggered at lambda={lam_target:.4f}; retrying with increment={load_increment:.4f}.')
+                    _emit_phase('cutback', f'Cutback triggered; retrying step with increment={load_increment:.4f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, phase_fraction=0.98, load_increment=float(load_increment))
                     step_id -= 1
                     continue
                 warnings.append(f'Nonlinear solve stopped without convergence at lambda={lam_target:.4f}; best ratio={best_metric:.3e}.')
+                _emit_phase('step-stopped', f'Step {step_id} stopped without convergence; best ratio={best_metric:.3e}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, phase_fraction=0.99, ratio=float(best_metric))
                 u_committed = best_u
                 gp_states = best_states
                 interface_states = best_iface

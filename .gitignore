@@ -114,3 +114,5 @@ dmypy.json
 exports_root/
 exports_v3/
 exports_v6/
+
+run.bat

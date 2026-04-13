@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 import hashlib
 import importlib
 import os
@@ -65,8 +66,18 @@ def _optional_import(name: str) -> Any | None:
         return None
 
 
+def _is_custom_block_sparse_matrix(matrix: Any) -> bool:
+    return bool(hasattr(matrix, 'pattern') and hasattr(matrix, 'to_csr') and hasattr(matrix, 'block_size'))
+
+
+def _materialize_custom_block_sparse(matrix: Any) -> Any:
+    if _is_custom_block_sparse_matrix(matrix):
+        return matrix.to_csr()
+    return matrix
+
 
 def _matrix_data_hash(matrix: Any) -> str:
+    matrix = _materialize_custom_block_sparse(matrix)
     sp = _optional_import('scipy.sparse')
     if sp is not None and getattr(sp, 'issparse', lambda *_: False)(matrix):
         A = matrix.tocsr()
@@ -85,6 +96,7 @@ def _matrix_data_hash(matrix: Any) -> str:
 
 
 def _matrix_pattern_signature(matrix: Any) -> str:
+    matrix = _materialize_custom_block_sparse(matrix)
     sp = _optional_import('scipy.sparse')
     if sp is not None and getattr(sp, 'issparse', lambda *_: False)(matrix):
         A = matrix.tocsr()
@@ -103,6 +115,7 @@ def _matrix_pattern_signature(matrix: Any) -> str:
 
 
 def _is_probably_symmetric(matrix: Any, tol: float = 1.0e-9) -> bool:
+    matrix = _materialize_custom_block_sparse(matrix)
     sp = _optional_import('scipy.sparse')
     if sp is not None and getattr(sp, 'issparse', lambda *_: False)(matrix):
         A = matrix.tocsr()
@@ -268,6 +281,43 @@ def _warp_block_type(wp: Any, block_size: int) -> Any:
     raise ValueError(f'unsupported warp block size: {block_size}')
 
 
+def _warp_solver_iterations(result: Any) -> int:
+    if isinstance(result, tuple) and result:
+        first = result[0]
+        if hasattr(first, 'numpy'):
+            try:
+                arr = np.asarray(first.numpy()).reshape(-1)
+                if arr.size:
+                    return int(arr[0])
+            except Exception:
+                return 0
+        try:
+            return int(first)
+        except Exception:
+            return 0
+    try:
+        return int(result)
+    except Exception:
+        return 0
+
+
+def _warp_solution_to_numpy(x_wp: Any, expected_size: int, block_size: int = 1) -> np.ndarray:
+    if hasattr(x_wp, 'numpy'):
+        x = np.asarray(x_wp.numpy(), dtype=float)
+    else:
+        x = np.asarray(x_wp, dtype=float)
+    if x.ndim > 1:
+        x = x.reshape(-1)
+    else:
+        x = x.reshape(-1)
+    if int(expected_size) > 0 and x.size != int(expected_size):
+        if block_size > 1 and x.size * int(block_size) == int(expected_size):
+            x = x.reshape(-1)
+        else:
+            raise ValueError(f'warp solver returned solution of size {x.size}, expected {expected_size}')
+    return x
+
+
 
 def _scipy_to_block_triplets(A: Any, block_size: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     sp = _optional_import('scipy.sparse')
@@ -310,6 +360,197 @@ def _scipy_to_block_triplets(A: Any, block_size: int) -> tuple[np.ndarray, np.nd
             vals.append(block)
     return np.asarray(rows, dtype=np.int32), np.asarray(cols, dtype=np.int32), np.asarray(vals, dtype=np.float32)
 
+
+
+def _apply_dirichlet_penalty_sparse(A: Any, rhs: np.ndarray, fixed_dofs: np.ndarray, fixed_values: np.ndarray, penalty: float) -> tuple[Any, np.ndarray]:
+    sp = _optional_import('scipy.sparse')
+    if sp is None or not getattr(sp, 'issparse', lambda *_: False)(A):
+        raise TypeError('expected a scipy sparse matrix for dirichlet penalty application')
+    if fixed_dofs.size == 0:
+        return A, np.asarray(rhs, dtype=float)
+    A_mod = A.tolil(copy=True)
+    b_mod = np.asarray(rhs, dtype=float).copy()
+    for dof, value in zip(np.asarray(fixed_dofs, dtype=np.int64), np.asarray(fixed_values, dtype=float), strict=False):
+        A_mod[int(dof), int(dof)] = float(A_mod[int(dof), int(dof)]) + float(penalty)
+        b_mod[int(dof)] += float(penalty) * float(value)
+    return A_mod.tocsr(), b_mod
+
+
+@lru_cache(maxsize=1)
+def _get_warp_block_modifier_bundle() -> Any | None:
+    wp = _optional_import('warp')
+    if wp is None:
+        return None
+
+    @wp.kernel
+    def _add_regularization_kernel(block_values: wp.array3d(dtype=wp.float32), diag_slots: wp.array(dtype=wp.int32), value: float):
+        i = wp.tid()
+        slot = diag_slots[i]
+        if slot >= 0:
+            wp.atomic_add(block_values, slot, 0, 0, value)
+            wp.atomic_add(block_values, slot, 1, 1, value)
+            wp.atomic_add(block_values, slot, 2, 2, value)
+
+    @wp.kernel
+    def _apply_dirichlet_penalty_kernel(block_values: wp.array3d(dtype=wp.float32), rhs: wp.array(dtype=wp.float32), diag_slots: wp.array(dtype=wp.int32), fixed_dofs: wp.array(dtype=wp.int32), fixed_values: wp.array(dtype=wp.float32), penalty: float):
+        i = wp.tid()
+        dof = fixed_dofs[i]
+        node = dof // 3
+        comp = dof - 3 * node
+        slot = diag_slots[node]
+        if slot >= 0:
+            wp.atomic_add(block_values, slot, comp, comp, penalty)
+            wp.atomic_add(rhs, dof, penalty * fixed_values[i])
+
+    return wp, _add_regularization_kernel, _apply_dirichlet_penalty_kernel
+
+
+def _try_warp_block_sparse_solve(
+    matrix: Any,
+    rhs: np.ndarray,
+    *,
+    regularization: float,
+    symmetric: bool,
+    metadata: dict[str, Any] | None,
+    block_size: int,
+    compute_device: str,
+    context: LinearSolverContext | None,
+    tol: float,
+    maxiter: int,
+    fixed_dofs: np.ndarray | None = None,
+    fixed_values: np.ndarray | None = None,
+) -> tuple[np.ndarray, LinearSolveInfo] | None:
+    meta = metadata or {}
+    if not bool(meta.get('warp_full_gpu_linear_solve', False)) or not _is_custom_block_sparse_matrix(matrix):
+        return None
+    if int(block_size) != 3:
+        if bool(meta.get('require_warp', False)):
+            raise RuntimeError('full-gpu block sparse solve currently requires block_size=3')
+        return None
+    wp = _optional_import('warp')
+    wp_sparse = _optional_import('warp.sparse')
+    wp_linear = _optional_import('warp.optim.linear')
+    if wp is None or wp_sparse is None or wp_linear is None:
+        if bool(meta.get('require_warp', False)):
+            raise RuntimeError('warp full-gpu block sparse solve requested, but warp sparse modules are unavailable')
+        return None
+    device = str(compute_device or meta.get('warp_device', getattr(matrix, 'device', 'cuda:0'))).lower()
+    if device in {'auto', 'cuda'}:
+        device = 'cuda:0'
+    if not device.startswith('cuda'):
+        device = 'cuda:0'
+    try:
+        wp.init()
+        if hasattr(wp, 'set_device'):
+            wp.set_device(device)
+    except Exception as exc:
+        if bool(meta.get('require_warp', False)):
+            raise RuntimeError(f'failed to initialize Warp on {device}: {exc}') from exc
+        return None
+    bundle = _get_warp_block_modifier_bundle()
+    if bundle is None:
+        return None
+    _wp2, reg_kernel, bc_kernel = bundle
+    from geoai_simkit.solver.warp_hex8 import clone_warp_block_values, get_pattern_device_arrays
+    block_type = _warp_block_type(wp, 3)
+    source_values_dev = getattr(matrix, 'values_device', None)
+    values_dev = source_values_dev
+    rows_wp, cols_wp, diag_slots_wp = get_pattern_device_arrays(matrix.pattern, device, wp)
+    if values_dev is None:
+        vals_np = np.asarray(matrix.host_values(), dtype=np.float32)
+        values_dev = wp.from_numpy(vals_np, dtype=block_type, device=device)
+    else:
+        values_dev = clone_warp_block_values(values_dev, wp, block_type, device)
+    rhs_wp = wp.from_numpy(np.asarray(rhs, dtype=np.float32), dtype=wp.float32, device=device)
+    if regularization > 0.0 and int(matrix.pattern.diag_block_slots.size) > 0:
+        wp.launch(kernel=reg_kernel, dim=int(matrix.pattern.diag_block_slots.size), inputs=[values_dev, diag_slots_wp, float(regularization)], device=device)
+    fd = np.asarray(fixed_dofs if fixed_dofs is not None else np.empty((0,), dtype=np.int64), dtype=np.int32)
+    fv = np.asarray(fixed_values if fixed_values is not None else np.empty((0,), dtype=float), dtype=np.float32)
+    if fd.size:
+        penalty = float(meta.get('dirichlet_penalty', max(1.0e8, 1.0e6 / max(float(regularization), 1.0e-12))))
+        fd_wp = wp.from_numpy(fd, dtype=wp.int32, device=device)
+        fv_wp = wp.from_numpy(fv, dtype=wp.float32, device=device)
+        wp.launch(kernel=bc_kernel, dim=int(fd.size), inputs=[values_dev, rhs_wp, diag_slots_wp, fd_wp, fv_wp, penalty], device=device)
+    sync = getattr(wp, 'synchronize_device', None)
+    if callable(sync):
+        sync(device)
+    elif hasattr(wp, 'synchronize'):
+        wp.synchronize()
+    nblock = int(matrix.ndof) // 3
+    try:
+        A_wp = wp_sparse.bsr_from_triplets(rows_of_blocks=nblock, cols_of_blocks=nblock, rows=rows_wp, columns=cols_wp, values=values_dev)
+    except Exception:
+        vals_np = np.asarray(matrix.host_values(), dtype=np.float32)
+        values_dev = wp.from_numpy(vals_np, dtype=block_type, device=device)
+        if regularization > 0.0 and int(matrix.pattern.diag_block_slots.size) > 0:
+            wp.launch(kernel=reg_kernel, dim=int(matrix.pattern.diag_block_slots.size), inputs=[values_dev, diag_slots_wp, float(regularization)], device=device)
+        if fd.size:
+            penalty = float(meta.get('dirichlet_penalty', max(1.0e8, 1.0e6 / max(float(regularization), 1.0e-12))))
+            fd_wp = wp.from_numpy(fd, dtype=wp.int32, device=device)
+            fv_wp = wp.from_numpy(fv, dtype=wp.float32, device=device)
+            wp.launch(kernel=bc_kernel, dim=int(fd.size), inputs=[values_dev, rhs_wp, diag_slots_wp, fd_wp, fv_wp, penalty], device=device)
+        A_wp = wp_sparse.bsr_from_triplets(rows_of_blocks=nblock, cols_of_blocks=nblock, rows=rows_wp, columns=cols_wp, values=values_dev)
+
+    x0 = wp.zeros_like(rhs_wp)
+    precond_name = str(meta.get('warp_preconditioner', 'diag')).lower()
+    precond = None
+    precond_fn = getattr(wp_linear, 'preconditioner', None)
+    if callable(precond_fn):
+        for kwargs in ({'kind': precond_name}, {'type': precond_name}, {}):
+            try:
+                precond = precond_fn(A_wp, **kwargs)
+                break
+            except TypeError:
+                continue
+            except Exception:
+                break
+    solver_name = str(meta.get('warp_solver', 'cg' if symmetric else 'bicgstab')).lower()
+    solver_fn = getattr(wp_linear, solver_name, None)
+    if solver_fn is None:
+        if bool(meta.get('require_warp', False)):
+            raise RuntimeError(f'warp solver {solver_name!r} is unavailable')
+        return None
+    result = None
+    last_exc: Exception | None = None
+    attempts = []
+    if precond is not None:
+        attempts.append({'x': x0, 'M': precond, 'tol': tol, 'maxiter': maxiter, 'check_every': 0})
+        attempts.append({'x': x0, 'M': precond, 'tol': tol, 'maxiter': maxiter})
+    attempts.append({'x': x0, 'tol': tol, 'maxiter': maxiter, 'check_every': 0})
+    attempts.append({'x': x0, 'tol': tol, 'maxiter': maxiter})
+    for kwargs in attempts:
+        try:
+            result = solver_fn(A_wp, rhs_wp, **kwargs)
+            break
+        except TypeError as exc:
+            last_exc = exc
+        except Exception as exc:
+            last_exc = exc
+    if result is None:
+        if bool(meta.get('require_warp', False)):
+            raise RuntimeError(f'warp block sparse solve failed: {last_exc}') from last_exc
+        return None
+    sync = getattr(wp, 'synchronize_device', None)
+    if callable(sync):
+        sync(device)
+    elif hasattr(wp, 'synchronize'):
+        wp.synchronize()
+    x = _warp_solution_to_numpy(x0, expected_size=int(np.asarray(rhs).size), block_size=block_size)
+    iterations = max(1, _warp_solver_iterations(result))
+    return x, LinearSolveInfo(
+        backend=f'warp-bsr-{solver_name}',
+        regularization=regularization,
+        used_sparse=True,
+        iterations=iterations,
+        warnings=[],
+        ordering='natural',
+        preconditioner=precond_name if precond is not None else 'none',
+        symmetric=bool(symmetric),
+        reused_pattern=False,
+        reused_factorization=False,
+        block_size=3,
+        device=device,
+    )
 
 
 def _try_warp_sparse_solve(
@@ -412,21 +653,18 @@ def _try_warp_sparse_solve(
         if bool(meta.get('require_warp', False)):
             raise RuntimeError(f'warp sparse solve failed: {last_exc}') from last_exc
         return None
-    if hasattr(result, 'numpy'):
-        x = np.asarray(result.numpy(), dtype=float)
-    elif isinstance(result, tuple) and result:
-        first = result[0]
-        if hasattr(first, 'numpy'):
-            x = np.asarray(first.numpy(), dtype=float)
-        else:
-            x = np.asarray(first, dtype=float)
-    else:
-        x = np.asarray(result, dtype=float)
+    sync = getattr(wp, 'synchronize_device', None)
+    if callable(sync):
+        sync(device)
+    elif hasattr(wp, 'synchronize'):
+        wp.synchronize()
+    x = _warp_solution_to_numpy(x0, expected_size=int(np.asarray(rhs).size), block_size=max(1, int(block_size)))
+    iterations = max(1, _warp_solver_iterations(result))
     return x, LinearSolveInfo(
         backend=f'warp-{solver_name}',
         regularization=regularization,
         used_sparse=True,
-        iterations=maxiter,
+        iterations=iterations,
         warnings=[],
         ordering='natural',
         preconditioner=precond_name if precond is not None else 'none',
@@ -453,6 +691,8 @@ def solve_linear_system(
     metadata: dict[str, Any] | None = None,
     block_size: int = 1,
     compute_device: str = 'cpu',
+    fixed_dofs: np.ndarray | None = None,
+    fixed_values: np.ndarray | None = None,
 ) -> tuple[np.ndarray, LinearSolveInfo]:
     tc = configure_linear_algebra_threads(thread_count)
     b = np.asarray(rhs, dtype=float)
@@ -460,20 +700,29 @@ def solve_linear_system(
 
     sp = _optional_import('scipy.sparse')
     spla = _optional_import('scipy.sparse.linalg')
-    is_sparse = bool(sp is not None and getattr(sp, 'issparse', lambda *_: False)(matrix))
-
-    if is_sparse:
-        A_sparse = matrix.tocsr().astype(float)
-        n = int(A_sparse.shape[0])
-        diag = np.abs(np.asarray(A_sparse.diagonal(), dtype=float)) if n else np.array([1.0])
-        A_dense = None
-    else:
-        A_dense = np.asarray(matrix, dtype=float)
-        if A_dense.size == 0:
-            return np.empty((0,), dtype=float), LinearSolveInfo(backend='empty', regularization=0.0, thread_count=tc)
-        n = int(A_dense.shape[0])
-        diag = np.abs(np.diag(A_dense)) if A_dense.ndim == 2 and A_dense.shape[0] else np.array([1.0])
+    custom_block = _is_custom_block_sparse_matrix(matrix)
+    fixed_dofs_arr = np.asarray(fixed_dofs if fixed_dofs is not None else np.empty((0,), dtype=np.int64), dtype=np.int64)
+    fixed_values_arr = np.asarray(fixed_values if fixed_values is not None else np.empty((0,), dtype=float), dtype=float)
+    if custom_block:
+        n = int(matrix.ndof)
+        diag = np.array([1.0], dtype=float)
         A_sparse = None
+        A_dense = None
+        is_sparse = False
+    else:
+        is_sparse = bool(sp is not None and getattr(sp, 'issparse', lambda *_: False)(matrix))
+        if is_sparse:
+            A_sparse = matrix.tocsr().astype(float)
+            n = int(A_sparse.shape[0])
+            diag = np.abs(np.asarray(A_sparse.diagonal(), dtype=float)) if n else np.array([1.0])
+            A_dense = None
+        else:
+            A_dense = np.asarray(matrix, dtype=float)
+            if A_dense.size == 0:
+                return np.empty((0,), dtype=float), LinearSolveInfo(backend='empty', regularization=0.0, thread_count=tc)
+            n = int(A_dense.shape[0])
+            diag = np.abs(np.diag(A_dense)) if A_dense.ndim == 2 and A_dense.shape[0] else np.array([1.0])
+            A_sparse = None
 
     reg = max(regularization_floor, regularization_scale * float(np.max(diag) if diag.size else 1.0))
     warnings: list[str] = []
@@ -485,9 +734,41 @@ def solve_linear_system(
     if context is not None:
         context.solve_count += 1
 
+    if custom_block:
+        try:
+            warp_block_result = _try_warp_block_sparse_solve(
+                matrix,
+                b,
+                regularization=reg,
+                symmetric=symmetric,
+                metadata=meta,
+                block_size=block_size,
+                compute_device=compute_device,
+                context=context,
+                tol=float(meta.get('iterative_tolerance', 1.0e-10)),
+                maxiter=int(meta.get('iterative_maxiter', max(500, min(4000, 2 * max(1, n))))),
+                fixed_dofs=fixed_dofs_arr,
+                fixed_values=fixed_values_arr,
+            )
+            if warp_block_result is not None:
+                x, info = warp_block_result
+                info.thread_count = tc
+                info.symmetric = symmetric
+                return np.asarray(x, dtype=float), info
+        except Exception:
+            if bool(meta.get('require_warp', False)):
+                raise
+        matrix = matrix.to_csr()
+        is_sparse = True
+        A_sparse = matrix.tocsr().astype(float)
+        A_dense = None
+
     if use_sparse or is_sparse:
         try:
             Asp = A_sparse if A_sparse is not None else sp.csr_matrix(A_dense)
+            if fixed_dofs_arr.size:
+                penalty = float(meta.get('dirichlet_penalty', max(1.0e8, 1.0e6 / max(reg, 1.0e-12))))
+                Asp, b = _apply_dirichlet_penalty_sparse(Asp, b, fixed_dofs_arr, fixed_values_arr, penalty)
             perm, inv_perm, reused_pattern, reorder_warnings = _compute_permutation(Asp, ordering, symmetric, context)
             warnings.extend(reorder_warnings)
             Asp_perm, b_perm = _apply_permutation(Asp, b, perm)

@@ -37,6 +37,7 @@ from geoai_simkit.materials import registry
 from geoai_simkit.post.exporters import ExportManager
 from geoai_simkit.post.viewer import PreviewBuilder
 from geoai_simkit.solver.base import SolverSettings
+from geoai_simkit.solver.compute_preferences import BackendComputePreferences, recommended_compute_preferences
 from geoai_simkit.solver.linear_algebra import default_thread_count
 from geoai_simkit.solver.warp_backend import WarpBackend
 from geoai_simkit.utils import optional_import
@@ -240,6 +241,8 @@ def launch_main_window() -> None:
             self._solver_progress_dialog = None
             self._solver_heartbeat_timer = None
             self._heartbeat_counter = 0
+            self._last_solver_payload: dict[str, object] | None = None
+            self._last_solver_fraction = 0.0
             self._meshing_thread = None
             self._meshing_worker = None
             self._meshing_progress_dialog = None
@@ -303,6 +306,7 @@ def launch_main_window() -> None:
         def _configure_default_compute_preferences(self) -> None:
             total = max(1, int(os.cpu_count() or 1))
             half = default_thread_count()
+            self._cpu_core_total = total
             self._default_thread_count = half
             self._cuda_available = self._detect_cuda_available()
             if hasattr(self, 'solver_threads_spin'):
@@ -312,6 +316,126 @@ def launch_main_window() -> None:
             if hasattr(self, 'solver_device_combo'):
                 self.solver_device_combo.setCurrentText('cuda' if self._cuda_available else 'cpu')
                 self.solver_device_combo.setToolTip(self._tt('Prefer GPU when available; otherwise use CPU with configurable thread count.'))
+            if hasattr(self, 'solver_compute_threads_spin'):
+                self.solver_compute_threads_spin.setRange(0, max(8, total))
+            prefs = recommended_compute_preferences('gpu-throughput' if self._cuda_available else 'cpu-safe', cuda_available=self._cuda_available, cpu_total=total)
+            self._apply_compute_preferences_to_controls(prefs, update_summary=False)
+            self._update_solver_compute_summary()
+
+        def _read_solver_compute_preferences(self) -> BackendComputePreferences:
+            device = self.solver_compute_device_combo.currentText() if hasattr(self, 'solver_compute_device_combo') else (self.solver_device_combo.currentText() if hasattr(self, 'solver_device_combo') else 'auto')
+            threads = int(self.solver_compute_threads_spin.value()) if hasattr(self, 'solver_compute_threads_spin') else (int(self.solver_threads_spin.value()) if hasattr(self, 'solver_threads_spin') else 0)
+            ordering = self.solver_compute_ordering_combo.currentText() if hasattr(self, 'solver_compute_ordering_combo') else 'auto'
+            preconditioner = self.solver_compute_preconditioner_combo.currentText() if hasattr(self, 'solver_compute_preconditioner_combo') else 'auto'
+            solver_strategy = self.solver_compute_strategy_combo.currentText() if hasattr(self, 'solver_compute_strategy_combo') else 'auto'
+            warp_preconditioner = self.solver_compute_warp_preconditioner_combo.currentText() if hasattr(self, 'solver_compute_warp_preconditioner_combo') else 'diag'
+            profile = self.solver_compute_profile_combo.currentText() if hasattr(self, 'solver_compute_profile_combo') else 'manual'
+            tol_text = self.solver_compute_iter_tol_edit.text().strip() if hasattr(self, 'solver_compute_iter_tol_edit') else '1e-10'
+            maxiter = int(self.solver_compute_iter_max_spin.value()) if hasattr(self, 'solver_compute_iter_max_spin') else 2000
+            try:
+                iter_tol = float(tol_text)
+            except Exception:
+                iter_tol = 1.0e-10
+            return BackendComputePreferences(
+                backend='warp',
+                profile=profile,
+                device=device,
+                thread_count=threads,
+                require_warp=bool(self.solver_compute_require_warp_check.isChecked()) if hasattr(self, 'solver_compute_require_warp_check') else False,
+                warp_hex8_enabled=bool(self.solver_compute_hex8_check.isChecked()) if hasattr(self, 'solver_compute_hex8_check') else True,
+                warp_nonlinear_enabled=bool(self.solver_compute_nonlinear_check.isChecked()) if hasattr(self, 'solver_compute_nonlinear_check') else True,
+                warp_full_gpu_linear_solve=bool(self.solver_compute_full_gpu_check.isChecked()) if hasattr(self, 'solver_compute_full_gpu_check') else False,
+                warp_gpu_global_assembly=bool(self.solver_compute_gpu_assembly_check.isChecked()) if hasattr(self, 'solver_compute_gpu_assembly_check') else False,
+                warp_interface_enabled=bool(self.solver_compute_interface_check.isChecked()) if hasattr(self, 'solver_compute_interface_check') else True,
+                warp_structural_enabled=bool(self.solver_compute_structural_check.isChecked()) if hasattr(self, 'solver_compute_structural_check') else True,
+                warp_unified_block_merge=bool(self.solver_compute_block_merge_check.isChecked()) if hasattr(self, 'solver_compute_block_merge_check') else True,
+                ordering=ordering,
+                preconditioner=preconditioner,
+                solver_strategy=solver_strategy,
+                warp_preconditioner=warp_preconditioner,
+                iterative_tolerance=iter_tol,
+                iterative_maxiter=maxiter,
+                block_size=3,
+            )
+
+        def _apply_compute_preferences_to_controls(self, prefs: BackendComputePreferences, *, update_summary: bool = True) -> None:
+            self._updating_compute_controls = True
+            try:
+                if hasattr(self, 'solver_compute_profile_combo'):
+                    idx = self.solver_compute_profile_combo.findText(prefs.profile)
+                    if idx >= 0:
+                        self.solver_compute_profile_combo.setCurrentIndex(idx)
+                if hasattr(self, 'solver_compute_device_combo'):
+                    idx = self.solver_compute_device_combo.findText(prefs.device)
+                    if idx >= 0:
+                        self.solver_compute_device_combo.setCurrentIndex(idx)
+                if hasattr(self, 'solver_compute_threads_spin'):
+                    self.solver_compute_threads_spin.setValue(int(prefs.thread_count))
+                if hasattr(self, 'solver_compute_require_warp_check'):
+                    self.solver_compute_require_warp_check.setChecked(bool(prefs.require_warp))
+                if hasattr(self, 'solver_compute_hex8_check'):
+                    self.solver_compute_hex8_check.setChecked(bool(prefs.warp_hex8_enabled))
+                if hasattr(self, 'solver_compute_nonlinear_check'):
+                    self.solver_compute_nonlinear_check.setChecked(bool(prefs.warp_nonlinear_enabled))
+                if hasattr(self, 'solver_compute_full_gpu_check'):
+                    self.solver_compute_full_gpu_check.setChecked(bool(prefs.warp_full_gpu_linear_solve))
+                if hasattr(self, 'solver_compute_gpu_assembly_check'):
+                    self.solver_compute_gpu_assembly_check.setChecked(bool(prefs.warp_gpu_global_assembly))
+                if hasattr(self, 'solver_compute_interface_check'):
+                    self.solver_compute_interface_check.setChecked(bool(prefs.warp_interface_enabled))
+                if hasattr(self, 'solver_compute_structural_check'):
+                    self.solver_compute_structural_check.setChecked(bool(prefs.warp_structural_enabled))
+                if hasattr(self, 'solver_compute_block_merge_check'):
+                    self.solver_compute_block_merge_check.setChecked(bool(prefs.warp_unified_block_merge))
+                if hasattr(self, 'solver_compute_ordering_combo'):
+                    idx = self.solver_compute_ordering_combo.findText(prefs.ordering)
+                    if idx >= 0:
+                        self.solver_compute_ordering_combo.setCurrentIndex(idx)
+                if hasattr(self, 'solver_compute_preconditioner_combo'):
+                    idx = self.solver_compute_preconditioner_combo.findText(prefs.preconditioner)
+                    if idx >= 0:
+                        self.solver_compute_preconditioner_combo.setCurrentIndex(idx)
+                if hasattr(self, 'solver_compute_strategy_combo'):
+                    idx = self.solver_compute_strategy_combo.findText(prefs.solver_strategy)
+                    if idx >= 0:
+                        self.solver_compute_strategy_combo.setCurrentIndex(idx)
+                if hasattr(self, 'solver_compute_warp_preconditioner_combo'):
+                    idx = self.solver_compute_warp_preconditioner_combo.findText(prefs.warp_preconditioner)
+                    if idx >= 0:
+                        self.solver_compute_warp_preconditioner_combo.setCurrentIndex(idx)
+                if hasattr(self, 'solver_compute_iter_tol_edit'):
+                    self.solver_compute_iter_tol_edit.setText(f'{float(prefs.iterative_tolerance):.1e}')
+                if hasattr(self, 'solver_compute_iter_max_spin'):
+                    self.solver_compute_iter_max_spin.setValue(int(prefs.iterative_maxiter))
+                if hasattr(self, 'solver_device_combo'):
+                    idx = self.solver_device_combo.findText(prefs.device)
+                    if idx >= 0:
+                        self.solver_device_combo.setCurrentIndex(idx)
+                if hasattr(self, 'solver_threads_spin'):
+                    self.solver_threads_spin.setValue(int(prefs.thread_count))
+            finally:
+                self._updating_compute_controls = False
+            if update_summary:
+                self._update_solver_compute_summary()
+
+        def _apply_solver_compute_profile(self, profile: str) -> None:
+            prefs = recommended_compute_preferences(profile, cuda_available=getattr(self, '_cuda_available', False), cpu_total=getattr(self, '_cpu_core_total', max(1, int(os.cpu_count() or 1))))
+            self._apply_compute_preferences_to_controls(prefs)
+
+        def _on_solver_compute_profile_changed(self, profile: str) -> None:
+            if getattr(self, '_updating_compute_controls', False):
+                return
+            self._apply_solver_compute_profile(profile)
+
+        def _update_solver_compute_summary(self, *_args) -> None:
+            prefs = self._read_solver_compute_preferences()
+            cpu_total = getattr(self, '_cpu_core_total', max(1, int(os.cpu_count() or 1)))
+            summary = prefs.summary(cpu_total=cpu_total, cuda_available=getattr(self, '_cuda_available', False))
+            hw = f"Detected CPU cores: {cpu_total} | CUDA available: {'yes' if getattr(self, '_cuda_available', False) else 'no'}"
+            if hasattr(self, 'solver_compute_summary_label'):
+                self.solver_compute_summary_label.setText(self._tt(summary))
+            if hasattr(self, 'solver_compute_hardware_label'):
+                self.solver_compute_hardware_label.setText(self._tt(hw))
 
         def _apply_screen_adaptive_layout(self) -> None:
             screen = QtGui.QGuiApplication.primaryScreen()
@@ -1023,6 +1147,84 @@ def launch_main_window() -> None:
             sgl.addLayout(row)
             self.solver_note = QtWidgets.QLabel('尚未求解')
             sgl.addWidget(self.solver_note)
+
+            compute_group = QtWidgets.QGroupBox('后台计算配置')
+            cgl = QtWidgets.QVBoxLayout(compute_group)
+            preset_row = QtWidgets.QHBoxLayout()
+            self.solver_compute_profile_combo = QtWidgets.QComboBox(); self.solver_compute_profile_combo.addItems(['auto', 'cpu-safe', 'gpu-throughput', 'gpu-fullpath'])
+            self.solver_compute_profile_combo.currentTextChanged.connect(self._on_solver_compute_profile_changed)
+            self.btn_solver_profile_auto = QtWidgets.QPushButton('自动推荐')
+            self.btn_solver_profile_cpu = QtWidgets.QPushButton('CPU 保守')
+            self.btn_solver_profile_gpu = QtWidgets.QPushButton('GPU 全路径')
+            self.btn_solver_profile_auto.clicked.connect(lambda: self._apply_solver_compute_profile('auto'))
+            self.btn_solver_profile_cpu.clicked.connect(lambda: self._apply_solver_compute_profile('cpu-safe'))
+            self.btn_solver_profile_gpu.clicked.connect(lambda: self._apply_solver_compute_profile('gpu-fullpath'))
+            preset_row.addWidget(self.solver_compute_profile_combo)
+            preset_row.addWidget(self.btn_solver_profile_auto)
+            preset_row.addWidget(self.btn_solver_profile_cpu)
+            preset_row.addWidget(self.btn_solver_profile_gpu)
+            cgl.addLayout(preset_row)
+            cform = QtWidgets.QFormLayout()
+            self.solver_compute_backend_combo = QtWidgets.QComboBox(); self.solver_compute_backend_combo.addItems(['warp'])
+            self.solver_compute_device_combo = QtWidgets.QComboBox(); self.solver_compute_device_combo.addItems(['auto', 'cpu', 'cuda'])
+            self.solver_compute_threads_spin = QtWidgets.QSpinBox(); self.solver_compute_threads_spin.setRange(0, 128); self.solver_compute_threads_spin.setValue(0)
+            self.solver_compute_require_warp_check = QtWidgets.QCheckBox(); self.solver_compute_require_warp_check.setChecked(True)
+            self.solver_compute_hex8_check = QtWidgets.QCheckBox(); self.solver_compute_hex8_check.setChecked(True)
+            self.solver_compute_nonlinear_check = QtWidgets.QCheckBox(); self.solver_compute_nonlinear_check.setChecked(True)
+            self.solver_compute_full_gpu_check = QtWidgets.QCheckBox(); self.solver_compute_full_gpu_check.setChecked(True)
+            self.solver_compute_gpu_assembly_check = QtWidgets.QCheckBox(); self.solver_compute_gpu_assembly_check.setChecked(True)
+            self.solver_compute_interface_check = QtWidgets.QCheckBox(); self.solver_compute_interface_check.setChecked(True)
+            self.solver_compute_structural_check = QtWidgets.QCheckBox(); self.solver_compute_structural_check.setChecked(True)
+            self.solver_compute_block_merge_check = QtWidgets.QCheckBox(); self.solver_compute_block_merge_check.setChecked(True)
+            self.solver_compute_ordering_combo = QtWidgets.QComboBox(); self.solver_compute_ordering_combo.addItems(['auto', 'rcm', 'colamd', 'amd', 'mmd_ata', 'mmd_at_plus_a', 'natural'])
+            self.solver_compute_preconditioner_combo = QtWidgets.QComboBox(); self.solver_compute_preconditioner_combo.addItems(['auto', 'block-jacobi', 'spilu', 'jacobi', 'none'])
+            self.solver_compute_strategy_combo = QtWidgets.QComboBox(); self.solver_compute_strategy_combo.addItems(['auto', 'cg', 'minres', 'bicgstab', 'gmres', 'direct'])
+            self.solver_compute_warp_preconditioner_combo = QtWidgets.QComboBox(); self.solver_compute_warp_preconditioner_combo.addItems(['diag', 'none'])
+            self.solver_compute_iter_tol_edit = QtWidgets.QLineEdit('1e-10')
+            self.solver_compute_iter_max_spin = QtWidgets.QSpinBox(); self.solver_compute_iter_max_spin.setRange(25, 20000); self.solver_compute_iter_max_spin.setValue(2000)
+            cform.addRow('Backend', self.solver_compute_backend_combo)
+            cform.addRow('设备 Device', self.solver_compute_device_combo)
+            cform.addRow('CPU 核心数 / Threads (0=auto)', self.solver_compute_threads_spin)
+            cform.addRow('必须使用 Warp', self.solver_compute_require_warp_check)
+            cform.addRow('Warp Hex8 装配', self.solver_compute_hex8_check)
+            cform.addRow('Warp 非线性连续体', self.solver_compute_nonlinear_check)
+            cform.addRow('GPU 线性主路径', self.solver_compute_full_gpu_check)
+            cform.addRow('GPU 全局装配', self.solver_compute_gpu_assembly_check)
+            cform.addRow('GPU Interface 装配', self.solver_compute_interface_check)
+            cform.addRow('GPU Structural 合并', self.solver_compute_structural_check)
+            cform.addRow('统一 Block Merge', self.solver_compute_block_merge_check)
+            cform.addRow('重排序 Ordering', self.solver_compute_ordering_combo)
+            cform.addRow('预条件 Preconditioner', self.solver_compute_preconditioner_combo)
+            cform.addRow('求解策略 Strategy', self.solver_compute_strategy_combo)
+            cform.addRow('Warp 预条件', self.solver_compute_warp_preconditioner_combo)
+            cform.addRow('迭代容差', self.solver_compute_iter_tol_edit)
+            cform.addRow('迭代上限', self.solver_compute_iter_max_spin)
+            cgl.addLayout(cform)
+            self.solver_compute_hardware_label = QtWidgets.QLabel('')
+            self.solver_compute_hardware_label.setWordWrap(True)
+            self.solver_compute_summary_label = QtWidgets.QLabel('')
+            self.solver_compute_summary_label.setWordWrap(True)
+            cgl.addWidget(self.solver_compute_hardware_label)
+            cgl.addWidget(self.solver_compute_summary_label)
+            for _w in (self.solver_compute_backend_combo, self.solver_compute_device_combo, self.solver_compute_threads_spin, self.solver_compute_require_warp_check, self.solver_compute_hex8_check, self.solver_compute_nonlinear_check, self.solver_compute_full_gpu_check, self.solver_compute_gpu_assembly_check, self.solver_compute_interface_check, self.solver_compute_structural_check, self.solver_compute_block_merge_check, self.solver_compute_ordering_combo, self.solver_compute_preconditioner_combo, self.solver_compute_strategy_combo, self.solver_compute_warp_preconditioner_combo, self.solver_compute_iter_tol_edit, self.solver_compute_iter_max_spin):
+                try:
+                    _w.currentTextChanged.connect(self._update_solver_compute_summary)
+                except Exception:
+                    pass
+                try:
+                    _w.valueChanged.connect(self._update_solver_compute_summary)
+                except Exception:
+                    pass
+                try:
+                    _w.toggled.connect(self._update_solver_compute_summary)
+                except Exception:
+                    pass
+                try:
+                    _w.textChanged.connect(self._update_solver_compute_summary)
+                except Exception:
+                    pass
+            sgl.addWidget(compute_group)
+
             sform = QtWidgets.QFormLayout()
             self.result_scale_spin = QtWidgets.QDoubleSpinBox(); self.result_scale_spin.setRange(0.01, 1e6); self.result_scale_spin.setValue(1.0); self.result_scale_spin.setDecimals(3)
             self.result_scale_spin.valueChanged.connect(self.refresh_view)
@@ -1108,7 +1310,7 @@ def launch_main_window() -> None:
             return scroll
 
         def _create_solver_progress_dialog(self) -> None:
-            dlg = QtWidgets.QProgressDialog(self._tt('Preparing solver...'), self._tt('Cancel'), 0, 100, self)
+            dlg = QtWidgets.QProgressDialog(self._tt('Preparing solver...'), self._tt('Cancel'), 0, 0, self)
             dlg.setWindowTitle(self._tt('Solver progress'))
             dlg.setWindowModality(QtCore.Qt.WindowModality.NonModal)
             dlg.setAutoClose(False)
@@ -1126,6 +1328,8 @@ def launch_main_window() -> None:
             if text is not None:
                 dlg.setLabelText(self._tt(text))
             if value is not None:
+                if dlg.maximum() == 0 and int(value) > 0:
+                    dlg.setRange(0, 100)
                 dlg.setValue(max(0, min(100, int(value))))
 
         def _close_solver_progress_dialog(self) -> None:
@@ -1181,10 +1385,20 @@ def launch_main_window() -> None:
         def _solver_heartbeat_tick(self) -> None:
             if self._solver_thread is None or self._eta_estimator is None:
                 return
-            elapsed, _ = self._eta_estimator.update(0.0)
+            elapsed, eta = self._eta_estimator.update(float(getattr(self, '_last_solver_fraction', 0.0) or 0.0))
             dots = '.' * ((getattr(self, '_heartbeat_counter', 0) % 3) + 1)
             self._heartbeat_counter = getattr(self, '_heartbeat_counter', 0) + 1
-            message = f"{self._tt('Solver is running in background')} {dots} | {self._tt('Elapsed')} {format_seconds(elapsed)}"
+            tail = ''
+            payload = getattr(self, '_last_solver_payload', None) or {}
+            current = str(payload.get('message', '') or '').strip()
+            if not current and isinstance(payload, dict):
+                phase = str(payload.get('phase', '') or '').strip()
+                if phase:
+                    current = phase
+            if current:
+                tail = f" | {current}"
+            eta_text = f" | ETA {format_seconds(eta)}" if eta is not None else ''
+            message = f"{self._tt('Solver is running in background')} {dots} | {self._tt('Elapsed')} {format_seconds(elapsed)}{eta_text}{tail}"
             self.status_label.setText(message)
             self._update_solver_progress_dialog(text=message)
 
@@ -1536,15 +1750,23 @@ def launch_main_window() -> None:
                 tol = float(self.solver_tol_edit.text().strip())
             except Exception:
                 tol = 1.0e-5
-            requested_device = self.solver_device_combo.currentText() if hasattr(self, 'solver_device_combo') else 'auto'
-            if requested_device == 'auto':
-                requested_device = 'cuda' if getattr(self, '_cuda_available', False) else 'cpu'
-            tc = int(self.solver_threads_spin.value()) if hasattr(self, 'solver_threads_spin') else 0
-            if tc <= 0:
-                tc = getattr(self, '_default_thread_count', default_thread_count())
-            settings = SolverSettings(prefer_sparse=self.solver_prefer_sparse.isChecked(), line_search=self.solver_line_search.isChecked(), max_cutbacks=int(self.solver_max_cutbacks_spin.value()), max_iterations=int(self.solver_max_iter_spin.value()), tolerance=tol, device=requested_device, thread_count=tc)
+            prefs = self._read_solver_compute_preferences()
+            requested_device = prefs.resolved_device(getattr(self, '_cuda_available', False))
+            tc = prefs.resolved_thread_count(getattr(self, '_cpu_core_total', None))
+            settings = SolverSettings(
+                backend=prefs.backend,
+                prefer_sparse=self.solver_prefer_sparse.isChecked(),
+                line_search=self.solver_line_search.isChecked(),
+                max_cutbacks=int(self.solver_max_cutbacks_spin.value()),
+                max_iterations=int(self.solver_max_iter_spin.value()),
+                tolerance=tol,
+                device=requested_device,
+                thread_count=tc,
+            )
+            settings.metadata.update(prefs.to_metadata(cuda_available=getattr(self, '_cuda_available', False)))
             if self.current_model is not None:
                 self.current_model.metadata['solver_settings'] = {
+                    'backend': settings.backend,
                     'max_iterations': settings.max_iterations,
                     'tolerance': settings.tolerance,
                     'max_cutbacks': settings.max_cutbacks,
@@ -1552,6 +1774,7 @@ def launch_main_window() -> None:
                     'line_search': settings.line_search,
                     'device': settings.device,
                     'thread_count': settings.thread_count,
+                    **settings.metadata,
                 }
             return settings
 
@@ -1829,13 +2052,33 @@ def launch_main_window() -> None:
                 self._set_status('已自动赋默认边界条件：四周与底部位移固定。')
 
         def _estimate_progress_fraction(self, payload: dict) -> float:
+            explicit = payload.get('fraction', payload.get('stage_fraction', None))
             stage_index = int(payload.get('stage_index', 1) or 1)
             stage_count = max(1, int(payload.get('stage_count', 1) or 1))
+            if explicit is not None:
+                try:
+                    inner = max(0.0, min(0.999, float(explicit)))
+                    return min(0.999, ((stage_index - 1) + inner) / stage_count)
+                except Exception:
+                    pass
             step = int(payload.get('step', 1) or 1)
             iteration = int(payload.get('iteration', 0) or 0)
-            if payload.get('phase') == 'stage-complete':
+            phase = str(payload.get('phase', '') or '')
+            if phase == 'stage-complete':
                 return stage_index / stage_count
-            inner = min(0.95, (max(step, 1) - 1) * 0.12 + min(iteration, 12) / 12.0 * 0.12)
+            phase_bias = {
+                'worker-start': 0.01,
+                'stage-start': 0.02,
+                'step-start': 0.04,
+                'iteration-start': 0.06,
+                'assembly-start': 0.08,
+                'assembly-done': 0.18,
+                'linear-solve-start': 0.22,
+                'linear-solve-done': 0.32,
+                'line-search-start': 0.36,
+                'line-search-done': 0.42,
+            }.get(phase, 0.0)
+            inner = min(0.95, phase_bias + (max(step, 1) - 1) * 0.12 + min(iteration, 12) / 12.0 * 0.12)
             return min(0.99, ((stage_index - 1) + inner) / stage_count)
 
         # ---------- Project/model helpers ----------
@@ -3534,9 +3777,12 @@ def launch_main_window() -> None:
             self.current_model.clear_results()
             self._eta_estimator = ProgressEtaEstimator()
             self._clear_diagnostics()
-            self.progress_overall.setValue(0); self.progress_iter.setValue(0); self.history_table.setRowCount(0)
+            self.progress_overall.setRange(0, 0); self.progress_iter.setRange(0, 100); self.progress_overall.setValue(0); self.progress_iter.setValue(0); self.history_table.setRowCount(0)
+            self._last_solver_payload = None
+            self._last_solver_fraction = 0.0
             solver_settings = self._solver_settings()
-            self._append_task_row(self._tt('Solve'), '-', self._tt('Running'), self._tt(f'Background solve started on {solver_settings.device} with {solver_settings.thread_count} CPU threads ready for linear algebra.'), self._tt('A progress dialog and status heartbeat will stay visible while solving.'))
+            compute_summary = self._read_solver_compute_preferences().summary(cpu_total=getattr(self, '_cpu_core_total', None), cuda_available=getattr(self, '_cuda_available', False))
+            self._append_task_row(self._tt('Solve'), '-', self._tt('Running'), self._tt(f'Background solve started: {compute_summary}'), self._tt('A progress dialog and status heartbeat will stay visible while solving.'))
             self._set_status(self._tt('Background solve started ...'))
             self.act_run.setEnabled(False); self.btn_run_solver.setEnabled(False); self.act_cancel.setEnabled(True); self.btn_cancel_solver.setEnabled(True)
             self._create_solver_progress_dialog()
@@ -3569,13 +3815,15 @@ def launch_main_window() -> None:
         def _on_solver_progress(self, payload: object) -> None:
             if not isinstance(payload, dict):
                 return
+            self._last_solver_payload = dict(payload)
             stage_index = int(payload.get('stage_index', 1) or 1)
             stage_count = int(payload.get('stage_count', 1) or 1)
             phase = str(payload.get('phase', ''))
             stage = str(payload.get('stage', ''))
             fraction = self._estimate_progress_fraction(payload)
             elapsed, eta = self._eta_estimator.update(fraction) if self._eta_estimator is not None else (0.0, None)
-            overall = int(100.0 * max(0.0, min(1.0, fraction)))
+            self._last_solver_fraction = max(0.0, min(1.0, fraction))
+            overall = int(100.0 * self._last_solver_fraction)
             detail = str(payload.get('message', ''))
             advice = ''
             state_text = phase or 'running'
@@ -3600,6 +3848,8 @@ def launch_main_window() -> None:
             elif phase:
                 state_text = phase
             eta_text = f'ETA {format_seconds(eta)} | Elapsed {format_seconds(elapsed)}'
+            if self.progress_overall.maximum() == 0 and overall > 0:
+                self.progress_overall.setRange(0, 100)
             self.progress_overall.setValue(max(0, min(100, overall)))
             self.progress_overall.setFormat(f'Overall %p% | {eta_text}')
             label_text = f'{stage} | {state_text} | {detail} | {eta_text}' if stage else f'{state_text} | {detail} | {eta_text}'
@@ -3609,7 +3859,7 @@ def launch_main_window() -> None:
 
         def _on_solver_finished(self, solved_model: object, canceled: bool) -> None:
             self.current_model = solved_model
-            self.progress_overall.setValue(100); self.progress_iter.setValue(100 if not canceled else 0)
+            self.progress_overall.setRange(0, 100); self.progress_overall.setValue(100); self.progress_iter.setValue(100 if not canceled else 0)
             self.progress_overall.setFormat('Overall %p%')
             self._update_solver_progress_dialog(100 if not canceled else 0, str(self.current_model.metadata.get('solver_note', 'Solve finished')) if self.current_model else 'Solve finished')
             self._sync_all_views()
@@ -3621,6 +3871,7 @@ def launch_main_window() -> None:
             self._close_solver_progress_dialog()
 
         def _on_solver_failed(self, error_text: str) -> None:
+            self.progress_overall.setRange(0, 100)
             self.progress_iter.setValue(0)
             self.progress_overall.setFormat('Overall %p%')
             self._update_solver_progress_dialog(None, 'Solver failed. Preparing diagnostics...')
