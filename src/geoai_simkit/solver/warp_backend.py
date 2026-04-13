@@ -11,6 +11,7 @@ from geoai_simkit.materials import MaterialState, registry
 from geoai_simkit.solver.base import SolverBackend, SolverSettings
 from geoai_simkit.solver.hex8_linear import LinearRegionMaterial, extract_hex8_submesh, solve_linear_hex8, subset_hex8_submesh
 from geoai_simkit.solver.hex8_nonlinear import NonlinearHex8Solver
+from geoai_simkit.solver.linear_algebra import configure_linear_algebra_threads
 from geoai_simkit.solver.mesh_graph import build_point_adjacency
 from geoai_simkit.solver.staging import StageManager
 from geoai_simkit.utils import optional_import
@@ -56,19 +57,80 @@ class WarpBackend(SolverBackend):
             )
         return data
 
+
+    def _warp_has_cuda(self, wp) -> bool:
+        checks = []
+        for name in ("is_cuda_available", "cuda_available"):
+            attr = getattr(wp, name, None)
+            if callable(attr):
+                checks.append(attr)
+            elif isinstance(attr, bool):
+                return bool(attr)
+        for fn in checks:
+            try:
+                if fn():
+                    return True
+            except Exception:
+                pass
+        for name in ("get_cuda_devices", "get_devices"):
+            fn = getattr(wp, name, None)
+            if not callable(fn):
+                continue
+            try:
+                devices = fn()
+                for dev in devices:
+                    if "cuda" in str(dev).lower() or "gpu" in str(dev).lower():
+                        return True
+            except Exception:
+                pass
+        return False
+
+    def _select_runtime_device(self, wp, requested: str) -> str:
+        requested = (requested or "auto").lower()
+        try:
+            has_cuda = self._warp_has_cuda(wp)
+        except Exception:
+            has_cuda = False
+        chosen = requested
+        if requested == "auto":
+            chosen = "cuda" if has_cuda else "cpu"
+        if chosen == "cuda" and not has_cuda:
+            chosen = "cpu"
+        setter = getattr(wp, "set_device", None)
+        if callable(setter):
+            try:
+                setter("cuda:0" if chosen == "cuda" else "cpu")
+            except Exception:
+                pass
+        return chosen
+
     def solve(self, model: SimulationModel, settings: SolverSettings, progress_callback=None, cancel_check=None) -> SimulationModel:
         model.ensure_regions()
         backend_name = "placeholder-no-warp"
+        selected_device = str(settings.device or 'auto').lower()
+        require_warp = bool(settings.metadata.get('require_warp', False) or str(settings.device or 'auto').lower().startswith('cuda'))
         try:
             wp = self._ensure_warp()
+            if wp is None:
+                raise RuntimeError('warp-lang is required but not installed')
             wp.init()
-            backend_name = f"warp-{getattr(wp, '__version__', 'unknown')}"
+            selected_device = self._select_runtime_device(wp, selected_device)
+            backend_name = f"warp-{getattr(wp, '__version__', 'unknown')}-{selected_device}"
         except RuntimeError:
             wp = None
+            if require_warp:
+                raise
+            if selected_device == 'auto':
+                selected_device = 'cpu'
+
+        effective_threads = configure_linear_algebra_threads(int(settings.thread_count))
+        settings.thread_count = int(effective_threads)
 
         grid = model.to_unstructured_grid()
         if grid.n_points == 0:
             model.metadata["backend"] = backend_name
+            model.metadata['compute_device'] = selected_device
+            model.metadata['thread_count'] = int(settings.thread_count)
             return model
 
         for region in model.region_tags:
@@ -80,6 +142,7 @@ class WarpBackend(SolverBackend):
         x0 = points0.copy()
         total_u = np.zeros((grid.n_points, 3), dtype=float)
         stage_names: list[str] = []
+        linear_assembly_info: dict[str, object] | None = None
 
         # Try true Hex8 path first
         hex_submesh = extract_hex8_submesh(grid)
@@ -146,9 +209,12 @@ class WarpBackend(SolverBackend):
                         prefer_sparse=bool(settings.prefer_sparse),
                         line_search=bool(settings.line_search),
                         max_cutbacks=int(settings.max_cutbacks),
+                        thread_count=int(settings.thread_count),
                         progress_callback=_stage_progress,
                         cancel_check=cancel_check,
                         stage_name=stage.name,
+                        solver_metadata=settings.metadata,
+                        compute_device=selected_device,
                     )
                     u_local = result.u_nodes
                     rot_local = result.structural_rotations
@@ -164,13 +230,17 @@ class WarpBackend(SolverBackend):
                     cell_eqp_full[sub.full_cell_ids] = result.cell_eq_plastic
                 else:
                     mats = self._hex_materials(sub.full_cell_ids, cell_region_map, material_env)
-                    u_local, cell_stress, cell_vm = solve_linear_hex8(
+                    u_local, cell_stress, cell_vm, linear_assembly_info = solve_linear_hex8(
                         sub,
                         mats,
                         bcs=stage_bcs,
                         loads=stage_loads,
                         gravity=settings.gravity,
                         displacement_scale=1.0,
+                        prefer_sparse=bool(settings.prefer_sparse),
+                        thread_count=int(settings.thread_count),
+                        compute_device=selected_device,
+                        solver_metadata=settings.metadata,
                     )
                 du_full = np.zeros_like(total_u)
                 du_full[sub.global_point_ids] = u_local
@@ -209,10 +279,14 @@ class WarpBackend(SolverBackend):
             grid.points = x0 + settings.displacement_scale * total_u
             model.mesh = grid
             model.metadata["backend"] = backend_name
+            model.metadata['compute_device'] = selected_device
+            model.metadata['thread_count'] = int(settings.thread_count)
             model.metadata["stages_run"] = stage_names
             if nonlinear_present:
                 model.metadata.setdefault("solver_history", {})[stage.name] = result.convergence_history
             model.metadata.setdefault("linear_solver", {})[stage.name] = (result.convergence_history[-1].get("linear_backend") if nonlinear_present and result.convergence_history else ("numpy-dense" if not nonlinear_present else "unknown"))
+            if linear_assembly_info is not None:
+                model.metadata.setdefault('linear_element_assembly', {})[stage.name] = linear_assembly_info
             model.metadata["solver_mode"] = "nonlinear-hex8" if nonlinear_present else "linear-hex8"
             model.metadata["solver_note"] = (
                 "Executed the Hex8 nonlinear incremental path with Gauss-point state updates, structural overlays, and node-pair interface contact/friction. "
@@ -267,6 +341,8 @@ class WarpBackend(SolverBackend):
         grid.points = x0 + settings.displacement_scale * total_u
         model.mesh = grid
         model.metadata["backend"] = backend_name
+        model.metadata['compute_device'] = selected_device
+        model.metadata['thread_count'] = int(settings.thread_count)
         model.metadata["stages_run"] = stage_names
         model.metadata["solver_mode"] = "graph-relaxation-fallback"
         if wp is None:
@@ -344,14 +420,17 @@ class WarpBackend(SolverBackend):
         damping = 0.92
         k = max(1e-6, stiffness_scale)
         fixed = np.where(np.isclose(z, bottom))[0]
+        counts = np.diff(indptr).astype(np.float64)
+        valid_rows = counts > 0
+        if np.any(valid_rows):
+            src = np.repeat(np.arange(n, dtype=np.int64), counts.astype(np.int64))
+        else:
+            src = np.empty((0,), dtype=np.int64)
         for _ in range(max(1, steps)):
             lap = np.zeros_like(u)
-            for i in range(n):
-                start, end = int(indptr[i]), int(indptr[i + 1])
-                if start == end:
-                    continue
-                neigh = neighbors[start:end]
-                lap[i] = np.mean(u[neigh] - u[i], axis=0)
+            if src.size:
+                np.add.at(lap, src, u[neighbors])
+                lap[valid_rows] = lap[valid_rows] / counts[valid_rows, None] - u[valid_rows]
             force = lap * k
             force[:, 2] += depth_weight * g[2] * 1e-4
             v = damping * v + dt * force

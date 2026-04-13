@@ -110,3 +110,7 @@ dmypy.json
 *.tmp
 *.swp
 *.swo
+
+exports_root/
+exports_v3/
+exports_v6/

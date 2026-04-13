@@ -53,6 +53,7 @@ class GeometryObjectRecord:
     properties: dict[str, Any] = field(default_factory=dict)
     visible: bool = True
     pickable: bool = True
+    locked: bool = False
 
 
 @dataclass(slots=True)
@@ -264,20 +265,79 @@ class SimulationModel:
             if item.key in keys:
                 item.visible = bool(visible)
                 if pickable is None:
-                    item.pickable = bool(visible)
+                    item.pickable = bool(visible) and (not item.locked)
                 else:
-                    item.pickable = bool(pickable)
+                    item.pickable = bool(pickable) and (not item.locked)
+
+    def set_object_locked(self, object_keys: Iterable[str], locked: bool) -> None:
+        keys = set(object_keys)
+        for item in self.object_records:
+            if item.key in keys:
+                item.locked = bool(locked)
+                if item.locked:
+                    item.pickable = False
+                elif item.visible:
+                    item.pickable = True
 
     def show_all_objects(self) -> None:
         for item in self.object_records:
             item.visible = True
-            item.pickable = True
+            item.pickable = not item.locked
 
     def visible_object_keys(self) -> set[str]:
         return {item.key for item in self.object_records if item.visible}
 
     def pickable_object_keys(self) -> set[str]:
-        return {item.key for item in self.object_records if item.pickable and item.visible}
+        return {item.key for item in self.object_records if item.pickable and item.visible and not item.locked}
+
+    def translate_object_blocks(self, object_keys: Iterable[str], offset: tuple[float, float, float]) -> int:
+        """Translate selected object-backed blocks in-place.
+
+        This starter implementation supports MultiBlock-backed scene objects where
+        records keep a source_block name. It is intended for interactive micro-
+        adjustment from the 3D view/inspector without deleting or recreating the
+        object. Returns the number of translated blocks.
+        """
+        if not isinstance(self.mesh, pv.MultiBlock):
+            return 0
+        keys = {str(k) for k in object_keys}
+        if not keys:
+            return 0
+        vec = np.asarray(offset, dtype=float).reshape(1, 3)
+        moved = 0
+        for rec in self.object_records:
+            if rec.key not in keys:
+                continue
+            candidates = [rec.source_block, rec.key, rec.name]
+            block = None
+            chosen_name = None
+            for name in candidates:
+                if not name:
+                    continue
+                try:
+                    if name in self.mesh.keys():
+                        block = self.mesh[name]
+                        chosen_name = name
+                        break
+                except Exception:
+                    continue
+            if block is None:
+                continue
+            try:
+                pts = np.asarray(block.points)
+                if pts.size == 0:
+                    continue
+                block.points = pts + vec
+                rec.metadata['translation'] = [float(x) for x in (np.asarray(rec.metadata.get('translation', [0.0, 0.0, 0.0]), dtype=float) + vec.ravel())]
+                moved += 1
+                # keep some discoverable hint on the block itself for debugging/export
+                try:
+                    block.field_data['translation'] = np.asarray(rec.metadata['translation'], dtype=float)
+                except Exception:
+                    pass
+            except Exception:
+                continue
+        return moved
 
     def set_object_role(self, object_keys: Iterable[str], role: str) -> None:
         keys = set(object_keys)

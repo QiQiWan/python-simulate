@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 import tempfile
-from typing import Any
+import time
+from typing import Any, Callable
 
 import numpy as np
 try:
@@ -33,8 +34,16 @@ class GmshMesher:
         except Exception:
             return False
 
-    def __init__(self, options: GmshMesherOptions | None = None) -> None:
+    def __init__(
+        self,
+        options: GmshMesherOptions | None = None,
+        *,
+        progress_callback: Callable[[dict[str, Any]], None] | None = None,
+        log_callback: Callable[[str], None] | None = None,
+    ) -> None:
         self.options = options or GmshMesherOptions()
+        self.progress_callback = progress_callback
+        self.log_callback = log_callback
 
     def mesh_model(self, model: SimulationModel) -> SimulationModel:
         if pv is None:
@@ -45,33 +54,95 @@ class GmshMesher:
             raise RuntimeError('meshio is required for gmsh meshing') from exc
         data = model.mesh
         items = [(str(k), data[k]) for k in data.keys()] if isinstance(data, pv.MultiBlock) else [(model.name, data)]
+        items = [(key, block) for key, block in items if block is not None and int(getattr(block, 'n_cells', 0) or 0) > 0]
+        total = len(items)
         out = pv.MultiBlock()
         region_tags: list[RegionTag] = []
         cell_offset = 0
         warnings: list[str] = []
-        for key, block in items:
-            if block is None or int(getattr(block, 'n_cells', 0)) == 0:
-                continue
+        started_at = time.perf_counter()
+
+        self._emit(phase='gmsh-start', value=12, message=f'Launching local gmsh mesher for {total} object(s).', object_count=total, log=True)
+        for index, (key, block) in enumerate(items, start=1):
             region_name = self._region_name(key, block)
             try:
-                grid = self._mesh_block(block, meshio)
+                self._emit(
+                    phase='gmsh-object-start',
+                    value=15 + int(60.0 * max(0, index - 1) / max(1, total)),
+                    message=(
+                        f'Gmsh meshing {key} ({index}/{total}) with target size={self.options.element_size:g}; '
+                        f'source cells={int(getattr(block, "n_cells", 0) or 0)}'
+                    ),
+                    object_name=key,
+                    object_index=index,
+                    object_count=total,
+                    log=True,
+                )
+                grid, stats = self._mesh_block(block, meshio)
             except Exception as exc:
-                warnings.append(f'{key}: {exc}')
+                reason = self._format_gmsh_error(exc)
+                warnings.append(f'{key}: {reason}')
+                self._emit(
+                    phase='gmsh-object-failed',
+                    value=15 + int(60.0 * index / max(1, total)),
+                    message=f'{key}: {reason}',
+                    object_name=key,
+                    object_index=index,
+                    object_count=total,
+                    severity='warning',
+                    hint='Check whether the object is a closed solid; otherwise switch to voxel_hex8.',
+                    log=True,
+                )
                 continue
             if grid is None or int(grid.n_cells) == 0:
+                warnings.append(f'{key}: gmsh returned an empty volume mesh.')
                 continue
             grid.cell_data['region_name'] = np.array([region_name] * grid.n_cells)
             grid.field_data['region_name'] = np.array([region_name])
             out[region_name] = grid
             region_tags.append(RegionTag(name=region_name, cell_ids=np.arange(cell_offset, cell_offset + grid.n_cells, dtype=np.int64), metadata={'source': key, 'meshed_by': 'gmsh'}))
             cell_offset += grid.n_cells
+            self._emit(
+                phase='gmsh-object-complete',
+                value=15 + int(60.0 * index / max(1, total)),
+                message=(
+                    f'Gmsh completed {key} ({index}/{total}) -> {int(grid.n_cells)} cells, '
+                    f'{int(grid.n_points)} points, elapsed {float(stats.get("elapsed_seconds", 0.0)):.2f}s'
+                ),
+                object_name=key,
+                object_index=index,
+                object_count=total,
+                stats=stats,
+                log=True,
+            )
         if not out.keys():
-            raise RuntimeError('gmsh 未能生成体网格。请确认几何为闭合实体，或改用体素化。')
+            detail = '\n'.join(warnings[:6]) if warnings else 'No object produced a valid volume mesh.'
+            raise RuntimeError('gmsh 未能生成体网格。请确认几何为闭合实体，或改用体素化。\n' + detail)
+        elapsed = time.perf_counter() - started_at
         model.mesh = out if len(out.keys()) > 1 else next(out[k] for k in out.keys())
         model.region_tags = region_tags
         model.metadata['meshed_by'] = 'gmsh'
+        model.metadata['mesh_summary'] = {
+            'method': 'gmsh_tet',
+            'object_count': total,
+            'warning_count': len(warnings),
+            'elapsed_seconds': elapsed,
+            'regions': len(region_tags),
+            'cells': int(sum(int(getattr(out[k], 'n_cells', 0) or 0) for k in out.keys())),
+            'points': int(sum(int(getattr(out[k], 'n_points', 0) or 0) for k in out.keys())),
+        }
         if warnings:
             model.metadata.setdefault('mesh_warnings', []).extend(warnings)
+        self._emit(
+            phase='gmsh-finished',
+            value=88,
+            message=(
+                f'Gmsh meshing finished: {model.metadata["mesh_summary"]["regions"]} region(s), '
+                f'{model.metadata["mesh_summary"]["cells"]} cells, elapsed {elapsed:.2f}s.'
+            ),
+            summary=model.metadata['mesh_summary'],
+            log=True,
+        )
         return model
 
     def _region_name(self, key: str, block: Any) -> str:
@@ -86,7 +157,8 @@ class GmshMesher:
     def _mesh_block(self, block: Any, meshio_mod):
         surf = block.extract_surface().triangulate()
         if surf.n_cells == 0:
-            return None
+            return None, {'elapsed_seconds': 0.0}
+        started_at = time.perf_counter()
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)
             stl = td / 'in.stl'
@@ -99,7 +171,12 @@ class GmshMesher:
             if proc.returncode != 0 or not msh.exists():
                 raise RuntimeError((proc.stderr or proc.stdout or 'gmsh failed').strip())
             mesh = meshio_mod.read(msh)
-            return self._meshio_to_pyvista(mesh)
+            grid = self._meshio_to_pyvista(mesh)
+            return grid, {
+                'elapsed_seconds': time.perf_counter() - started_at,
+                'stdout_tail': '\n'.join((proc.stdout or '').splitlines()[-8:]),
+                'stderr_tail': '\n'.join((proc.stderr or '').splitlines()[-8:]),
+            }
 
     def _meshio_to_pyvista(self, mesh):
         mapping = {'tetra': 10, 'hexahedron': 12, 'wedge': 13, 'pyramid': 14}
@@ -117,3 +194,29 @@ class GmshMesher:
         if not cell_blocks:
             return None
         return pv.UnstructuredGrid(np.concatenate(cell_blocks), np.concatenate(cell_types), np.asarray(mesh.points[:, :3], dtype=float))
+
+    def _format_gmsh_error(self, exc: Exception) -> str:
+        text = str(exc).strip() or exc.__class__.__name__
+        lower = text.lower()
+        if 'meshio is required' in lower:
+            return 'meshio is not installed, so gmsh output cannot be converted. Install requirements-solver/meshing dependencies.'
+        if 'not found' in lower or 'no such file' in lower:
+            return 'gmsh executable was not found on PATH.'
+        if 'self intersect' in lower or 'non manifold' in lower:
+            return 'The surface appears self-intersecting or non-manifold; gmsh cannot build a valid 3D volume from it.'
+        if 'unable to recover' in lower or 'surface mesh' in lower:
+            return 'gmsh failed while recovering the volume from the imported shell; the object is likely open or has damaged facets.'
+        return text
+
+    def _emit(self, **payload: Any) -> None:
+        if self.progress_callback is not None:
+            try:
+                self.progress_callback(payload)
+            except Exception:
+                pass
+        text = str(payload.get('message') or '').strip()
+        if text and payload.get('log') and self.log_callback is not None:
+            try:
+                self.log_callback(text)
+            except Exception:
+                pass

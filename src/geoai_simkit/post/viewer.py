@@ -51,7 +51,7 @@ class PreviewBuilder:
         clip_ratio = float(visual_options.get('clip_ratio', 0.5))
         has_selection = bool(selected_regions or selected_blocks)
         visible_map = {rec.key: bool(getattr(rec, 'visible', True)) for rec in model.object_records}
-        pickable_map = {rec.key: bool(getattr(rec, 'pickable', True)) and bool(getattr(rec, 'visible', True)) for rec in model.object_records}
+        pickable_map = {rec.key: bool(getattr(rec, 'pickable', True)) and bool(getattr(rec, 'visible', True)) and (not bool(getattr(rec, 'locked', False))) for rec in model.object_records}
         data = build_stage_dataset(model, stage, displacement_scale=displacement_scale) if stage else model.mesh
         kwargs = {'show_edges': bool(show_edges), 'opacity': opacity_default}
         if cmap:
@@ -233,6 +233,7 @@ class PreviewBuilder:
             'role': _first('role') or _first('suggested_role'),
             'visible': _first('visible'),
             'pickable': _first('pickable'),
+            'locked': _first('locked'),
             'bounds': getattr(block, 'bounds', None),
         }
 

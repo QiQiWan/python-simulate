@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "geoai-simkit"
-version = "0.1.18"
-description = "Graphics-first AI simulation kernel starter with IFC import, pluggable materials, Warp backend hooks, and VTK export"
+version = "0.1.27"
+description = "Graphics-first AI simulation kernel with mandatory NVIDIA Warp GPU path, IFC import, and VTK export"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name = "OpenAI"}]
@@ -13,12 +13,14 @@ dependencies = [
   "numpy>=1.26",
   "pyvista>=0.47",
   "typing-extensions>=4.9",
-  "scipy>=1.11"
+  "scipy>=1.11",
+  "warp-lang>=1.12"
 ]
 
 [project.optional-dependencies]
 solver = [
-  "scipy>=1.11"
+  "scipy>=1.11",
+  "warp-lang>=1.12"
 ]
 ui = [
   "PySide6>=6.7",

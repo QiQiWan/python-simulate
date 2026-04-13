@@ -31,6 +31,16 @@ It is still **not a full commercial-grade nonlinear FEM product**. The main rema
 - coupled seepage / effective stress / consolidation workflows
 
 
+## What is new in v11
+
+This revision focuses on **Warp/CUDA element-level acceleration and solver configurability**:
+
+- added an optional **Warp Hex8 element kernel path** for linear Hex8 stiffness/body-force evaluation
+- keeps **CPU sparse global assembly** as a stable fallback, so environments without Warp still work
+- stores element-assembly details under `model.metadata["linear_element_assembly"]`
+- added configurable Warp knobs through `SolverSettings.metadata`
+- added documentation for recommended CUDA / thread / fallback settings
+
 ## What is new in v10
 
 This revision focuses on **desktop usability and interaction design**:

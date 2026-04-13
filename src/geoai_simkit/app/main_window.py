@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import time
 import traceback
 from typing import Any
 
@@ -35,6 +37,7 @@ from geoai_simkit.materials import registry
 from geoai_simkit.post.exporters import ExportManager
 from geoai_simkit.post.viewer import PreviewBuilder
 from geoai_simkit.solver.base import SolverSettings
+from geoai_simkit.solver.linear_algebra import default_thread_count
 from geoai_simkit.solver.warp_backend import WarpBackend
 from geoai_simkit.utils import optional_import
 
@@ -149,6 +152,61 @@ def launch_main_window() -> None:
         def _on_progress(self, payload: object) -> None:
             self.progress.emit(payload)
 
+    class MeshingWorker(QtCore.QObject):
+        progress = QtCore.Signal(object)
+        finished = QtCore.Signal(object, str)
+        failed = QtCore.Signal(str)
+
+        def __init__(self, model: SimulationModel, method: str, element_size: float, padding: float) -> None:
+            super().__init__()
+            self.model = model
+            self.method = method
+            self.element_size = float(element_size)
+            self.padding = float(padding)
+
+        @QtCore.Slot()
+        def run(self) -> None:
+            try:
+                self.progress.emit({'phase': 'prepare', 'value': 5, 'message': 'Preparing meshing job', 'log': True})
+                model = self.model
+
+                def _forward(payload: object) -> None:
+                    if isinstance(payload, dict):
+                        self.progress.emit(payload)
+
+                if self.method == 'gmsh_tet':
+                    self.progress.emit({'phase': 'gmsh-start', 'value': 12, 'message': 'Launching local gmsh mesher', 'log': True})
+                    try:
+                        model = GmshMesher(
+                            GmshMesherOptions(element_size=self.element_size),
+                            progress_callback=_forward,
+                        ).mesh_model(model)
+                    except Exception as exc:
+                        self.progress.emit({
+                            'phase': 'gmsh-fallback',
+                            'value': 18,
+                            'message': f'Gmsh failed and will fall back to voxelization: {exc}',
+                            'severity': 'warning',
+                            'hint': 'Inspect the gmsh diagnostics and consider fixing non-closed solids later.',
+                            'log': True,
+                        })
+                        model = VoxelMesher(
+                            VoxelizeOptions(cell_size=self.element_size, padding=self.padding),
+                            progress_callback=_forward,
+                        ).voxelize_model(model)
+                        self.method = 'voxel_hex8'
+                else:
+                    self.progress.emit({'phase': 'voxelize-start', 'value': 12, 'message': 'Voxelizing model', 'log': True})
+                    model = VoxelMesher(
+                        VoxelizeOptions(cell_size=self.element_size, padding=self.padding),
+                        progress_callback=_forward,
+                    ).voxelize_model(model)
+                model.ensure_regions()
+                self.progress.emit({'phase': 'finalize', 'value': 95, 'message': 'Finalizing mesh data', 'log': True})
+                self.finished.emit(model, self.method)
+            except Exception:
+                self.failed.emit(traceback.format_exc())
+
     class MainWindow(QtWidgets.QMainWindow):
         def __init__(self) -> None:
             super().__init__()
@@ -182,8 +240,22 @@ def launch_main_window() -> None:
             self._solver_progress_dialog = None
             self._solver_heartbeat_timer = None
             self._heartbeat_counter = 0
+            self._meshing_thread = None
+            self._meshing_worker = None
+            self._meshing_progress_dialog = None
+            self._meshing_heartbeat_timer = None
+            self._meshing_started_at = None
+            self._last_meshing_payload: dict[str, object] | None = None
+            self._inspector_dismissed = False
+            self._flash_timer = QtCore.QTimer(self)
+            self._flash_timer.setInterval(180)
+            self._flash_timer.timeout.connect(self._on_flash_tick)
+            self._flash_payload = None
 
             self._build_ui()
+            self._apply_screen_adaptive_layout()
+            self._configure_default_compute_preferences()
+            QtWidgets.QApplication.instance().installEventFilter(self)
             self._populate_material_model_combo()
             self._rebuild_material_param_form()
             self._update_validation()
@@ -197,6 +269,100 @@ def launch_main_window() -> None:
                     self.setWindowIcon(icon)
             except Exception:
                 pass
+
+        def _detect_cuda_available(self) -> bool:
+            try:
+                wp = optional_import('warp')
+                if hasattr(wp, 'init'):
+                    wp.init()
+                for name in ('is_cuda_available', 'cuda_available'):
+                    attr = getattr(wp, name, None)
+                    if callable(attr):
+                        try:
+                            if attr():
+                                return True
+                        except Exception:
+                            pass
+                    elif isinstance(attr, bool) and attr:
+                        return True
+                for name in ('get_cuda_devices', 'get_devices'):
+                    fn = getattr(wp, name, None)
+                    if not callable(fn):
+                        continue
+                    try:
+                        devices = fn()
+                        for dev in devices:
+                            if 'cuda' in str(dev).lower() or 'gpu' in str(dev).lower():
+                                return True
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            return False
+
+        def _configure_default_compute_preferences(self) -> None:
+            total = max(1, int(os.cpu_count() or 1))
+            half = default_thread_count()
+            self._default_thread_count = half
+            self._cuda_available = self._detect_cuda_available()
+            if hasattr(self, 'solver_threads_spin'):
+                self.solver_threads_spin.setRange(0, max(8, total))
+                self.solver_threads_spin.setValue(half)
+                self.solver_threads_spin.setToolTip(self._tt(f'0 means auto. Default suggestion uses nearly all available CPU cores while leaving one core free ({half}/{total}).'))
+            if hasattr(self, 'solver_device_combo'):
+                self.solver_device_combo.setCurrentText('cuda' if self._cuda_available else 'cpu')
+                self.solver_device_combo.setToolTip(self._tt('Prefer GPU when available; otherwise use CPU with configurable thread count.'))
+
+        def _apply_screen_adaptive_layout(self) -> None:
+            screen = QtGui.QGuiApplication.primaryScreen()
+            if screen is None:
+                return
+            geom = screen.availableGeometry()
+            sw, sh = max(1200, geom.width()), max(800, geom.height())
+            target_w = min(max(int(sw * 0.92), 1260), 1800)
+            target_h = min(max(int(sh * 0.90), 820), 1200)
+            self.resize(target_w, target_h)
+            self.setMinimumSize(1180, 760)
+            compact = sw < 1600 or sh < 950
+            if hasattr(self, 'page_stack'):
+                self.page_stack.setMinimumWidth(380 if compact else 440)
+            if hasattr(self, 'main_splitter'):
+                left = int(target_w * (0.64 if compact else 0.67))
+                right = target_w - left
+                self.main_splitter.setSizes([left, right])
+                self.main_splitter.setChildrenCollapsible(False)
+            if hasattr(self, 'center_splitter'):
+                top = int(target_h * (0.66 if compact else 0.70))
+                bottom = target_h - top
+                self.center_splitter.setSizes([top, bottom])
+                self.center_splitter.setChildrenCollapsible(False)
+            if hasattr(self, 'progress_overall'):
+                self.progress_overall.setFixedWidth(150 if compact else 180)
+            if hasattr(self, 'progress_iter'):
+                self.progress_iter.setFixedWidth(130 if compact else 160)
+            if hasattr(self, 'inspector_dock'):
+                self.inspector_dock.setMinimumWidth(300 if compact else 340)
+
+        def _widget_is_inside(self, widget, container) -> bool:
+            while widget is not None:
+                if widget is container:
+                    return True
+                widget = widget.parentWidget() if hasattr(widget, 'parentWidget') else None
+            return False
+
+        def eventFilter(self, obj, event):
+            try:
+                if event.type() == QtCore.QEvent.Type.MouseButtonPress:
+                    if hasattr(self, 'inspector_dock') and self.inspector_dock.isVisible() and not self._inspector_pinned:
+                        widget = obj if isinstance(obj, QtWidgets.QWidget) else None
+                        if widget is None:
+                            widget = QtWidgets.QApplication.widgetAt(QtGui.QCursor.pos())
+                        if widget is not None and not self._widget_is_inside(widget, self.inspector_dock):
+                            self._inspector_dismissed = True
+                            self._update_inspector_collapse()
+            except Exception:
+                pass
+            return super().eventFilter(obj, event)
 
         # ---------- UI ----------
         def _build_ui(self) -> None:
@@ -215,9 +381,14 @@ def launch_main_window() -> None:
             self.act_hide_selected = toolbar.addAction('Hide Selected')
             self.act_isolate_selected = toolbar.addAction('Isolate Selected')
             self.act_show_all_objects = toolbar.addAction('Show All')
+            self.act_lock_selected = toolbar.addAction('Lock Selected')
+            self.act_unlock_selected = toolbar.addAction('Unlock Selected')
             self.act_box_select = toolbar.addAction('Box Select')
             self.act_lasso_select = toolbar.addAction('Lasso Select')
             self.act_clear_selection = toolbar.addAction('Clear Selection')
+            toolbar.addWidget(QtWidgets.QLabel(' Select'))
+            self.selection_filter_combo = QtWidgets.QComboBox(); self.selection_filter_combo.addItems(['all', 'structures', 'soil', 'supports', 'visible_only'])
+            toolbar.addWidget(self.selection_filter_combo)
             toolbar.addSeparator()
             self.act_run = toolbar.addAction('Run')
             self.act_cancel = toolbar.addAction('Cancel')
@@ -250,9 +421,11 @@ def launch_main_window() -> None:
             root.addWidget(self.step_list, 0)
 
             splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+            self.main_splitter = splitter
             root.addWidget(splitter, 1)
 
             center_split = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+            self.center_splitter = center_split
             self.plotter = QtInteractor(self)
             center_split.addWidget(self.plotter.interactor)
             tabs = QtWidgets.QTabWidget()
@@ -289,13 +462,16 @@ def launch_main_window() -> None:
 
             self.status_label = QtWidgets.QLabel('Ready')
             self.statusBar().addWidget(self.status_label, 1)
-            self.progress_overall = QtWidgets.QProgressBar(); self.progress_overall.setFixedWidth(200); self.progress_overall.setFormat('Overall %p%')
-            self.progress_iter = QtWidgets.QProgressBar(); self.progress_iter.setFixedWidth(180); self.progress_iter.setFormat('Inner %p%')
+            self.progress_overall = QtWidgets.QProgressBar(); self.progress_overall.setFixedWidth(180); self.progress_overall.setFormat('Overall %p%')
+            self.progress_iter = QtWidgets.QProgressBar(); self.progress_iter.setFixedWidth(160); self.progress_iter.setFormat('Inner %p%')
             self.statusBar().addPermanentWidget(self.progress_overall)
             self.statusBar().addPermanentWidget(self.progress_iter)
             self._solver_heartbeat_timer = QtCore.QTimer(self)
             self._solver_heartbeat_timer.setInterval(600)
             self._solver_heartbeat_timer.timeout.connect(self._solver_heartbeat_tick)
+            self._meshing_heartbeat_timer = QtCore.QTimer(self)
+            self._meshing_heartbeat_timer.setInterval(500)
+            self._meshing_heartbeat_timer.timeout.connect(self._meshing_heartbeat_tick)
 
             self.step_list.currentRowChanged.connect(self.page_stack.setCurrentIndex)
             self.act_new_demo.triggered.connect(self.create_demo)
@@ -307,12 +483,15 @@ def launch_main_window() -> None:
             self.act_hide_selected.triggered.connect(self.hide_selected_objects)
             self.act_isolate_selected.triggered.connect(self.isolate_selected_objects)
             self.act_show_all_objects.triggered.connect(self.show_all_objects)
+            self.act_lock_selected.triggered.connect(self.lock_selected_objects)
+            self.act_unlock_selected.triggered.connect(self.unlock_selected_objects)
             self.act_box_select.triggered.connect(self.activate_box_selection)
             self.act_lasso_select.triggered.connect(self.activate_lasso_selection)
             self.act_clear_selection.triggered.connect(self.clear_all_selection)
             self.act_box_select.triggered.connect(self.enable_box_select_mode)
             self.act_lasso_select.triggered.connect(self.enable_lasso_select_mode)
-            self.act_toggle_inspector.triggered.connect(lambda checked: self.inspector_dock.setVisible(checked))
+            self.act_toggle_inspector.triggered.connect(self._on_toggle_inspector_requested)
+            self.selection_filter_combo.currentTextChanged.connect(self._on_pick_filter_changed)
             self.lang_combo.currentTextChanged.connect(self._on_language_combo_changed)
             self.result_stage_combo.currentTextChanged.connect(self.refresh_view)
             self.result_field_combo.currentTextChanged.connect(self.refresh_view)
@@ -357,9 +536,10 @@ def launch_main_window() -> None:
             self.inspector_summary = QtWidgets.QTextEdit(); self.inspector_summary.setReadOnly(True); self.inspector_summary.setMinimumHeight(110)
             self.inspector_props = QtWidgets.QTableWidget(0, 2); self.inspector_props.setHorizontalHeaderLabels(['Property', 'Value']); self.inspector_props.horizontalHeader().setStretchLastSection(True)
             vis_row = QtWidgets.QHBoxLayout()
-            self.inspector_visible_check = QtWidgets.QCheckBox('Visible'); self.inspector_pickable_check = QtWidgets.QCheckBox('Pickable')
+            self.inspector_visible_check = QtWidgets.QCheckBox('Visible'); self.inspector_pickable_check = QtWidgets.QCheckBox('Pickable'); self.inspector_locked_check = QtWidgets.QCheckBox('Locked')
             self.inspector_hide_btn = QtWidgets.QPushButton('Hide Selected'); self.inspector_show_btn = QtWidgets.QPushButton('Show Selected')
-            vis_row.addWidget(self.inspector_visible_check); vis_row.addWidget(self.inspector_pickable_check); vis_row.addStretch(1); vis_row.addWidget(self.inspector_hide_btn); vis_row.addWidget(self.inspector_show_btn)
+            self.inspector_lock_btn = QtWidgets.QPushButton('Lock'); self.inspector_unlock_btn = QtWidgets.QPushButton('Unlock')
+            vis_row.addWidget(self.inspector_visible_check); vis_row.addWidget(self.inspector_pickable_check); vis_row.addWidget(self.inspector_locked_check); vis_row.addStretch(1); vis_row.addWidget(self.inspector_hide_btn); vis_row.addWidget(self.inspector_show_btn); vis_row.addWidget(self.inspector_lock_btn); vis_row.addWidget(self.inspector_unlock_btn)
             sl.addWidget(self.inspector_title)
             sl.addWidget(self.inspector_summary)
             sl.addLayout(vis_row)
@@ -377,10 +557,28 @@ def launch_main_window() -> None:
             al.addRow('New region name', self.inspector_region_edit)
             al.addRow('Target region', self.inspector_region_combo)
             al.addRow('Role', self.inspector_role_combo)
+            self.inspector_pick_filter_combo = QtWidgets.QComboBox(); self.inspector_pick_filter_combo.addItems(['all', 'structures', 'soil', 'supports', 'visible_only'])
+            self.inspector_pick_note = QtWidgets.QLabel('Pick filter limits 3D clicking/box selection without changing model data.')
+            self.inspector_pick_note.setWordWrap(True)
+            al.addRow('Pick filter', self.inspector_pick_filter_combo)
+            al.addRow(self.inspector_pick_note)
             al.addRow(self.inspector_assign_new_btn)
             al.addRow(self.inspector_assign_existing_btn)
             al.addRow(self.inspector_merge_regions_btn)
             al.addRow(self.inspector_apply_role_btn)
+            self.inspector_nudge_step = QtWidgets.QDoubleSpinBox(); self.inspector_nudge_step.setDecimals(3); self.inspector_nudge_step.setRange(0.001, 1000.0); self.inspector_nudge_step.setValue(0.2)
+            self.inspector_nudge_dx = QtWidgets.QDoubleSpinBox(); self.inspector_nudge_dx.setDecimals(3); self.inspector_nudge_dx.setRange(-1000.0, 1000.0); self.inspector_nudge_dx.setValue(0.0)
+            self.inspector_nudge_dy = QtWidgets.QDoubleSpinBox(); self.inspector_nudge_dy.setDecimals(3); self.inspector_nudge_dy.setRange(-1000.0, 1000.0); self.inspector_nudge_dy.setValue(0.0)
+            self.inspector_nudge_dz = QtWidgets.QDoubleSpinBox(); self.inspector_nudge_dz.setDecimals(3); self.inspector_nudge_dz.setRange(-1000.0, 1000.0); self.inspector_nudge_dz.setValue(0.0)
+            self.inspector_apply_nudge_btn = QtWidgets.QPushButton('Apply 3D nudge')
+            nudge_row = QtWidgets.QHBoxLayout(); nudge_row.addWidget(self.inspector_nudge_dx); nudge_row.addWidget(self.inspector_nudge_dy); nudge_row.addWidget(self.inspector_nudge_dz)
+            quick_row = QtWidgets.QHBoxLayout();
+            self.inspector_nudge_xp = QtWidgets.QPushButton('+X'); self.inspector_nudge_xm = QtWidgets.QPushButton('-X'); self.inspector_nudge_yp = QtWidgets.QPushButton('+Y'); self.inspector_nudge_ym = QtWidgets.QPushButton('-Y'); self.inspector_nudge_zp = QtWidgets.QPushButton('+Z'); self.inspector_nudge_zm = QtWidgets.QPushButton('-Z')
+            for _b in [self.inspector_nudge_xp, self.inspector_nudge_xm, self.inspector_nudge_yp, self.inspector_nudge_ym, self.inspector_nudge_zp, self.inspector_nudge_zm]: quick_row.addWidget(_b)
+            al.addRow('Nudge step', self.inspector_nudge_step)
+            al.addRow('Δx Δy Δz', nudge_row)
+            al.addRow(self.inspector_apply_nudge_btn)
+            al.addRow(quick_row)
             self.inspector_tabs.addTab(action_tab, 'Actions')
 
             solver_tab = QtWidgets.QWidget(); fol = QtWidgets.QFormLayout(solver_tab)
@@ -410,12 +608,23 @@ def launch_main_window() -> None:
             self.inspector_assign_existing_btn.clicked.connect(self.assign_selected_objects_to_existing_region)
             self.inspector_merge_regions_btn.clicked.connect(self.merge_selected_regions)
             self.inspector_apply_role_btn.clicked.connect(self.apply_selected_object_role)
+            self.inspector_apply_nudge_btn.clicked.connect(self.apply_nudge_to_selected_objects)
+            self.inspector_nudge_xp.clicked.connect(lambda: self.quick_nudge_selected_objects('x', +1.0))
+            self.inspector_nudge_xm.clicked.connect(lambda: self.quick_nudge_selected_objects('x', -1.0))
+            self.inspector_nudge_yp.clicked.connect(lambda: self.quick_nudge_selected_objects('y', +1.0))
+            self.inspector_nudge_ym.clicked.connect(lambda: self.quick_nudge_selected_objects('y', -1.0))
+            self.inspector_nudge_zp.clicked.connect(lambda: self.quick_nudge_selected_objects('z', +1.0))
+            self.inspector_nudge_zm.clicked.connect(lambda: self.quick_nudge_selected_objects('z', -1.0))
             self.inspector_hide_btn.clicked.connect(self.hide_selected_objects)
             self.inspector_show_btn.clicked.connect(self.show_selected_objects)
+            self.inspector_lock_btn.clicked.connect(self.lock_selected_objects)
+            self.inspector_unlock_btn.clicked.connect(self.unlock_selected_objects)
             self.inspector_visible_check.toggled.connect(self._on_inspector_visibility_toggled)
             self.inspector_pickable_check.toggled.connect(self._on_inspector_pickable_toggled)
+            self.inspector_locked_check.toggled.connect(self._on_inspector_locked_toggled)
             self.inspector_pin.toggled.connect(self._on_inspector_pin_toggled)
             self.inspector_collapse.toggled.connect(lambda *_: self._update_inspector_collapse())
+            self.inspector_pick_filter_combo.currentTextChanged.connect(self._on_pick_filter_changed)
             self.inspector_dock = dock
             self._update_inspector_collapse()
 
@@ -573,7 +782,7 @@ def launch_main_window() -> None:
             lay.addWidget(suggestion_box)
 
             split = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-            self.scene_tree = QtWidgets.QTreeWidget(); self.scene_tree.setHeaderLabels(['对象', '类型/区域'])
+            self.scene_tree = QtWidgets.QTreeWidget(); self.scene_tree.setHeaderLabels(['V', 'L', 'Object', 'Type / Region']); self.scene_tree.setColumnWidth(0, 28); self.scene_tree.setColumnWidth(1, 28); self.scene_tree.setColumnWidth(2, 220)
             self.scene_tree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
             self.scene_tree.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
             split.addWidget(self.scene_tree)
@@ -926,6 +1135,49 @@ def launch_main_window() -> None:
                 dlg.deleteLater()
             self._solver_progress_dialog = None
 
+        def _create_meshing_progress_dialog(self) -> None:
+            dlg = QtWidgets.QProgressDialog(self._tt('Preparing meshing...'), self._tt('Close'), 0, 100, self)
+            dlg.setWindowTitle(self._tt('Meshing progress'))
+            dlg.setWindowModality(QtCore.Qt.WindowModality.NonModal)
+            dlg.setAutoClose(False)
+            dlg.setAutoReset(False)
+            dlg.setMinimumDuration(0)
+            dlg.setValue(0)
+            dlg.setCancelButton(None)
+            self._meshing_progress_dialog = dlg
+            dlg.show()
+
+        def _update_meshing_progress_dialog(self, value: int | None = None, text: str | None = None) -> None:
+            dlg = getattr(self, '_meshing_progress_dialog', None)
+            if dlg is None:
+                return
+            if text is not None:
+                dlg.setLabelText(self._tt(text))
+            if value is not None:
+                dlg.setValue(max(0, min(100, int(value))))
+
+        def _close_meshing_progress_dialog(self) -> None:
+            dlg = getattr(self, '_meshing_progress_dialog', None)
+            if dlg is not None:
+                dlg.close()
+                dlg.deleteLater()
+            self._meshing_progress_dialog = None
+
+        def _meshing_heartbeat_tick(self) -> None:
+            if self._meshing_thread is None or self._meshing_started_at is None:
+                return
+            elapsed = max(0.0, time.time() - self._meshing_started_at)
+            dots = '.' * ((getattr(self, '_heartbeat_counter', 0) % 3) + 1)
+            self._heartbeat_counter = getattr(self, '_heartbeat_counter', 0) + 1
+            tail = ''
+            payload = getattr(self, '_last_meshing_payload', None) or {}
+            current = str(payload.get('message', '') or '').strip()
+            if current:
+                tail = f" | {current}"
+            message = f"{self._tt('Meshing is running in background')} {dots} | {self._tt('Elapsed')} {format_seconds(elapsed)}{tail}"
+            self.status_label.setText(message)
+            self._update_meshing_progress_dialog(text=message)
+
         def _solver_heartbeat_tick(self) -> None:
             if self._solver_thread is None or self._eta_estimator is None:
                 return
@@ -1017,17 +1269,40 @@ def launch_main_window() -> None:
                 fixes.append(self._tt('Suggestion: open the Validation tab and fix all errors before solving again.'))
             return fixes
 
+        def _on_toggle_inspector_requested(self, checked: bool) -> None:
+            if checked:
+                self._inspector_dismissed = False
+                self.inspector_dock.setVisible(True)
+            else:
+                self._inspector_dismissed = True
+                self.inspector_dock.setVisible(False)
+
         def _on_inspector_pin_toggled(self, checked: bool) -> None:
             self._inspector_pinned = checked
+            if checked:
+                self._inspector_dismissed = False
             self._update_inspector_collapse()
 
+        def _inspector_has_explicit_selection(self) -> bool:
+            if self.current_model is None:
+                return False
+            has_object_or_region = bool(self._selected_scene_payloads() or self._selected_region_names())
+            stage_rows = False
+            try:
+                stage_rows = bool(self.stage_table.selectionModel() and self.stage_table.selectionModel().selectedRows() and self.stage_table.hasFocus())
+            except Exception:
+                stage_rows = False
+            return bool(has_object_or_region or stage_rows)
+
         def _update_inspector_collapse(self) -> None:
-            has_selection = bool(self._selected_scene_payloads() or self._selected_region_names() or self._selected_stage())
+            has_selection = self._inspector_has_explicit_selection()
             auto_collapse = bool(self.inspector_collapse.isChecked()) if hasattr(self, 'inspector_collapse') else False
-            expanded = self._inspector_pinned or has_selection or not auto_collapse
+            expanded = self._inspector_pinned or ((has_selection or not auto_collapse) and (not self._inspector_dismissed or self._inspector_pinned))
             self.inspector_stack.setCurrentIndex(1 if expanded else 0)
-            visible = True if self._inspector_pinned else (expanded if auto_collapse else True)
-            self.inspector_dock.setVisible(visible)
+            if not expanded and hasattr(self, 'inspector_collapsed_label'):
+                self.inspector_collapsed_label.setText(self._tt('Inspector (auto hidden)'))
+            visible = True if self._inspector_pinned else (expanded if auto_collapse else not self._inspector_dismissed)
+            self.inspector_dock.setVisible(bool(visible))
             if hasattr(self, 'act_toggle_inspector'):
                 self.act_toggle_inspector.setChecked(self.inspector_dock.isVisible())
 
@@ -1044,13 +1319,18 @@ def launch_main_window() -> None:
             if not payload:
                 return
             kind, key = payload
-            if kind != 'object' or column != 0:
+            if kind != 'object':
                 return
-            state = item.checkState(0) == QtCore.Qt.CheckState.Checked
-            self.current_model.set_object_visibility([key], state)
-            self.refresh_view()
-            self._update_global_inspector()
-
+            if column == 0:
+                state = item.checkState(0) == QtCore.Qt.CheckState.Checked
+                self.current_model.set_object_visibility([key], state)
+                self.refresh_view()
+                self._update_global_inspector()
+            elif column == 1:
+                locked = item.checkState(1) == QtCore.Qt.CheckState.Checked
+                self.current_model.set_object_locked([key], locked)
+                self.refresh_view()
+                self._update_global_inspector()
         def _set_visibility_for_keys(self, object_keys: list[str], visible: bool, isolate: bool = False) -> None:
             if self.current_model is None or not object_keys:
                 return
@@ -1091,6 +1371,48 @@ def launch_main_window() -> None:
             self.current_model.show_all_objects()
             self._sync_all_views()
 
+        def lock_selected_objects(self) -> None:
+            if self.current_model is None:
+                return
+            keys = self._selected_object_keys()
+            if not keys:
+                self._set_status(self._tt('Please select one or more objects first.'))
+                return
+            self.current_model.set_object_locked(keys, True)
+            self._sync_all_views()
+            self._set_status(self._tt('Selected objects are now locked from 3D picking.'))
+
+        def unlock_selected_objects(self) -> None:
+            if self.current_model is None:
+                return
+            keys = self._selected_object_keys()
+            if not keys:
+                self._set_status(self._tt('Please select one or more objects first.'))
+                return
+            self.current_model.set_object_locked(keys, False)
+            self._sync_all_views()
+            self._set_status(self._tt('Selected objects are now unlocked for 3D picking.'))
+
+        def _object_passes_selection_filter(self, object_key: str) -> bool:
+            if self.current_model is None:
+                return False
+            rec = self.current_model.object_record(object_key)
+            if rec is None:
+                return False
+            mode = self.selection_filter_combo.currentText() if hasattr(self, 'selection_filter_combo') else 'all'
+            role = str(rec.metadata.get('role', '')).lower()
+            if mode == 'all':
+                return True
+            if mode == 'visible_only':
+                return bool(rec.visible) and (not rec.locked)
+            if mode == 'structures':
+                return role in {'wall', 'slab', 'beam', 'column', 'support'}
+            if mode == 'soil':
+                return role == 'soil'
+            if mode == 'supports':
+                return role in {'beam', 'column', 'support'}
+            return True
+
         def _on_inspector_visibility_toggled(self, checked: bool) -> None:
             keys = self._selected_object_keys()
             if self.current_model is None or not keys:
@@ -1104,8 +1426,60 @@ def launch_main_window() -> None:
             keys = self._selected_object_keys()
             for rec in self.current_model.object_records:
                 if rec.key in keys:
-                    rec.pickable = checked and rec.visible
+                    rec.pickable = checked and rec.visible and (not rec.locked)
             self.refresh_view()
+
+        def _on_inspector_locked_toggled(self, checked: bool) -> None:
+            if self.current_model is None:
+                return
+            keys = self._selected_object_keys()
+            if not keys:
+                return
+            self.current_model.set_object_locked(keys, checked)
+            self._sync_all_views()
+
+        def apply_nudge_to_selected_objects(self) -> None:
+            if self.current_model is None:
+                return
+            keys = self._selected_object_keys()
+            if not keys:
+                self._set_status(self._tt('No object is selected for 3D adjustment.'))
+                return
+            dx = float(self.inspector_nudge_dx.value()) if hasattr(self, 'inspector_nudge_dx') else 0.0
+            dy = float(self.inspector_nudge_dy.value()) if hasattr(self, 'inspector_nudge_dy') else 0.0
+            dz = float(self.inspector_nudge_dz.value()) if hasattr(self, 'inspector_nudge_dz') else 0.0
+            moved = self.current_model.translate_object_blocks(keys, (dx, dy, dz))
+            if moved <= 0:
+                self._set_status(self._tt('3D adjustment is currently available for block-backed scene objects only.'))
+                return
+            self._sync_all_views()
+            self._set_status(self._tt(f'Applied 3D nudge to {moved} object(s): Δ=({dx:g}, {dy:g}, {dz:g})'))
+
+        def quick_nudge_selected_objects(self, axis: str, sign: float) -> None:
+            step = float(self.inspector_nudge_step.value()) if hasattr(self, 'inspector_nudge_step') else 0.2
+            dx = dy = dz = 0.0
+            if axis == 'x':
+                dx = sign * step
+            elif axis == 'y':
+                dy = sign * step
+            else:
+                dz = sign * step
+            if hasattr(self, 'inspector_nudge_dx'):
+                self.inspector_nudge_dx.setValue(dx)
+                self.inspector_nudge_dy.setValue(dy)
+                self.inspector_nudge_dz.setValue(dz)
+            self.apply_nudge_to_selected_objects()
+
+        def _on_pick_filter_changed(self, value: str) -> None:
+            if hasattr(self, 'selection_filter_combo') and self.selection_filter_combo.currentText() != value:
+                self.selection_filter_combo.blockSignals(True)
+                self.selection_filter_combo.setCurrentText(value)
+                self.selection_filter_combo.blockSignals(False)
+            if hasattr(self, 'inspector_pick_filter_combo') and self.inspector_pick_filter_combo.currentText() != value:
+                self.inspector_pick_filter_combo.blockSignals(True)
+                self.inspector_pick_filter_combo.setCurrentText(value)
+                self.inspector_pick_filter_combo.blockSignals(False)
+            self._set_status(f'Pick filter set to {value}.')
 
         # ---------- Logging / status ----------
         def _log(self, text: str) -> None:
@@ -1117,12 +1491,58 @@ def launch_main_window() -> None:
             self.solver_note.setText(msg)
             self._log(msg)
 
+        def _mesh_summary_text(self, model: SimulationModel | None) -> str:
+            if model is None:
+                return ''
+            summary = dict(getattr(model, 'metadata', {}).get('mesh_summary', {}) or {})
+            try:
+                grid = model.to_unstructured_grid()
+                summary.setdefault('cells', int(getattr(grid, 'n_cells', 0) or 0))
+                summary.setdefault('points', int(getattr(grid, 'n_points', 0) or 0))
+            except Exception:
+                pass
+            summary.setdefault('regions', len(getattr(model, 'region_tags', []) or []))
+            method = str(summary.get('method', getattr(model, 'metadata', {}).get('meshed_by', 'mesh')))
+            parts = [f"{method}: {int(summary.get('cells', 0) or 0)} cells", f"{int(summary.get('points', 0) or 0)} points", f"{int(summary.get('regions', 0) or 0)} regions"]
+            if 'object_count' in summary:
+                parts.append(f"objects {int(summary.get('objects_succeeded', summary.get('object_count', 0)) or 0)}/{int(summary.get('object_count', 0) or 0)}")
+            if 'elapsed_seconds' in summary:
+                parts.append(f"elapsed {float(summary.get('elapsed_seconds', 0.0)):.2f}s")
+            return ', '.join(parts)
+
+        def _extract_meshing_failure_details(self, error_text: str) -> tuple[str, str]:
+            lines = [line.strip() for line in str(error_text).splitlines() if line.strip()]
+            if not lines:
+                return self._tt('Meshing failed.'), self._tt('Review the traceback in the log pane.')
+            detail = lines[-1]
+            lower = detail.lower()
+            remedy = self._tt('Review the traceback in the log pane.')
+            if 'background voxel grid would be too large' in lower:
+                remedy = self._tt('Increase the mesh size / cell size, reduce padding, or voxelize large objects separately.')
+            elif 'no interior cells were selected' in lower or 'open/non-manifold' in lower or 'watertight' in lower:
+                remedy = self._tt('The object is likely not a closed solid. Repair the IFC/body geometry or use a coarser voxel size.')
+            elif 'surface extraction returned no usable faces' in lower or 'effectively zero' in lower:
+                remedy = self._tt('The selected object is empty or too thin for volume meshing. Check visibility, thickness, and source geometry.')
+            elif 'gmsh executable was not found' in lower:
+                remedy = self._tt('Install gmsh and ensure it is available on PATH, or switch to voxel_hex8.')
+            elif 'meshio is not installed' in lower:
+                remedy = self._tt('Install meshio / meshing dependencies before using gmsh_tet.')
+            elif 'failed while recovering the volume' in lower or 'non-manifold' in lower:
+                remedy = self._tt('Repair self-intersections/open shells, then retry gmsh_tet or switch to voxel_hex8.')
+            return detail, remedy
+
         def _solver_settings(self) -> SolverSettings:
             try:
                 tol = float(self.solver_tol_edit.text().strip())
             except Exception:
                 tol = 1.0e-5
-            settings = SolverSettings(prefer_sparse=self.solver_prefer_sparse.isChecked(), line_search=self.solver_line_search.isChecked(), max_cutbacks=int(self.solver_max_cutbacks_spin.value()), max_iterations=int(self.solver_max_iter_spin.value()), tolerance=tol, device=self.solver_device_combo.currentText() if hasattr(self, 'solver_device_combo') else 'auto', thread_count=int(self.solver_threads_spin.value()) if hasattr(self, 'solver_threads_spin') else 0)
+            requested_device = self.solver_device_combo.currentText() if hasattr(self, 'solver_device_combo') else 'auto'
+            if requested_device == 'auto':
+                requested_device = 'cuda' if getattr(self, '_cuda_available', False) else 'cpu'
+            tc = int(self.solver_threads_spin.value()) if hasattr(self, 'solver_threads_spin') else 0
+            if tc <= 0:
+                tc = getattr(self, '_default_thread_count', default_thread_count())
+            settings = SolverSettings(prefer_sparse=self.solver_prefer_sparse.isChecked(), line_search=self.solver_line_search.isChecked(), max_cutbacks=int(self.solver_max_cutbacks_spin.value()), max_iterations=int(self.solver_max_iter_spin.value()), tolerance=tol, device=requested_device, thread_count=tc)
             if self.current_model is not None:
                 self.current_model.metadata['solver_settings'] = {
                     'max_iterations': settings.max_iterations,
@@ -1130,6 +1550,8 @@ def launch_main_window() -> None:
                     'max_cutbacks': settings.max_cutbacks,
                     'prefer_sparse': settings.prefer_sparse,
                     'line_search': settings.line_search,
+                    'device': settings.device,
+                    'thread_count': settings.thread_count,
                 }
             return settings
 
@@ -1165,7 +1587,10 @@ def launch_main_window() -> None:
             row = self.diagnostics_table.rowCount()
             self.diagnostics_table.insertRow(row)
             for col, value in enumerate(row_data):
-                self.diagnostics_table.setItem(row, col, QtWidgets.QTableWidgetItem(self._tt(str(value))))
+                item = QtWidgets.QTableWidgetItem(self._tt(str(value)))
+                if col == 0:
+                    item.setData(QtCore.Qt.ItemDataRole.UserRole, {'severity': severity, 'source': source, 'message': message, 'remedy': remedy})
+                self.diagnostics_table.setItem(row, col, item)
 
         def _sync_diagnostics_from_validation(self, issues=None) -> None:
             if issues is None:
@@ -1561,6 +1986,56 @@ def launch_main_window() -> None:
                     self._log(traceback.format_exc())
             self.voxelize_current()
 
+        def _on_meshing_progress(self, payload: object) -> None:
+            if not isinstance(payload, dict):
+                return
+            self._last_meshing_payload = dict(payload)
+            value = int(payload.get('value', 0) or 0)
+            message = str(payload.get('message', 'Meshing...'))
+            phase = str(payload.get('phase', ''))
+            self._update_meshing_progress_dialog(value, message)
+            self.status_label.setText(self._tt(message))
+            self._update_task_status(self._tt('Running'), message)
+            if payload.get('log') or phase in {'object-complete', 'object-failed', 'object-warning', 'gmsh-object-complete', 'gmsh-object-failed', 'gmsh-fallback'}:
+                self._log(message)
+            if phase in {'object-failed', 'gmsh-object-failed'}:
+                self._append_diagnostic('error', 'mesh', message, self._tt(str(payload.get('hint', 'Check object geometry closure, mesh size, and meshing dependencies.'))))
+            elif phase in {'object-warning', 'gmsh-fallback'}:
+                self._append_diagnostic('warning', 'mesh', message, self._tt(str(payload.get('hint', 'Review logs and consider switching meshing method.'))))
+
+        def _on_meshing_finished(self, meshed_model: object, method: str) -> None:
+            self.current_model = meshed_model
+            self._meshing_heartbeat_timer.stop()
+            summary_text = self._mesh_summary_text(self.current_model)
+            self._update_meshing_progress_dialog(100, self._tt('Meshing finished'))
+            self._sync_all_views()
+            if hasattr(self, 'mesh_show_edges_check'):
+                self.mesh_show_edges_check.setChecked(True)
+            self.run_mesh_check()
+            self._set_status(self._tt(f'{method} meshing finished. {summary_text}'))
+            self._update_task_status(self._tt('Completed'), self._tt(f'{method} meshing finished. {summary_text}'), self._tt('Review mesh statistics, region counts, and quality indicators before solving.'))
+            self._log(summary_text)
+            for warning in (self.current_model.metadata.get('mesh_warnings', []) or [])[:8]:
+                self._append_diagnostic('warning', 'mesh', str(warning), self._tt('Review the object and meshing method; warnings may indicate coarse fallback or geometry defects.'))
+            self._close_meshing_progress_dialog()
+
+        def _on_meshing_failed(self, error_text: str) -> None:
+            self._meshing_heartbeat_timer.stop()
+            self._update_task_status(self._tt('Failed'), self._tt('Meshing failed; see logs and diagnostics.'), self._tt('Try voxel_hex8, check IFC closure, or verify local gmsh/meshio availability.'))
+            self._append_diagnostic('error', 'mesh', self._tt('Meshing failed; see logs and diagnostics.'), self._tt('Try voxel_hex8, check IFC closure, or verify local gmsh/meshio availability.'))
+            self._log(error_text)
+            QtWidgets.QMessageBox.critical(self, self._tt('Meshing failed'), self._tt('Meshing failed. Please review the traceback and diagnostics.') + '\n\n' + error_text.splitlines()[-1])
+            self._set_status(self._tt('Meshing failed'))
+            self._close_meshing_progress_dialog()
+
+        def _cleanup_meshing_thread(self) -> None:
+            self._meshing_worker = None
+            self._meshing_thread = None
+            self._meshing_started_at = None
+            self._last_meshing_payload = None
+            self.btn_voxelize.setEnabled(True); self.btn_import_ifc.setEnabled(True); self.btn_build_parametric.setEnabled(True)
+            self._meshing_heartbeat_timer.stop()
+
         # ---------- Populate UI ----------
         def _refresh_scene_tree(self) -> None:
             self.scene_tree.blockSignals(True)
@@ -1568,21 +2043,24 @@ def launch_main_window() -> None:
             if self.current_model is None:
                 self.scene_tree.blockSignals(False)
                 return
-            root = QtWidgets.QTreeWidgetItem([self.current_model.name, self.current_model.metadata.get('source', '-')])
+            root = QtWidgets.QTreeWidgetItem(['', '', self.current_model.name, self.current_model.metadata.get('source', '-')])
             self.scene_tree.addTopLevelItem(root)
             if self.current_model.object_records:
                 for rec in self.current_model.object_records:
                     label = rec.name or rec.key
-                    info = rec.region_name or rec.metadata.get('role') or rec.object_type
-                    item = QtWidgets.QTreeWidgetItem([label, info])
+                    info = (rec.region_name or rec.metadata.get('role') or rec.object_type)
+                    item = QtWidgets.QTreeWidgetItem(['', '', label, info])
                     item.setData(0, QtCore.Qt.ItemDataRole.UserRole, ('object', rec.key))
                     item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
                     item.setCheckState(0, QtCore.Qt.CheckState.Checked if rec.visible else QtCore.Qt.CheckState.Unchecked)
+                    item.setCheckState(1, QtCore.Qt.CheckState.Checked if getattr(rec, 'locked', False) else QtCore.Qt.CheckState.Unchecked)
                     color = QtGui.QColor(_color_for_type(rec.metadata.get('role'), rec.object_type))
-                    item.setBackground(0, color.lighter(165))
-                    item.setForeground(1, QtGui.QBrush(color.darker(170) if rec.visible else QtGui.QColor('#9e9e9e')))
+                    item.setBackground(2, color.lighter(165))
+                    item.setForeground(3, QtGui.QBrush(color.darker(170) if rec.visible else QtGui.QColor('#9e9e9e')))
                     if not rec.visible:
-                        font = item.font(0); font.setStrikeOut(True); item.setFont(0, font)
+                        font = item.font(2); font.setStrikeOut(True); item.setFont(2, font)
+                    if getattr(rec, 'locked', False):
+                        item.setForeground(2, QtGui.QBrush(QtGui.QColor('#8e24aa')))
                     root.addChild(item)
             else:
                 mesh = self.current_model.mesh
@@ -1591,20 +2069,19 @@ def launch_main_window() -> None:
                         block = mesh[name]
                         if block is None:
                             continue
-                        item = QtWidgets.QTreeWidgetItem([str(name), f'cells={getattr(block, "n_cells", 0)}'])
+                        item = QtWidgets.QTreeWidgetItem(['', '', str(name), f'cells={getattr(block, "n_cells", 0)}'])
                         item.setData(0, QtCore.Qt.ItemDataRole.UserRole, ('block', str(name)))
                         root.addChild(item)
-            region_root = QtWidgets.QTreeWidgetItem(['Regions', f'n={len(self.current_model.region_tags)}'])
+            region_root = QtWidgets.QTreeWidgetItem(['', '', 'Regions', f'n={len(self.current_model.region_tags)}'])
             root.addChild(region_root)
             for region in self.current_model.region_tags:
-                item = QtWidgets.QTreeWidgetItem([f'region:{region.name}', f'cells={len(region.cell_ids)}'])
+                item = QtWidgets.QTreeWidgetItem(['', '', f'region:{region.name}', f'cells={len(region.cell_ids)}'])
                 item.setData(0, QtCore.Qt.ItemDataRole.UserRole, ('region', region.name))
                 region_root.addChild(item)
             root.setExpanded(True)
             region_root.setExpanded(True)
             self._refresh_region_target_widgets()
             self.scene_tree.blockSignals(False)
-
         def _populate_project_info(self) -> None:
             if self.current_model is None:
                 self.project_name_label.setText('未载入'); self.project_stats_label.setText('-'); self.project_source_label.setText('-'); self.project_schema_label.setText('-')
@@ -1929,7 +2406,7 @@ def launch_main_window() -> None:
                 object_key = str(meta.get('object_key') or '')
                 region_name = str(meta.get('region_name') or '')
                 bounds = tuple(meta.get('bounds') or ())
-                if object_key and bounds and self._bounds_intersect(bounds, sel_bounds):
+                if object_key and bounds and self._bounds_intersect(bounds, sel_bounds) and self._object_passes_selection_filter(object_key):
                     picked.append(('object', object_key))
                 elif region_name and bounds and self._bounds_intersect(bounds, sel_bounds):
                     picked.append(('region', region_name))
@@ -1958,7 +2435,7 @@ def launch_main_window() -> None:
                 pass
             modifiers = QtWidgets.QApplication.keyboardModifiers()
             additive = bool(modifiers & (QtCore.Qt.KeyboardModifier.ControlModifier | QtCore.Qt.KeyboardModifier.ShiftModifier))
-            if object_key:
+            if object_key and self._object_passes_selection_filter(object_key):
                 self._select_scene_payload('object', object_key, additive=additive)
             elif region_name:
                 self._select_scene_payload('region', region_name, additive=additive)
@@ -2122,7 +2599,7 @@ def launch_main_window() -> None:
             for issue in issues:
                 prefix = {'error': '⛔', 'warning': '⚠', 'info': 'ℹ'}.get(issue.level, '•')
                 item = QtWidgets.QListWidgetItem(f'{prefix} [{issue.step}] {issue.message}')
-                item.setData(QtCore.Qt.ItemDataRole.UserRole, issue.step)
+                item.setData(QtCore.Qt.ItemDataRole.UserRole, {'step': issue.step, 'message': issue.message})
                 self.validation_list.addItem(item)
                 by_step.setdefault(issue.step, []).append(issue)
             for idx, step_key in enumerate(STEP_KEYS):
@@ -2146,24 +2623,126 @@ def launch_main_window() -> None:
                 self.step_list.setCurrentRow(STEP_KEYS.index(step_key))
 
         def _jump_from_validation_item(self, item) -> None:
+            payload = None
             try:
-                step_key = item.data(QtCore.Qt.ItemDataRole.UserRole)
+                payload = item.data(QtCore.Qt.ItemDataRole.UserRole)
             except Exception:
-                step_key = None
+                payload = None
+            step_key = None
+            message = ''
+            if isinstance(payload, dict):
+                step_key = payload.get('step')
+                message = str(payload.get('message') or '')
+            elif payload:
+                step_key = payload
             if step_key:
                 self._jump_to_step_key(str(step_key))
+            target = self._find_visual_target_from_text(message)
+            if target:
+                self._select_and_focus_target(*target, flash=True)
 
         def _jump_from_diagnostic_item(self, item) -> None:
             row = item.row() if hasattr(item, 'row') else -1
             if row < 0 or not hasattr(self, 'diagnostics_table'):
                 return
-            source_item = self.diagnostics_table.item(row, 1)
-            source = str(source_item.text()) if source_item else ''
+            payload = None
+            base = self.diagnostics_table.item(row, 0)
+            if base is not None:
+                payload = base.data(QtCore.Qt.ItemDataRole.UserRole)
+            source = ''
+            message = ''
+            if isinstance(payload, dict):
+                source = str(payload.get('source') or '')
+                message = str(payload.get('message') or '')
+            else:
+                source_item = self.diagnostics_table.item(row, 1)
+                source = str(source_item.text()) if source_item else ''
             mapping = {
                 'project': 'project', 'geometry': 'geometry', 'ifc': 'geometry', 'mesh': 'geometry',
                 'materials': 'materials', 'stages': 'stages', 'solver': 'results',
             }
             self._jump_to_step_key(mapping.get(source, 'results'))
+            target = self._find_visual_target_from_text(message)
+            if target:
+                self._select_and_focus_target(*target, flash=True)
+
+        def _find_visual_target_from_text(self, text: str) -> tuple[str, str] | None:
+            if self.current_model is None or not text:
+                return None
+            lowered = text.lower()
+            region_names = sorted([r.name for r in self.current_model.region_tags], key=len, reverse=True)
+            for name in region_names:
+                if name and name.lower() in lowered:
+                    return ('region', name)
+            for rec in sorted(self.current_model.object_records, key=lambda r: len(r.name or r.key), reverse=True):
+                if rec.name and rec.name.lower() in lowered:
+                    return ('object', rec.key)
+                if rec.key and rec.key.lower() in lowered:
+                    return ('object', rec.key)
+            return None
+
+        def _select_and_focus_target(self, kind: str, key: str, flash: bool = False) -> None:
+            self._select_scene_payload(kind, key, additive=False)
+            if kind == 'region':
+                self._focus_region_in_view(key)
+            elif kind == 'object':
+                self._focus_object_in_view(key)
+            if flash:
+                self._start_flash(kind, key)
+
+        def _focus_object_in_view(self, object_key: str) -> None:
+            if not object_key:
+                return
+            rec = self.current_model.object_record(object_key) if self.current_model is not None else None
+            if rec and rec.region_name:
+                self._highlight_regions = [rec.region_name]
+            self._highlight_blocks = [object_key]
+            self._show_model()
+            try:
+                for meta in self._viewer_actor_map.values():
+                    if str(meta.get('object_key') or '') == object_key:
+                        bounds = meta.get('bounds')
+                        if bounds is not None:
+                            self.plotter.reset_camera(bounds=bounds)
+                            return
+                self.plotter.reset_camera()
+            except Exception:
+                pass
+
+        def _start_flash(self, kind: str, key: str) -> None:
+            if not hasattr(self, '_flash_timer'):
+                return
+            self._flash_payload = {
+                'kind': kind,
+                'key': key,
+                'remaining': 6,
+                'on': False,
+                'base_regions': list(self._highlight_regions),
+                'base_blocks': list(self._highlight_blocks),
+            }
+            self._flash_timer.start()
+
+        def _on_flash_tick(self) -> None:
+            payload = getattr(self, '_flash_payload', None)
+            if not payload:
+                self._flash_timer.stop()
+                return
+            kind = payload['kind']; key = payload['key']
+            payload['on'] = not payload['on']
+            if kind == 'region':
+                self._highlight_regions = [key] if payload['on'] else list(payload.get('base_regions', []))
+                self._highlight_blocks = list(payload.get('base_blocks', []))
+            else:
+                self._highlight_blocks = [key] if payload['on'] else list(payload.get('base_blocks', []))
+                self._highlight_regions = list(payload.get('base_regions', []))
+            payload['remaining'] -= 1
+            self._show_model()
+            if payload['remaining'] <= 0:
+                self._flash_timer.stop()
+                self._highlight_regions = list(payload.get('base_regions', []))
+                self._highlight_blocks = list(payload.get('base_blocks', []))
+                self._show_model()
+                self._flash_payload = None
 
         def _connect_validation_signals(self) -> None:
             for widget in self._param_inputs.values():
@@ -2376,6 +2955,16 @@ def launch_main_window() -> None:
             object_keys = self._selected_object_keys()
             regions = self._selected_region_names() or self._selected_scene_region_names()
             stage = self._selected_stage()
+            payload: tuple[str, str] | None = None
+            if object_keys:
+                payload = ('object', '|'.join(sorted(object_keys)))
+            elif regions:
+                payload = ('region', '|'.join(sorted(regions)))
+            elif stage is not None:
+                payload = ('stage', stage.name)
+            if payload != self._last_selection_payload:
+                self._inspector_dismissed = False
+            self._last_selection_payload = payload
             if object_keys:
                 names = []
                 props = []
@@ -2390,7 +2979,8 @@ def launch_main_window() -> None:
                 self.inspector_summary.setPlainText('\n'.join(names))
                 self.inspector_visible_check.blockSignals(True); self.inspector_visible_check.setChecked(bool(first.visible) if first else True); self.inspector_visible_check.blockSignals(False)
                 self.inspector_pickable_check.blockSignals(True); self.inspector_pickable_check.setChecked(bool(first.pickable) if first else True); self.inspector_pickable_check.blockSignals(False)
-                props.extend([('visible', str(bool(first.visible)) if first else '-'), ('pickable', str(bool(first.pickable)) if first else '-')])
+                self.inspector_locked_check.blockSignals(True); self.inspector_locked_check.setChecked(bool(first.locked) if first else False); self.inspector_locked_check.blockSignals(False)
+                props.extend([('visible', str(bool(first.visible)) if first else '-'), ('pickable', str(bool(first.pickable)) if first else '-'), ('locked', str(bool(first.locked)) if first else '-')])
                 self._set_key_value_table(self.inspector_props, props[:20])
                 self._update_inspector_collapse()
                 return
@@ -2418,7 +3008,12 @@ def launch_main_window() -> None:
             self.inspector_summary.setPlainText(self.current_model.name)
             self.inspector_visible_check.blockSignals(True); self.inspector_visible_check.setChecked(True); self.inspector_visible_check.blockSignals(False)
             self.inspector_pickable_check.blockSignals(True); self.inspector_pickable_check.setChecked(True); self.inspector_pickable_check.blockSignals(False)
-            self._set_key_value_table(self.inspector_props, [('regions', str(len(self.current_model.region_tags))), ('objects', str(len(self.current_model.object_records))), ('stages', str(len(self.current_model.stages))), ('materials', str(len(self.current_model.material_library)))])
+            self.inspector_locked_check.blockSignals(True); self.inspector_locked_check.setChecked(False); self.inspector_locked_check.blockSignals(False)
+            if self._inspector_has_explicit_selection() or self._inspector_pinned or not self.inspector_collapse.isChecked():
+                self._set_key_value_table(self.inspector_props, [('regions', str(len(self.current_model.region_tags))), ('objects', str(len(self.current_model.object_records))), ('stages', str(len(self.current_model.stages))), ('materials', str(len(self.current_model.material_library)))])
+            else:
+                self.inspector_summary.setPlainText('')
+                self._set_key_value_table(self.inspector_props, [])
             self._update_inspector_collapse()
 
         def _show_scene_context_menu(self, pos) -> None:
@@ -2429,6 +3024,8 @@ def launch_main_window() -> None:
             act_isolate = menu.addAction(self._tt('Isolate Selected'))
             act_show_selected = menu.addAction(self._tt('Show Selected'))
             act_show_all = menu.addAction(self._tt('Show All'))
+            act_lock = menu.addAction(self._tt('Lock Selected'))
+            act_unlock = menu.addAction(self._tt('Unlock Selected'))
             menu.addSeparator()
             act_new_region = menu.addAction(self._tt('设为新 Region'))
             act_existing_region = menu.addAction(self._tt('设为现有 Region'))
@@ -2445,6 +3042,10 @@ def launch_main_window() -> None:
                 self.show_selected_objects()
             elif chosen == act_show_all:
                 self.show_all_objects()
+            elif chosen == act_lock:
+                self.lock_selected_objects()
+            elif chosen == act_unlock:
+                self.unlock_selected_objects()
             elif chosen == act_new_region:
                 self.assign_selected_objects_to_new_region()
             elif chosen == act_existing_region:
@@ -2934,11 +3535,14 @@ def launch_main_window() -> None:
             self._eta_estimator = ProgressEtaEstimator()
             self._clear_diagnostics()
             self.progress_overall.setValue(0); self.progress_iter.setValue(0); self.history_table.setRowCount(0)
-            self._append_task_row('求解', '-', '运行中', '后台求解已启动')
-            self._set_status('后台求解已启动 ...')
+            solver_settings = self._solver_settings()
+            self._append_task_row(self._tt('Solve'), '-', self._tt('Running'), self._tt(f'Background solve started on {solver_settings.device} with {solver_settings.thread_count} CPU threads ready for linear algebra.'), self._tt('A progress dialog and status heartbeat will stay visible while solving.'))
+            self._set_status(self._tt('Background solve started ...'))
             self.act_run.setEnabled(False); self.btn_run_solver.setEnabled(False); self.act_cancel.setEnabled(True); self.btn_cancel_solver.setEnabled(True)
+            self._create_solver_progress_dialog()
+            self._solver_heartbeat_timer.start()
             self._solver_thread = QtCore.QThread(self)
-            self._solver_worker = SolverWorker(self.solver, self.current_model, self._solver_settings())
+            self._solver_worker = SolverWorker(self.solver, self.current_model, solver_settings)
             self._solver_worker.moveToThread(self._solver_thread)
             self._solver_thread.started.connect(self._solver_worker.run)
             self._solver_worker.progress.connect(self._on_solver_progress)
