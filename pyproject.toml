@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geoai-simkit"
+version = "0.1.18"
+description = "Graphics-first AI simulation kernel starter with IFC import, pluggable materials, Warp backend hooks, and VTK export"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "OpenAI"}]
+dependencies = [
+  "numpy>=1.26",
+  "pyvista>=0.47",
+  "typing-extensions>=4.9",
+  "scipy>=1.11"
+]
+
+[project.optional-dependencies]
+solver = [
+  "scipy>=1.11"
+]
+ui = [
+  "PySide6>=6.7",
+  "pyvistaqt>=0.11"
+]
+ifc = [
+  "ifcopenshell>=0.8.4"
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.5"
+]
+warp = [
+  "warp-lang>=1.12"
+]
+
+[project.scripts]
+geoai-simkit = "geoai_simkit.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+geoai_simkit = ["assets/*.ico", "assets/*.png"]

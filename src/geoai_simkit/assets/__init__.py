@@ -1,0 +1,1 @@
+"""Bundled visual assets."""
