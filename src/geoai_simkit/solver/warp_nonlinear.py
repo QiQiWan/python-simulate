@@ -2,11 +2,13 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
+import time
 import numpy as np
 
 from geoai_simkit.materials.base import MaterialState
 from geoai_simkit.materials.hss import HSS, HSSmall
 from geoai_simkit.materials.mohr_coulomb import MohrCoulomb
+from geoai_simkit.solver.gpu_runtime import choose_cuda_device
 from geoai_simkit.solver.linear_algebra import _optional_import
 from geoai_simkit.solver.warp_hex8 import BlockSparsePattern, WarpBlockSparseMatrix, block_values_to_csr, build_block_sparse_pattern
 
@@ -29,10 +31,14 @@ class WarpNonlinearAssemblyInfo:
     warnings: list[str] = field(default_factory=list)
     element_count: int = 0
     material_family: str = "unsupported"
+    cache_hit: bool = False
+    upload_seconds: float = 0.0
+    uploaded_bytes: int = 0
 
 
 DEFAULT_WARP_NL_CONFIG = WarpNonlinearConfig()
 _WARP_NONLINEAR_FAILURES: dict[str, str] = {}
+_WARP_NONLINEAR_DEVICE_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 
 
 def resolve_warp_nonlinear_config(metadata: dict[str, Any] | None = None) -> WarpNonlinearConfig:
@@ -46,11 +52,31 @@ def resolve_warp_nonlinear_config(metadata: dict[str, Any] | None = None) -> War
     )
 
 
-def _pick_warp_device(requested_device: str) -> str:
-    req = str(requested_device or 'auto').lower()
-    if req in {'auto', 'cuda'}:
-        return 'cuda:0'
-    return req
+
+
+def _material_signature(materials: list[Any], family: str) -> tuple[Any, ...]:
+    if family == 'hss':
+        return tuple((round(float(m.E50ref), 6), round(float(m.Eoedref), 6), round(float(m.Eurref), 6), round(float(m.nu_ur), 6), round(float(m.pref), 6), round(float(m.m), 6), round(float(m.c), 6), round(float(m.phi_deg), 6), round(float(m.psi_deg), 6), round(float(m.G0ref or 0.0), 6), round(float(m.gamma07 or 0.0), 12), round(float(m.Rf), 6)) for m in materials)
+    if family == 'mohr-coulomb':
+        return tuple((round(float(m.E), 6), round(float(m.nu), 6), round(float(m.cohesion), 6), round(float(m.friction_deg), 6), round(float(m.dilation_deg), 6)) for m in materials)
+    return tuple()
+
+
+def _device_cache_key(device: str, points: np.ndarray, elements: np.ndarray, pattern: BlockSparsePattern, family: str, materials: list[Any]) -> tuple[Any, ...]:
+    return (str(device), int(id(points)), int(id(elements)), int(id(pattern)), family, _material_signature(materials, family))
+
+
+def _bytes_of_arrays(*arrays: np.ndarray) -> int:
+    total = 0
+    for arr in arrays:
+        try:
+            total += int(np.asarray(arr).nbytes)
+        except Exception:
+            pass
+    return total
+
+def _pick_warp_device(requested_device: str, *, round_robin_index: int = 0) -> str:
+    return choose_cuda_device(requested_device, round_robin_index=round_robin_index)
 
 
 def _detect_material_family(materials: list[Any], cfg: WarpNonlinearConfig) -> tuple[str, list[str]]:
@@ -821,14 +847,78 @@ def try_warp_nonlinear_continuum_assembly(
     n_nodes = int(points.shape[0])
     trans_ndof = n_nodes * 3
     try:
-        pts_wp = wp.from_numpy(pts, dtype=wp.vec3, device=device)
-        elems_wp = wp.from_numpy(elems, dtype=wp.int32, device=device)
-        slots_wp = wp.from_numpy(np.asarray(pattern.elem_block_slots, dtype=np.int32), dtype=wp.int32, device=device)
+        upload_started = time.perf_counter()
+        cache_key = _device_cache_key(device, points, elements, pattern, family, materials)
+        cached = _WARP_NONLINEAR_DEVICE_CACHE.get(cache_key)
+        upload_bytes = 0
+        if cached is None:
+            cache_hit = False
+            pts_wp = wp.from_numpy(pts, dtype=wp.vec3, device=device)
+            elems_wp = wp.from_numpy(elems, dtype=wp.int32, device=device)
+            slots_wp = wp.from_numpy(np.asarray(pattern.elem_block_slots, dtype=np.int32), dtype=wp.int32, device=device)
+            upload_bytes += _bytes_of_arrays(pts, elems, np.asarray(pattern.elem_block_slots, dtype=np.int32))
+            cached = {'pts_wp': pts_wp, 'elems_wp': elems_wp, 'slots_wp': slots_wp}
+            if family == 'hss':
+                cached.update({
+                    'E50_wp': wp.from_numpy(np.asarray([float(m.E50ref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'Eoed_wp': wp.from_numpy(np.asarray([float(m.Eoedref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'Eur_wp': wp.from_numpy(np.asarray([float(m.Eurref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'nu_wp': wp.from_numpy(np.asarray([float(m.nu_ur) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'pref_wp': wp.from_numpy(np.asarray([float(m.pref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'm_wp': wp.from_numpy(np.asarray([float(m.m) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'c_wp': wp.from_numpy(np.asarray([float(m.c) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'phi_wp': wp.from_numpy(np.asarray([float(m.phi_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'psi_wp': wp.from_numpy(np.asarray([float(m.psi_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'G0_wp': wp.from_numpy(np.asarray([float(m.G0ref or 0.0) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'g07_wp': wp.from_numpy(np.asarray([float(m.gamma07 or 0.0) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'Rf_wp': wp.from_numpy(np.asarray([float(m.Rf) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                })
+                upload_bytes += _bytes_of_arrays(
+                    np.asarray([float(m.E50ref) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.Eoedref) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.Eurref) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.nu_ur) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.pref) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.m) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.c) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.phi_deg) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.psi_deg) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.G0ref or 0.0) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.gamma07 or 0.0) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.Rf) for m in materials], dtype=np.float32),
+                )
+            else:
+                cached.update({
+                    'E_wp': wp.from_numpy(np.asarray([float(m.E) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'nu_wp': wp.from_numpy(np.asarray([float(m.nu) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'c_wp': wp.from_numpy(np.asarray([float(m.cohesion) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'phi_wp': wp.from_numpy(np.asarray([float(m.friction_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    'psi_wp': wp.from_numpy(np.asarray([float(m.dilation_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                })
+                upload_bytes += _bytes_of_arrays(
+                    np.asarray([float(m.E) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.nu) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.cohesion) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.friction_deg) for m in materials], dtype=np.float32),
+                    np.asarray([float(m.dilation_deg) for m in materials], dtype=np.float32),
+                )
+            if len(_WARP_NONLINEAR_DEVICE_CACHE) > 12:
+                _WARP_NONLINEAR_DEVICE_CACHE.clear()
+            _WARP_NONLINEAR_DEVICE_CACHE[cache_key] = cached
+        else:
+            cache_hit = True
+        info.cache_hit = cache_hit
+        pts_wp = cached['pts_wp']
+        elems_wp = cached['elems_wp']
+        slots_wp = cached['slots_wp']
         u_wp = wp.from_numpy(u_nodes_np, dtype=wp.vec3, device=device)
         base_stress_wp = wp.from_numpy(base_stress, dtype=wp.float32, device=device)
         base_strain_wp = wp.from_numpy(base_strain, dtype=wp.float32, device=device)
         base_pstrain_wp = wp.from_numpy(base_pstrain, dtype=wp.float32, device=device)
         base_aux_wp = wp.from_numpy(base_aux, dtype=wp.float32, device=device)
+        upload_bytes += _bytes_of_arrays(u_nodes_np, base_stress, base_strain, base_pstrain, base_aux)
+        info.uploaded_bytes = int(upload_bytes)
+        info.upload_seconds = float(time.perf_counter() - upload_started)
         block_vals_wp = wp.zeros((max(1, pattern.rows.shape[0]), 3, 3), dtype=wp.float32, device=device)
         fint_wp = wp.zeros(trans_ndof, dtype=wp.float32, device=device)
         out_stress_wp = wp.zeros(base_stress.shape, dtype=wp.float32, device=device)
@@ -844,18 +934,18 @@ def try_warp_nonlinear_continuum_assembly(
 
         if family == 'hss':
             kernel = hss_kernel
-            E50_wp = wp.from_numpy(np.asarray([float(m.E50ref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            Eoed_wp = wp.from_numpy(np.asarray([float(m.Eoedref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            Eur_wp = wp.from_numpy(np.asarray([float(m.Eurref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            nu_wp = wp.from_numpy(np.asarray([float(m.nu_ur) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            pref_wp = wp.from_numpy(np.asarray([float(m.pref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            m_wp = wp.from_numpy(np.asarray([float(m.m) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            c_wp = wp.from_numpy(np.asarray([float(m.c) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            phi_wp = wp.from_numpy(np.asarray([float(m.phi_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            psi_wp = wp.from_numpy(np.asarray([float(m.psi_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            G0_wp = wp.from_numpy(np.asarray([float(m.G0ref or 0.0) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            g07_wp = wp.from_numpy(np.asarray([float(m.gamma07 or 0.0) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            Rf_wp = wp.from_numpy(np.asarray([float(m.Rf) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
+            E50_wp = cached['E50_wp']
+            Eoed_wp = cached['Eoed_wp']
+            Eur_wp = cached['Eur_wp']
+            nu_wp = cached['nu_wp']
+            pref_wp = cached['pref_wp']
+            m_wp = cached['m_wp']
+            c_wp = cached['c_wp']
+            phi_wp = cached['phi_wp']
+            psi_wp = cached['psi_wp']
+            G0_wp = cached['G0_wp']
+            g07_wp = cached['g07_wp']
+            Rf_wp = cached['Rf_wp']
             wp.launch(
                 kernel=kernel,
                 dim=int(elems.shape[0]),
@@ -865,11 +955,11 @@ def try_warp_nonlinear_continuum_assembly(
             )
         else:
             kernel = mc_kernel
-            E_wp = wp.from_numpy(np.asarray([float(m.E) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            nu_wp = wp.from_numpy(np.asarray([float(m.nu) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            c_wp = wp.from_numpy(np.asarray([float(m.cohesion) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            phi_wp = wp.from_numpy(np.asarray([float(m.friction_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
-            psi_wp = wp.from_numpy(np.asarray([float(m.dilation_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device)
+            E_wp = cached['E_wp']
+            nu_wp = cached['nu_wp']
+            c_wp = cached['c_wp']
+            phi_wp = cached['phi_wp']
+            psi_wp = cached['psi_wp']
             wp.launch(
                 kernel=kernel,
                 dim=int(elems.shape[0]),

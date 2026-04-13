@@ -105,6 +105,8 @@ class NonlinearHex8Solver:
         self._constant_continuum_backend: dict[str, object] = {'backend': 'unset', 'used_warp': False, 'warnings': []}
         self._current_compute_device: str = 'cpu'
         self._current_solver_metadata: dict[str, Any] = {}
+        self._phase_emitter = None
+        self._gpu_upload_notified = False
 
     def _build_gp_cache(self) -> list[list[tuple[np.ndarray, float]]]:
         cache: dict[tuple[float, ...], list[tuple[np.ndarray, float]]] = {}
@@ -292,7 +294,7 @@ class NonlinearHex8Solver:
         total_ndof: int,
         *,
         assemble_tangent: bool = True,
-    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray, list[str]]:
         trans_ndof = int(self.submesh.points.shape[0] * 3)
         Fint = np.zeros(total_ndof, dtype=float)
         K_const = self._constant_continuum_K.to_csr() if hasattr(self._constant_continuum_K, 'to_csr') else self._constant_continuum_K
@@ -333,7 +335,7 @@ class NonlinearHex8Solver:
         total_ndof: int,
         *,
         assemble_tangent: bool = True,
-    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray, list[str]]:
         use_sparse = bool(assemble_tangent and self._sp is not None and total_ndof >= 900)
         K = None if not assemble_tangent else (self._sp.csr_matrix((total_ndof, total_ndof), dtype=float) if use_sparse else np.zeros((total_ndof, total_ndof), dtype=float))
         Fint = np.zeros(total_ndof, dtype=float)
@@ -392,9 +394,10 @@ class NonlinearHex8Solver:
         assemble_tangent: bool = True,
         compute_device: str = 'cpu',
         solver_metadata: dict[str, Any] | None = None,
-    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray, list[str]]:
         if self._all_linear_elastic and self._constant_continuum_K is not None:
-            return self._assemble_linear_continuum_response(du_step_trans, base_states, total_ndof, assemble_tangent=assemble_tangent)
+            K, Fint, trial_states, cell_stress, cell_yield, cell_eqp = self._assemble_linear_continuum_response(du_step_trans, base_states, total_ndof, assemble_tangent=assemble_tangent)
+            return K, Fint, trial_states, cell_stress, cell_yield, cell_eqp, []
         warp_K, warp_Fint, warp_states, warp_cell_stress, warp_cell_yield, warp_cell_eqp, warp_info = try_warp_nonlinear_continuum_assembly(
             points=self.submesh.points,
             elements=self.submesh.elements,
@@ -407,9 +410,24 @@ class NonlinearHex8Solver:
             solver_metadata=solver_metadata,
             block_pattern=self._block_pattern,
         )
+        cont_warnings = list(getattr(warp_info, 'warnings', []) or [])
+        phase_emit = getattr(self, '_phase_emitter', None)
+        if callable(phase_emit) and bool(getattr(warp_info, 'used', False)) and not bool(getattr(self, '_gpu_upload_notified', False)):
+            upload_mb = float(getattr(warp_info, 'uploaded_bytes', 0) or 0.0) / float(1024 ** 2)
+            upload_seconds = float(getattr(warp_info, 'upload_seconds', 0.0) or 0.0)
+            cache_hit = bool(getattr(warp_info, 'cache_hit', False))
+            try:
+                if cache_hit:
+                    phase_emit('gpu-data-ready', f'Reusing resident GPU data cache on {warp_info.device}', phase_fraction=0.16, gpu_cache='warm', gpu_upload_mb=upload_mb, gpu_upload_seconds=upload_seconds)
+                else:
+                    phase_emit('gpu-data-upload', f'Uploading nonlinear continuum data to {warp_info.device}: {upload_mb:.1f} MB in {upload_seconds:.2f}s', phase_fraction=0.16, gpu_cache='cold', gpu_upload_mb=upload_mb, gpu_upload_seconds=upload_seconds)
+            except Exception:
+                pass
+            self._gpu_upload_notified = True
         if warp_states is not None and warp_Fint is not None and warp_cell_stress is not None and warp_cell_yield is not None and warp_cell_eqp is not None:
-            return warp_K, warp_Fint, warp_states, warp_cell_stress, warp_cell_yield, warp_cell_eqp
-        return self._assemble_generic_continuum_response(du_step_trans, base_states, total_ndof, assemble_tangent=assemble_tangent)
+            return warp_K, warp_Fint, warp_states, warp_cell_stress, warp_cell_yield, warp_cell_eqp, cont_warnings
+        K, Fint, trial_states, cell_stress, cell_yield, cell_eqp = self._assemble_generic_continuum_response(du_step_trans, base_states, total_ndof, assemble_tangent=assemble_tangent)
+        return K, Fint, trial_states, cell_stress, cell_yield, cell_eqp, cont_warnings
 
     def _evaluate_state(
         self,
@@ -426,7 +444,7 @@ class NonlinearHex8Solver:
     ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray, dict[str, list[InterfaceElementState]], list[str]]:
         warnings: list[str] = []
         du_step = u_guess - u_step_base
-        Kc, Fint_c, trial_states, cell_stress, cell_yield, cell_eqp = self._assemble_continuum_response(
+        Kc, Fint_c, trial_states, cell_stress, cell_yield, cell_eqp, continuum_warnings = self._assemble_continuum_response(
             du_step[: n_nodes * 3],
             base_states,
             ndof,
@@ -434,6 +452,7 @@ class NonlinearHex8Solver:
             compute_device=self._current_compute_device,
             solver_metadata=self._current_solver_metadata,
         )
+        warnings.extend([w for w in continuum_warnings if w])
         Fint = Fint_c.copy()
         K = Kc
         use_sparse = bool(assemble_tangent and self._sp is not None and K is not None and self._sp.issparse(K))
@@ -518,11 +537,26 @@ class NonlinearHex8Solver:
         ndof: int,
         n_nodes: int,
         max_iter: int = 6,
-    ) -> tuple[np.ndarray, float]:
+        progress_hook=None,
+    ) -> tuple[np.ndarray, float, list[str]]:
         alpha = 1.0
         best_u = u_guess.copy()
         best_metric = rnorm0
-        for _ in range(max_iter):
+        warnings: list[str] = []
+        solver_meta = getattr(self, '_current_solver_metadata', {}) or {}
+        step_tol = float(solver_meta.get('line_search_step_tol', 1.0e-12))
+        eval_limit = float(solver_meta.get('line_search_eval_limit_seconds', 12.0))
+        du_free = du[free] if du.shape == u_guess.shape else np.asarray(du, dtype=float)
+        if du_free.size == 0 or float(np.linalg.norm(du_free)) <= step_tol:
+            warnings.append('Line search skipped because the increment norm is negligible.')
+            return best_u, 0.0, warnings
+        started = time.perf_counter()
+        for ls_iter in range(max_iter):
+            if callable(progress_hook):
+                try:
+                    progress_hook(ls_iter + 1, max_iter, alpha)
+                except Exception:
+                    pass
             trial = u_guess.copy()
             if du.shape == trial.shape:
                 trial[free] += alpha * du[free]
@@ -555,7 +589,10 @@ class NonlinearHex8Solver:
                 best_metric = metric
                 break
             alpha *= 0.5
-        return best_u, alpha
+            if time.perf_counter() - started >= eval_limit:
+                warnings.append(f'Line search watchdog reached {eval_limit:.1f}s; keeping the best trial and continuing.')
+                break
+        return best_u, alpha, warnings
 
     def solve(
         self,
@@ -577,6 +614,8 @@ class NonlinearHex8Solver:
         stage_name: str | None = None,
         solver_metadata: dict[str, Any] | None = None,
         compute_device: str = 'cpu',
+        initial_u_nodes: np.ndarray | None = None,
+        initial_rotations: np.ndarray | None = None,
     ) -> NonlinearSolveResult:
         n_nodes = self.submesh.points.shape[0]
         trans_ndof = n_nodes * 3
@@ -599,6 +638,12 @@ class NonlinearHex8Solver:
         solver_meta.setdefault('warp_interface_enabled', str(compute_device).lower().startswith('cuda'))
         solver_meta.setdefault('warp_structural_enabled', str(compute_device).lower().startswith('cuda'))
         solver_meta.setdefault('warp_unified_block_merge', True)
+        solver_meta.setdefault('stage_state_sync', True)
+        solver_meta.setdefault('line_search_max_iter', 2 if str(compute_device).lower().startswith('cuda') else 6)
+        solver_meta.setdefault('line_search_mode', 'adaptive' if str(compute_device).lower().startswith('cuda') else 'always')
+        solver_meta.setdefault('line_search_eval_limit_seconds', 3.0 if str(compute_device).lower().startswith('cuda') else 10.0)
+        solver_meta.setdefault('line_search_small_step_ratio', 2.0e-4 if str(compute_device).lower().startswith('cuda') else 1.0e-5)
+        solver_meta.setdefault('line_search_accept_ratio', 0.85 if str(compute_device).lower().startswith('cuda') else 0.70)
 
         pattern_parts: list[np.ndarray] = [np.asarray(self.submesh.elements, dtype=np.int32)]
         for iface in interfaces:
@@ -627,6 +672,17 @@ class NonlinearHex8Solver:
                 warnings.append(f"Linear-elastic continuum uses cached tangent backend: {cont_backend['backend']}.")
             warnings.extend([str(item) for item in cont_backend.get('warnings', [])])
         u_committed = np.zeros(ndof, dtype=float)
+        if initial_u_nodes is not None:
+            init_u = np.asarray(initial_u_nodes, dtype=float).reshape(-1, 3)
+            if init_u.shape[0] == n_nodes:
+                u_committed[:trans_ndof] = init_u.reshape(-1)
+        if initial_rotations is not None:
+            init_r = np.asarray(initial_rotations, dtype=float).reshape(-1, 3)
+            if init_r.shape[0] == n_nodes:
+                for nid in range(n_nodes):
+                    if dof_map.has_rotation(nid):
+                        rdofs = dof_map.rot_dofs(nid)
+                        u_committed[np.asarray(rdofs, dtype=np.int64)] = init_r[nid]
         F_total = self._build_external_force(loads, ndof, dof_map)
 
         if structures:
@@ -681,7 +737,11 @@ class NonlinearHex8Solver:
             payload.update(extra)
             _emit_progress(payload)
 
+        self._phase_emitter = _emit_phase
+        self._gpu_upload_notified = False
         _emit_phase('solver-setup', f'Preparing nonlinear solver: nodes={n_nodes}, cells={self.submesh.elements.shape[0]}, dof={ndof}, device={compute_device}', lam_base=0.0, lam_goal=1.0, phase_fraction=0.01)
+        if np.linalg.norm(u_committed) > 0.0 and bool(solver_meta.get('stage_state_sync', True)):
+            _emit_phase('stage-sync', 'Synchronized committed displacement / state from previous stage', lam_base=0.0, lam_goal=1.0, phase_fraction=0.02, sync_norm=float(np.linalg.norm(u_committed)))
 
         while current_lambda < 1.0 - 1.0e-12:
             if cancel_check and cancel_check():
@@ -704,6 +764,7 @@ class NonlinearHex8Solver:
             best_states = base_states
             best_iface = iface_base
             converged = False
+            prev_metric = np.inf
 
             for it in range(1, max(1, max_iterations) + 1):
                 if cancel_check and cancel_check():
@@ -819,10 +880,27 @@ class NonlinearHex8Solver:
                 _emit_phase('linear-solve-done', f'Linear solve finished in {linear_seconds:.2f}s using {solve_info.backend}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.78, linear_backend=str(solve_info.backend), linear_seconds=float(linear_seconds))
                 warnings.extend(solve_info.warnings)
                 convergence_history[-1]['linear_backend'] = solve_info.backend
-                if line_search:
+                du_norm = float(np.linalg.norm(du_free)) if du_free.size else 0.0
+                u_norm = max(1.0, float(np.linalg.norm(u_guess[free])) if free.size else 1.0)
+                ls_mode = str(self._current_solver_metadata.get('line_search_mode', 'always')).lower()
+                ls_small_ratio = float(self._current_solver_metadata.get('line_search_small_step_ratio', 2.0e-4 if str(self._current_compute_device).lower().startswith('cuda') else 1.0e-5))
+                ls_accept_ratio = float(self._current_solver_metadata.get('line_search_accept_ratio', 0.85 if str(self._current_compute_device).lower().startswith('cuda') else 0.70))
+                skip_line_search = not bool(line_search)
+                skip_reason = 'disabled' if skip_line_search else ''
+                if not skip_line_search and ls_mode in {'adaptive', 'gpu-adaptive'}:
+                    if du_norm <= ls_small_ratio * u_norm:
+                        skip_line_search = True
+                        skip_reason = 'small increment'
+                    elif prev_metric < np.inf and metric <= prev_metric * ls_accept_ratio:
+                        skip_line_search = True
+                        skip_reason = 'residual improving with warm start'
+                    elif bool(self._current_solver_metadata.get('stage_state_sync', True)) and step_id > 1 and it == 1:
+                        skip_line_search = True
+                        skip_reason = 'stage-state synchronization warm start'
+                if not skip_line_search:
                     _emit_phase('line-search-start', 'Running line search', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.82)
                     ls_started = time.perf_counter()
-                    u_next, alpha = self._line_search(
+                    u_next, alpha, ls_warnings = self._line_search(
                         u_guess,
                         du_full,
                         free,
@@ -837,15 +915,20 @@ class NonlinearHex8Solver:
                         iface_base,
                         ndof,
                         n_nodes,
+                        max_iter=int(self._current_solver_metadata.get('line_search_max_iter', 2 if str(self._current_compute_device).lower().startswith('cuda') else 6)),
+                        progress_hook=lambda ls_iter, ls_total, ls_alpha: _emit_phase('line-search-trial', f'Line search trial {ls_iter}/{ls_total} alpha={ls_alpha:.3f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=min(0.93, 0.82 + 0.1 * (ls_iter / max(1, ls_total))), line_search_trial=int(ls_iter), line_search_total=int(ls_total), line_search_alpha=float(ls_alpha)),
                     )
                     ls_seconds = time.perf_counter() - ls_started
-                    _emit_phase('line-search-done', f'Line search finished in {ls_seconds:.2f}s with alpha={alpha:.2f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.94, line_search_alpha=float(alpha), line_search_seconds=float(ls_seconds))
+                    warnings.extend(ls_warnings)
+                    _emit_phase('line-search-done', f'Line search finished in {ls_seconds:.2f}s with alpha={alpha:.2f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.94, line_search_alpha=float(alpha), line_search_seconds=float(ls_seconds), line_search_warning_count=len(ls_warnings))
                     convergence_history[-1]['line_search_alpha'] = float(alpha)
                     u_guess = u_next
                 else:
+                    _emit_phase('line-search-skip', f'Skipping line search: {skip_reason}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.90, step_norm=float(du_norm))
                     u_guess[free] += du_free
                 if fixed_dofs.size:
                     u_guess[fixed_dofs] = fixed_values
+                prev_metric = float(metric)
 
             if not converged:
                 if cutbacks < max_cutbacks and load_increment > 1.0e-3:
@@ -864,6 +947,7 @@ class NonlinearHex8Solver:
 
         u_nodes = u_committed[:trans_ndof].reshape(n_nodes, 3)
         structural_rot = dof_map.structural_rotation_field(n_nodes, u_committed)
+        self._phase_emitter = None
         return NonlinearSolveResult(
             u_nodes=u_nodes,
             structural_rotations=structural_rot,

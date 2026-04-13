@@ -9,6 +9,7 @@ from geoai_simkit.core.types import ResultField
 from geoai_simkit.geometry.mesh_adapter import add_region_arrays
 from geoai_simkit.materials import MaterialState, registry
 from geoai_simkit.solver.base import SolverBackend, SolverSettings
+from geoai_simkit.solver.gpu_runtime import choose_cuda_device, detect_cuda_devices
 from geoai_simkit.solver.hex8_linear import LinearRegionMaterial, extract_hex8_submesh, solve_linear_hex8, subset_hex8_submesh
 from geoai_simkit.solver.hex8_nonlinear import NonlinearHex8Solver
 from geoai_simkit.solver.linear_algebra import configure_linear_algebra_threads
@@ -85,36 +86,48 @@ class WarpBackend(SolverBackend):
                 pass
         return False
 
-    def _select_runtime_device(self, wp, requested: str) -> str:
-        requested = (requested or "auto").lower()
+    def _select_runtime_device(self, wp, requested: str, *, round_robin_index: int = 0, allowed_aliases: list[str] | None = None) -> str:
+        requested = (requested or "auto-best").lower()
         try:
             has_cuda = self._warp_has_cuda(wp)
         except Exception:
             has_cuda = False
-        chosen = requested
-        if requested == "auto":
-            chosen = "cuda" if has_cuda else "cpu"
-        if chosen == "cuda" and not has_cuda:
-            chosen = "cpu"
+        if not has_cuda:
+            chosen = 'cpu'
+        else:
+            chosen = choose_cuda_device(requested, round_robin_index=round_robin_index, allowed_aliases=allowed_aliases)
         setter = getattr(wp, "set_device", None)
         if callable(setter):
             try:
-                setter("cuda:0" if chosen == "cuda" else "cpu")
+                setter(chosen)
             except Exception:
                 pass
         return chosen
 
+    def _stage_runtime_device(self, wp, requested: str, multi_gpu_mode: str, stage_index: int, fallback_device: str, allowed_aliases: list[str] | None = None) -> str:
+        mode = str(multi_gpu_mode or 'single').lower()
+        req = str(requested or fallback_device or 'auto-best').lower()
+        if wp is None:
+            return fallback_device
+        if mode in {'round-robin', 'stage-round-robin'}:
+            if req in {'auto', 'auto-best', 'best', 'cuda'}:
+                req = 'auto-round-robin'
+            return self._select_runtime_device(wp, req, round_robin_index=max(0, int(stage_index) - 1), allowed_aliases=allowed_aliases)
+        return self._select_runtime_device(wp, req, round_robin_index=max(0, int(stage_index) - 1), allowed_aliases=allowed_aliases)
+
     def solve(self, model: SimulationModel, settings: SolverSettings, progress_callback=None, cancel_check=None) -> SimulationModel:
         model.ensure_regions()
         backend_name = "placeholder-no-warp"
-        selected_device = str(settings.device or 'auto').lower()
+        selected_device = str(settings.device or settings.metadata.get('warp_device') or 'auto-best').lower()
         require_warp = bool(settings.metadata.get('require_warp', False) or str(settings.device or 'auto').lower().startswith('cuda'))
+        allowed_gpu_devices = [str(v).lower() for v in (settings.metadata.get('allowed_gpu_devices', []) or []) if str(v).strip()]
         try:
             wp = self._ensure_warp()
             if wp is None:
                 raise RuntimeError('warp-lang is required but not installed')
             wp.init()
-            selected_device = self._select_runtime_device(wp, selected_device)
+            rr_index = int(model.metadata.get('solve_sequence_index', 0)) if isinstance(model.metadata, dict) else 0
+            selected_device = self._select_runtime_device(wp, settings.metadata.get('warp_device') or selected_device, round_robin_index=rr_index, allowed_aliases=allowed_gpu_devices)
             backend_name = f"warp-{getattr(wp, '__version__', 'unknown')}-{selected_device}"
         except RuntimeError:
             wp = None
@@ -124,6 +137,20 @@ class WarpBackend(SolverBackend):
                 selected_device = 'cpu'
 
         effective_threads = configure_linear_algebra_threads(int(settings.thread_count))
+        if progress_callback is not None and wp is not None:
+            try:
+                progress_callback({'phase': 'gpu-scan', 'message': f'CUDA device scan complete. Using {selected_device}.', 'fraction': 0.005, 'device': selected_device, 'available_devices': [d.alias for d in detect_cuda_devices()], 'selected_devices': allowed_gpu_devices or None})
+            except Exception:
+                pass
+        if progress_callback is not None and wp is not None and str(selected_device).startswith('cuda') and bool(settings.metadata.get('warmup_gpu', True)):
+            try:
+                progress_callback({'phase': 'gpu-warmup', 'message': f'Warming up GPU runtime on {selected_device}', 'fraction': 0.01, 'device': selected_device})
+                optional_import('warp.sparse')
+                optional_import('warp.optim.linear')
+                optional_import('geoai_simkit.solver.warp_hex8')
+                optional_import('geoai_simkit.solver.warp_nonlinear')
+            except Exception:
+                pass
         settings.thread_count = int(effective_threads)
 
         grid = model.to_unstructured_grid()
@@ -131,6 +158,7 @@ class WarpBackend(SolverBackend):
             model.metadata["backend"] = backend_name
             model.metadata['compute_device'] = selected_device
             model.metadata['thread_count'] = int(settings.thread_count)
+            model.metadata['selected_gpu_devices'] = allowed_gpu_devices
             return model
 
         for region in model.region_tags:
@@ -161,12 +189,16 @@ class WarpBackend(SolverBackend):
             rot_full = np.zeros_like(total_u)
 
             stage_contexts = stage_manager.iter_stages()
+            stage_sync_summary: list[dict[str, object]] = []
+            multi_gpu_mode = str(settings.metadata.get('multi_gpu_mode', 'single')).lower()
+            requested_stage_device = str(settings.metadata.get('warp_device') or selected_device)
             for stage_index, stage_ctx in enumerate(stage_contexts, start=1):
                 if cancel_check and cancel_check():
                     model.metadata['solver_warnings'] = model.metadata.get('solver_warnings', []) + ['Solve canceled by user.']
                     break
                 stage = stage_ctx.stage
                 stage_names.append(stage.name)
+                stage_device = self._stage_runtime_device(wp, requested_stage_device, multi_gpu_mode, stage_index, selected_device, allowed_aliases=allowed_gpu_devices) if wp is not None else selected_device
                 if progress_callback is not None:
                     try:
                         progress_callback({'phase': 'stage-start', 'stage': stage.name, 'stage_index': stage_index, 'stage_count': len(stage_contexts), 'message': f'Starting stage {stage.name}'})
@@ -195,6 +227,7 @@ class WarpBackend(SolverBackend):
                         payload.setdefault('stage', stage.name)
                         payload.setdefault('stage_index', stage_index)
                         payload.setdefault('stage_count', len(stage_contexts))
+                        payload.setdefault('device', stage_device)
                         progress_callback(payload)
                     result = NonlinearHex8Solver(sub, mats, gravity=settings.gravity).solve(
                         bcs=stage_bcs,
@@ -214,10 +247,13 @@ class WarpBackend(SolverBackend):
                         cancel_check=cancel_check,
                         stage_name=stage.name,
                         solver_metadata=settings.metadata,
-                        compute_device=selected_device,
+                        compute_device=stage_device,
+                        initial_u_nodes=total_u[sub.global_point_ids] if bool(settings.metadata.get('stage_state_sync', True)) else None,
+                        initial_rotations=rot_full[sub.global_point_ids] if bool(settings.metadata.get('stage_state_sync', True)) else None,
                     )
                     u_local = result.u_nodes
                     rot_local = result.structural_rotations
+                    stage_sync_summary.append({'stage': stage.name, 'device': stage_device, 'u_norm': float(np.linalg.norm(u_local)), 'rot_norm': float(np.linalg.norm(rot_local)), 'gp_cells': int(len(result.gp_states))})
                     cell_stress = result.cell_stress
                     cell_vm = result.von_mises
                     for local_idx, fid in enumerate(sub.full_cell_ids):
@@ -239,15 +275,19 @@ class WarpBackend(SolverBackend):
                         displacement_scale=1.0,
                         prefer_sparse=bool(settings.prefer_sparse),
                         thread_count=int(settings.thread_count),
-                        compute_device=selected_device,
+                        compute_device=stage_device,
                         solver_metadata=settings.metadata,
                     )
-                du_full = np.zeros_like(total_u)
-                du_full[sub.global_point_ids] = u_local
-                total_u += du_full
-                rot_full = np.zeros_like(total_u)
-                if nonlinear_present:
+                if nonlinear_present and bool(settings.metadata.get('stage_state_sync', True)):
+                    total_u[sub.global_point_ids] = u_local
                     rot_full[sub.global_point_ids] = rot_local
+                else:
+                    du_full = np.zeros_like(total_u)
+                    du_full[sub.global_point_ids] = u_local
+                    total_u += du_full
+                    rot_full = np.zeros_like(total_u)
+                    if nonlinear_present:
+                        rot_full[sub.global_point_ids] = rot_local
                 cell_stress_full[:] = 0.0
                 cell_vm_full[:] = 0.0
                 cell_stress_full[sub.full_cell_ids] = cell_stress
@@ -266,6 +306,7 @@ class WarpBackend(SolverBackend):
                     except Exception:
                         pass
 
+            model.metadata['stage_sync_summary'] = stage_sync_summary
             grid.point_data["U"] = total_u
             grid.point_data["U_mag"] = np.linalg.norm(total_u, axis=1)
             grid.cell_data["stress"] = cell_stress_full
@@ -281,6 +322,7 @@ class WarpBackend(SolverBackend):
             model.metadata["backend"] = backend_name
             model.metadata['compute_device'] = selected_device
             model.metadata['thread_count'] = int(settings.thread_count)
+            model.metadata['selected_gpu_devices'] = allowed_gpu_devices
             model.metadata["stages_run"] = stage_names
             if nonlinear_present:
                 model.metadata.setdefault("solver_history", {})[stage.name] = result.convergence_history
@@ -288,6 +330,7 @@ class WarpBackend(SolverBackend):
             if linear_assembly_info is not None:
                 model.metadata.setdefault('linear_element_assembly', {})[stage.name] = linear_assembly_info
             model.metadata["solver_mode"] = "nonlinear-hex8" if nonlinear_present else "linear-hex8"
+            model.metadata['stage_state_sync'] = bool(settings.metadata.get('stage_state_sync', True))
             model.metadata["solver_note"] = (
                 "Executed the Hex8 nonlinear incremental path with Gauss-point state updates, structural overlays, and node-pair interface contact/friction. "
                 "The current kernel uses a modified-Newton global loop, principal-space Mohr-Coulomb return updates, and HS-small-style stress-dependent stiffness. "

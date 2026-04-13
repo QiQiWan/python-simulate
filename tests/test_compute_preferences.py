@@ -4,7 +4,7 @@ from geoai_simkit.solver.compute_preferences import BackendComputePreferences, r
 def test_recommended_gpu_profile_enables_gpu_path_when_cuda_available():
     prefs = recommended_compute_preferences('gpu-fullpath', cuda_available=True, cpu_total=16)
     meta = prefs.to_metadata(cuda_available=True)
-    assert prefs.device == 'cuda'
+    assert prefs.device == 'auto-best'
     assert meta['require_warp'] is True
     assert meta['warp_full_gpu_linear_solve'] is True
     assert meta['warp_gpu_global_assembly'] is True
@@ -20,7 +20,24 @@ def test_cpu_safe_profile_disables_gpu_specific_paths():
 
 
 def test_preferences_summary_mentions_threads_and_device():
-    prefs = BackendComputePreferences(device='auto', thread_count=0, preconditioner='auto', ordering='auto')
+    prefs = BackendComputePreferences(device='auto-best', thread_count=0, preconditioner='auto', ordering='auto')
     summary = prefs.summary(cpu_total=8, cuda_available=True)
-    assert 'device=cuda' in summary
+    assert 'device=cuda:0' in summary
     assert 'cpu_threads=7' in summary
+
+
+
+def test_gpu_profiles_include_adaptive_line_search_metadata():
+    prefs = recommended_compute_preferences('gpu-throughput', cuda_available=True, cpu_total=16)
+    meta = prefs.to_metadata(cuda_available=True)
+    assert meta['multi_gpu_mode'] == 'single'
+    assert meta['warp_device'] in {'auto-best', 'auto-round-robin', 'cuda:0'}
+    assert meta['line_search_mode'] == 'adaptive'
+    assert meta['warmup_gpu'] is True
+
+
+def test_round_robin_mode_maps_to_auto_round_robin():
+    prefs = BackendComputePreferences(device='auto-best', multi_gpu_mode='round-robin')
+    meta = prefs.to_metadata(cuda_available=True)
+    assert meta['multi_gpu_mode'] == 'round-robin'
+    assert meta['warp_device'] == 'auto-round-robin'

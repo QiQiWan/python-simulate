@@ -9,6 +9,8 @@ from typing import Any
 
 import numpy as np
 
+from geoai_simkit.solver.gpu_runtime import choose_cuda_device
+
 
 @dataclass(slots=True)
 class LinearSolveInfo:
@@ -64,6 +66,70 @@ def _optional_import(name: str) -> Any | None:
         return importlib.import_module(name)
     except Exception:
         return None
+
+
+_WARP_SOLVER_FAILURES: dict[tuple[str, str, str], str] = {}
+
+
+def _resolve_warp_compute_device(requested: str | None) -> str:
+    return choose_cuda_device(requested or "auto-best")
+
+
+def _warp_solver_sequence(name: str, symmetric: bool) -> list[str]:
+    selected = str(name or "auto").lower()
+    if selected == "auto":
+        return ["cg", "cr"] if symmetric else ["bicgstab", "gmres"]
+    return [selected]
+
+
+def _warp_call_kwargs(meta: dict[str, Any] | None, solver_name: str, maxiter: int, tol: float, use_precond: bool) -> list[dict[str, Any]]:
+    meta = meta or {}
+    base: dict[str, Any] = {
+        "x": None,
+        "tol": tol,
+        "atol": float(meta.get('warp_absolute_tolerance', 0.0)),
+        "maxiter": int(maxiter),
+        "check_every": int(max(1, meta.get('warp_check_every', 10))),
+        "use_cuda_graph": bool(meta.get('warp_use_cuda_graph', False)),
+    }
+    if solver_name == "gmres":
+        base["restart"] = int(max(8, meta.get('gmres_restart', 31)))
+        base["is_left_preconditioner"] = bool(meta.get('warp_left_preconditioner', False))
+    variants: list[dict[str, Any]] = []
+    for trim in range(4):
+        kwargs = dict(base)
+        if trim >= 1:
+            kwargs.pop("atol", None)
+        if trim >= 2:
+            kwargs.pop("use_cuda_graph", None)
+        if trim >= 3:
+            kwargs.pop("check_every", None)
+        variants.append(kwargs)
+    attempts: list[dict[str, Any]] = []
+    if use_precond:
+        for item in variants:
+            with_m = dict(item)
+            with_m["M"] = None
+            attempts.append(with_m)
+    attempts.extend(variants)
+    return attempts
+
+
+def _build_warp_preconditioner(wp_linear: Any, A_wp: Any, name: str) -> Any | None:
+    precond_name = str(name or "none").lower()
+    if precond_name in {"none", "off", "false"}:
+        return None
+    precond_fn = getattr(wp_linear, "preconditioner", None)
+    if not callable(precond_fn):
+        return None
+    for kwargs in ({"kind": precond_name}, {"type": precond_name}, {}):
+        try:
+            return precond_fn(A_wp, **kwargs)
+        except TypeError:
+            continue
+        except Exception:
+            return None
+    return None
 
 
 def _is_custom_block_sparse_matrix(matrix: Any) -> bool:
@@ -434,11 +500,7 @@ def _try_warp_block_sparse_solve(
         if bool(meta.get('require_warp', False)):
             raise RuntimeError('warp full-gpu block sparse solve requested, but warp sparse modules are unavailable')
         return None
-    device = str(compute_device or meta.get('warp_device', getattr(matrix, 'device', 'cuda:0'))).lower()
-    if device in {'auto', 'cuda'}:
-        device = 'cuda:0'
-    if not device.startswith('cuda'):
-        device = 'cuda:0'
+    device = _resolve_warp_compute_device(compute_device or meta.get('warp_device', getattr(matrix, 'device', 'auto-best')))
     try:
         wp.init()
         if hasattr(wp, 'set_device'):
@@ -493,39 +555,39 @@ def _try_warp_block_sparse_solve(
 
     x0 = wp.zeros_like(rhs_wp)
     precond_name = str(meta.get('warp_preconditioner', 'diag')).lower()
-    precond = None
-    precond_fn = getattr(wp_linear, 'preconditioner', None)
-    if callable(precond_fn):
-        for kwargs in ({'kind': precond_name}, {'type': precond_name}, {}):
-            try:
-                precond = precond_fn(A_wp, **kwargs)
-                break
-            except TypeError:
-                continue
-            except Exception:
-                break
-    solver_name = str(meta.get('warp_solver', 'cg' if symmetric else 'bicgstab')).lower()
-    solver_fn = getattr(wp_linear, solver_name, None)
-    if solver_fn is None:
-        if bool(meta.get('require_warp', False)):
-            raise RuntimeError(f'warp solver {solver_name!r} is unavailable')
-        return None
+    solver_names = _warp_solver_sequence(str(meta.get('warp_solver', 'auto')), symmetric)
     result = None
     last_exc: Exception | None = None
-    attempts = []
-    if precond is not None:
-        attempts.append({'x': x0, 'M': precond, 'tol': tol, 'maxiter': maxiter, 'check_every': 0})
-        attempts.append({'x': x0, 'M': precond, 'tol': tol, 'maxiter': maxiter})
-    attempts.append({'x': x0, 'tol': tol, 'maxiter': maxiter, 'check_every': 0})
-    attempts.append({'x': x0, 'tol': tol, 'maxiter': maxiter})
-    for kwargs in attempts:
-        try:
-            result = solver_fn(A_wp, rhs_wp, **kwargs)
+    used_solver = None
+    used_precond = 'none'
+    for solver_name in solver_names:
+        solver_fn = getattr(wp_linear, solver_name, None)
+        if solver_fn is None:
+            continue
+        cache_key = (device, solver_name, precond_name)
+        if cache_key in _WARP_SOLVER_FAILURES:
+            continue
+        precond = _build_warp_preconditioner(wp_linear, A_wp, precond_name)
+        for kwargs in _warp_call_kwargs(meta, solver_name, maxiter, tol, precond is not None):
+            call_kwargs = dict(kwargs)
+            call_kwargs['x'] = x0
+            if precond is not None and 'M' in call_kwargs:
+                call_kwargs['M'] = precond
+                used_precond = precond_name
+            else:
+                call_kwargs.pop('M', None)
+                used_precond = 'none'
+            try:
+                result = solver_fn(A_wp, rhs_wp, **call_kwargs)
+                used_solver = solver_name
+                break
+            except TypeError as exc:
+                last_exc = exc
+            except Exception as exc:
+                last_exc = exc
+                _WARP_SOLVER_FAILURES[cache_key] = str(exc)
+        if result is not None:
             break
-        except TypeError as exc:
-            last_exc = exc
-        except Exception as exc:
-            last_exc = exc
     if result is None:
         if bool(meta.get('require_warp', False)):
             raise RuntimeError(f'warp block sparse solve failed: {last_exc}') from last_exc
@@ -538,13 +600,13 @@ def _try_warp_block_sparse_solve(
     x = _warp_solution_to_numpy(x0, expected_size=int(np.asarray(rhs).size), block_size=block_size)
     iterations = max(1, _warp_solver_iterations(result))
     return x, LinearSolveInfo(
-        backend=f'warp-bsr-{solver_name}',
+        backend=f'warp-bsr-{used_solver or solver_names[0]}',
         regularization=regularization,
         used_sparse=True,
         iterations=iterations,
         warnings=[],
         ordering='natural',
-        preconditioner=precond_name if precond is not None else 'none',
+        preconditioner=used_precond,
         symmetric=bool(symmetric),
         reused_pattern=False,
         reused_factorization=False,
@@ -577,11 +639,7 @@ def _try_warp_sparse_solve(
         if bool(meta.get('require_warp', False)):
             raise RuntimeError('warp full-gpu linear solve requested, but warp/scipy sparse support is unavailable')
         return None
-    device = str(compute_device or meta.get('warp_device', 'cuda:0')).lower()
-    if device == 'auto' or device == 'cuda':
-        device = 'cuda:0'
-    if not device.startswith('cuda'):
-        device = 'cuda:0'
+    device = _resolve_warp_compute_device(compute_device or meta.get('warp_device', 'auto-best'))
     try:
         wp.init()
         if hasattr(wp, 'set_device'):
@@ -610,45 +668,41 @@ def _try_warp_sparse_solve(
     b_wp = wp.from_numpy(np.asarray(rhs, dtype=np.float32), dtype=wp.float32, device=device)
     x0 = wp.zeros_like(b_wp)
     precond_name = str(meta.get('warp_preconditioner', 'diag')).lower()
-    precond = None
-    precond_fn = getattr(wp_linear, 'preconditioner', None)
-    if callable(precond_fn):
-        for kwargs in (
-            {'kind': precond_name},
-            {'type': precond_name},
-            {},
-        ):
-            try:
-                precond = precond_fn(A_wp, **kwargs)
-                break
-            except TypeError:
-                continue
-            except Exception:
-                break
-    solver_name = str(meta.get('warp_solver', 'cg' if symmetric else 'bicgstab')).lower()
-    solver_fn = getattr(wp_linear, solver_name, None)
-    if solver_fn is None:
-        if bool(meta.get('require_warp', False)):
-            raise RuntimeError(f'warp solver {solver_name!r} is unavailable')
-        return None
+    solver_names = _warp_solver_sequence(str(meta.get('warp_solver', 'auto')), symmetric)
     result = None
-    call_attempts = []
-    if precond is not None:
-        call_attempts.append({'x': x0, 'M': precond, 'tol': tol, 'maxiter': maxiter, 'check_every': 0})
-        call_attempts.append({'x': x0, 'M': precond, 'tol': tol, 'maxiter': maxiter})
-    call_attempts.append({'x': x0, 'tol': tol, 'maxiter': maxiter, 'check_every': 0})
-    call_attempts.append({'x': x0, 'tol': tol, 'maxiter': maxiter})
     last_exc: Exception | None = None
-    for kwargs in call_attempts:
-        try:
-            result = solver_fn(A_wp, b_wp, **kwargs)
+    used_solver = None
+    used_precond = 'none'
+    for solver_name in solver_names:
+        solver_fn = getattr(wp_linear, solver_name, None)
+        if solver_fn is None:
+            continue
+        cache_key = (device, solver_name, precond_name)
+        if cache_key in _WARP_SOLVER_FAILURES:
+            continue
+        precond = _build_warp_preconditioner(wp_linear, A_wp, precond_name)
+        for kwargs in _warp_call_kwargs(meta, solver_name, maxiter, tol, precond is not None):
+            call_kwargs = dict(kwargs)
+            call_kwargs['x'] = x0
+            if precond is not None and 'M' in call_kwargs:
+                call_kwargs['M'] = precond
+                used_precond = precond_name
+            else:
+                call_kwargs.pop('M', None)
+                used_precond = 'none'
+            try:
+                result = solver_fn(A_wp, b_wp, **call_kwargs)
+                used_solver = solver_name
+                break
+            except TypeError as exc:
+                last_exc = exc
+                continue
+            except Exception as exc:
+                last_exc = exc
+                _WARP_SOLVER_FAILURES[cache_key] = str(exc)
+                continue
+        if result is not None:
             break
-        except TypeError as exc:
-            last_exc = exc
-            continue
-        except Exception as exc:
-            last_exc = exc
-            continue
     if result is None:
         if bool(meta.get('require_warp', False)):
             raise RuntimeError(f'warp sparse solve failed: {last_exc}') from last_exc
@@ -661,13 +715,13 @@ def _try_warp_sparse_solve(
     x = _warp_solution_to_numpy(x0, expected_size=int(np.asarray(rhs).size), block_size=max(1, int(block_size)))
     iterations = max(1, _warp_solver_iterations(result))
     return x, LinearSolveInfo(
-        backend=f'warp-{solver_name}',
+        backend=f'warp-{used_solver or solver_names[0]}',
         regularization=regularization,
         used_sparse=True,
         iterations=iterations,
         warnings=[],
         ordering='natural',
-        preconditioner=precond_name if precond is not None else 'none',
+        preconditioner=used_precond,
         symmetric=bool(symmetric),
         reused_pattern=False,
         reused_factorization=False,

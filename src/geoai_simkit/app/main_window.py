@@ -38,6 +38,7 @@ from geoai_simkit.post.exporters import ExportManager
 from geoai_simkit.post.viewer import PreviewBuilder
 from geoai_simkit.solver.base import SolverSettings
 from geoai_simkit.solver.compute_preferences import BackendComputePreferences, recommended_compute_preferences
+from geoai_simkit.solver.gpu_runtime import describe_cuda_hardware, detect_cuda_devices
 from geoai_simkit.solver.linear_algebra import default_thread_count
 from geoai_simkit.solver.warp_backend import WarpBackend
 from geoai_simkit.utils import optional_import
@@ -52,11 +53,34 @@ MATERIAL_SPECS: dict[str, list[tuple[str, float]]] = {
 STEP_NAMES = ['1 项目', '2 几何 / IFC', '3 区域 / 材料', '4 Stage / 工况', '5 求解 / 结果']
 STEP_KEYS = ['项目', '几何', '区域/材料', '边界/阶段', '求解/结果']
 
-INVALID_STYLE = "QWidget { border: 1px solid #d9534f; background-color: rgba(217,83,79,0.10); }"
-VALID_STYLE = ""
-WARNING_STYLE = "QWidget { border: 1px solid #f0ad4e; background-color: rgba(240,173,78,0.08); }"
+class UIStyle:
+    INVALID_STYLE = "QWidget { border: 1px solid #d9534f; background-color: rgba(217,83,79,0.10); border-radius: 6px; }"
+    VALID_STYLE = ""
+    WARNING_STYLE = "QWidget { border: 1px solid #f0ad4e; background-color: rgba(240,173,78,0.08); border-radius: 6px; }"
+
+    @staticmethod
+    def modern_stylesheet() -> str:
+        return """
+        QMainWindow { background: #f6f7fb; }
+        QToolBar { spacing: 6px; padding: 6px; border-bottom: 1px solid #d9dee7; background: #ffffff; }
+        QGroupBox { font-weight: 600; border: 1px solid #d9dee7; border-radius: 10px; margin-top: 10px; padding-top: 10px; background: #ffffff; }
+        QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #1f2937; }
+        QPushButton { background: #ffffff; border: 1px solid #cfd6e3; border-radius: 8px; padding: 6px 12px; }
+        QPushButton:hover { background: #eef4ff; border-color: #8fb4ff; }
+        QPushButton:pressed { background: #dbe8ff; }
+        QPushButton:disabled { color: #9aa4b2; background: #f2f4f7; }
+        QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QListWidget, QTreeWidget, QTableWidget, QTabWidget::pane { background: #ffffff; border: 1px solid #d9dee7; border-radius: 8px; }
+        QTabBar::tab { background: #eef2f7; border: 1px solid #d9dee7; border-bottom: none; border-top-left-radius: 8px; border-top-right-radius: 8px; padding: 6px 10px; margin-right: 4px; }
+        QTabBar::tab:selected { background: #ffffff; color: #0f172a; }
+        QProgressBar { border: 1px solid #d9dee7; border-radius: 7px; background: #eef2f7; text-align: center; }
+        QProgressBar::chunk { background: #4f8cff; border-radius: 7px; }
+        QListWidget#gpuDeviceList::item:selected { background: #dbeafe; color: #0f172a; border-radius: 6px; }
+        """
 
 
+INVALID_STYLE = UIStyle.INVALID_STYLE
+VALID_STYLE = UIStyle.VALID_STYLE
+WARNING_STYLE = UIStyle.WARNING_STYLE
 
 
 def resolve_app_icon() -> Path:
@@ -120,6 +144,46 @@ def launch_main_window() -> None:
     QtCore = optional_import('PySide6.QtCore')
     QtGui = optional_import('PySide6.QtGui')
     QtInteractor = optional_import('pyvistaqt').QtInteractor
+
+    class _LogicalPage(QtWidgets.QWidget):
+        page_name = 'page'
+
+        def __init__(self, owner, builder) -> None:
+            super().__init__()
+            self.owner = owner
+            layout = QtWidgets.QVBoxLayout(self)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(builder())
+
+    class ProjectPage(_LogicalPage):
+        page_name = 'project'
+
+        def __init__(self, owner) -> None:
+            super().__init__(owner, owner._build_project_page)
+
+    class GeometryPage(_LogicalPage):
+        page_name = 'geometry'
+
+        def __init__(self, owner) -> None:
+            super().__init__(owner, owner._build_geometry_page)
+
+    class MaterialPage(_LogicalPage):
+        page_name = 'material'
+
+        def __init__(self, owner) -> None:
+            super().__init__(owner, owner._build_material_page)
+
+    class StagePage(_LogicalPage):
+        page_name = 'stage'
+
+        def __init__(self, owner) -> None:
+            super().__init__(owner, owner._build_stage_page)
+
+    class ResultsPage(_LogicalPage):
+        page_name = 'results'
+
+        def __init__(self, owner) -> None:
+            super().__init__(owner, owner._build_results_page)
 
     class SolverWorker(QtCore.QObject):
         progress = QtCore.Signal(object)
@@ -256,6 +320,8 @@ def launch_main_window() -> None:
             self._flash_payload = None
 
             self._build_ui()
+            self._apply_modern_ui_style()
+            self._apply_action_icons()
             self._apply_screen_adaptive_layout()
             self._configure_default_compute_preferences()
             QtWidgets.QApplication.instance().installEventFilter(self)
@@ -264,6 +330,52 @@ def launch_main_window() -> None:
             self._update_validation()
             self._refresh_form_validation()
 
+
+        def _apply_modern_ui_style(self) -> None:
+            try:
+                self.setStyleSheet(UIStyle.modern_stylesheet())
+            except Exception:
+                pass
+
+        def _standard_icon(self, pixmap_name: str):
+            try:
+                return self.style().standardIcon(getattr(QtWidgets.QStyle.StandardPixmap, pixmap_name))
+            except Exception:
+                return QtGui.QIcon()
+
+        def _apply_action_icons(self) -> None:
+            icon_map = {
+                'act_new_demo': 'SP_FileDialogNewFolder',
+                'act_import_ifc': 'SP_DialogOpenButton',
+                'act_run': 'SP_MediaPlay',
+                'act_cancel': 'SP_BrowserStop',
+                'act_export': 'SP_DialogSaveButton',
+                'act_export_bundle': 'SP_DriveFDIcon',
+                'act_hide_selected': 'SP_TitleBarShadeButton',
+                'act_show_all_objects': 'SP_DialogResetButton',
+                'act_clear_selection': 'SP_DialogDiscardButton',
+                'act_toggle_inspector': 'SP_FileDialogDetailedView',
+            }
+            for name, pix in icon_map.items():
+                obj = getattr(self, name, None)
+                if obj is not None:
+                    try:
+                        obj.setIcon(self._standard_icon(pix))
+                    except Exception:
+                        pass
+            for btn_name, pix in {
+                'btn_run_solver': 'SP_MediaPlay',
+                'btn_cancel_solver': 'SP_BrowserStop',
+                'btn_solver_profile_auto': 'SP_BrowserReload',
+                'btn_solver_profile_cpu': 'SP_ComputerIcon',
+                'btn_solver_profile_gpu': 'SP_DriveHDIcon',
+            }.items():
+                btn = getattr(self, btn_name, None)
+                if btn is not None:
+                    try:
+                        btn.setIcon(self._standard_icon(pix))
+                    except Exception:
+                        pass
 
         def _apply_window_icon(self) -> None:
             try:
@@ -274,34 +386,66 @@ def launch_main_window() -> None:
                 pass
 
         def _detect_cuda_available(self) -> bool:
+            return bool(detect_cuda_devices())
+
+        def _detected_cuda_devices(self):
             try:
-                wp = optional_import('warp')
-                if hasattr(wp, 'init'):
-                    wp.init()
-                for name in ('is_cuda_available', 'cuda_available'):
-                    attr = getattr(wp, name, None)
-                    if callable(attr):
-                        try:
-                            if attr():
-                                return True
-                        except Exception:
-                            pass
-                    elif isinstance(attr, bool) and attr:
-                        return True
-                for name in ('get_cuda_devices', 'get_devices'):
-                    fn = getattr(wp, name, None)
-                    if not callable(fn):
-                        continue
-                    try:
-                        devices = fn()
-                        for dev in devices:
-                            if 'cuda' in str(dev).lower() or 'gpu' in str(dev).lower():
-                                return True
-                    except Exception:
-                        pass
+                return detect_cuda_devices()
             except Exception:
-                pass
-            return False
+                return []
+
+        def _selected_gpu_aliases(self) -> list[str]:
+            if not hasattr(self, 'solver_gpu_list'):
+                return []
+            vals: list[str] = []
+            for item in self.solver_gpu_list.selectedItems():
+                alias = str(item.data(QtCore.Qt.ItemDataRole.UserRole) or '').strip()
+                if alias:
+                    vals.append(alias)
+            return vals
+
+        def _populate_gpu_device_list(self, selected_aliases: list[str] | tuple[str, ...] | None = None) -> None:
+            if not hasattr(self, 'solver_gpu_list'):
+                return
+            selected = {str(v).lower() for v in (selected_aliases or []) if str(v).strip()}
+            devices = self._detected_cuda_devices()
+            self.solver_gpu_list.blockSignals(True)
+            self.solver_gpu_list.clear()
+            for dev in devices:
+                item = QtWidgets.QListWidgetItem(f"{dev.alias}  |  {dev.name}  |  {dev.memory_gib:.1f} GiB")
+                item.setData(QtCore.Qt.ItemDataRole.UserRole, dev.alias)
+                item.setToolTip(self._tt(f'Select / highlight {dev.alias} to include it in GPU scheduling.'))
+                self.solver_gpu_list.addItem(item)
+                if not selected or dev.alias.lower() in selected:
+                    item.setSelected(True)
+            self.solver_gpu_list.blockSignals(False)
+            if hasattr(self, 'solver_gpu_hint_label'):
+                count = max(0, self.solver_gpu_list.count())
+                self.solver_gpu_hint_label.setText(self._tt(f'Detected GPUs: {count}. Highlight one or more devices to constrain scheduling.'))
+
+        def _populate_solver_compute_device_options(self) -> None:
+            devices = self._detected_cuda_devices()
+            values = ['auto-best', 'auto-round-robin', 'cpu']
+            if devices:
+                values.extend([dev.alias for dev in devices])
+            elif getattr(self, '_cuda_available', False):
+                values.append('cuda:0')
+            if hasattr(self, 'solver_compute_device_combo'):
+                current = self.solver_compute_device_combo.currentText() or 'auto-best'
+                self.solver_compute_device_combo.blockSignals(True)
+                self.solver_compute_device_combo.clear()
+                self.solver_compute_device_combo.addItems(values)
+                idx = self.solver_compute_device_combo.findText(current)
+                self.solver_compute_device_combo.setCurrentIndex(idx if idx >= 0 else 0)
+                self.solver_compute_device_combo.blockSignals(False)
+            if hasattr(self, 'solver_device_combo'):
+                current = self.solver_device_combo.currentText() or 'auto-best'
+                self.solver_device_combo.blockSignals(True)
+                self.solver_device_combo.clear()
+                self.solver_device_combo.addItems(values)
+                idx = self.solver_device_combo.findText(current)
+                self.solver_device_combo.setCurrentIndex(idx if idx >= 0 else 0)
+                self.solver_device_combo.blockSignals(False)
 
         def _configure_default_compute_preferences(self) -> None:
             total = max(1, int(os.cpu_count() or 1))
@@ -309,13 +453,16 @@ def launch_main_window() -> None:
             self._cpu_core_total = total
             self._default_thread_count = half
             self._cuda_available = self._detect_cuda_available()
+            self._cuda_devices = self._detected_cuda_devices()
+            self._populate_solver_compute_device_options()
+            self._populate_gpu_device_list()
             if hasattr(self, 'solver_threads_spin'):
                 self.solver_threads_spin.setRange(0, max(8, total))
                 self.solver_threads_spin.setValue(half)
                 self.solver_threads_spin.setToolTip(self._tt(f'0 means auto. Default suggestion uses nearly all available CPU cores while leaving one core free ({half}/{total}).'))
             if hasattr(self, 'solver_device_combo'):
-                self.solver_device_combo.setCurrentText('cuda' if self._cuda_available else 'cpu')
-                self.solver_device_combo.setToolTip(self._tt('Prefer GPU when available; otherwise use CPU with configurable thread count.'))
+                self.solver_device_combo.setCurrentText('auto-best' if self._cuda_available else 'cpu')
+                self.solver_device_combo.setToolTip(self._tt('Auto-best chooses the strongest detected CUDA device. Auto-round-robin cycles across GPUs on multi-card machines.'))
             if hasattr(self, 'solver_compute_threads_spin'):
                 self.solver_compute_threads_spin.setRange(0, max(8, total))
             prefs = recommended_compute_preferences('gpu-throughput' if self._cuda_available else 'cpu-safe', cuda_available=self._cuda_available, cpu_total=total)
@@ -323,12 +470,13 @@ def launch_main_window() -> None:
             self._update_solver_compute_summary()
 
         def _read_solver_compute_preferences(self) -> BackendComputePreferences:
-            device = self.solver_compute_device_combo.currentText() if hasattr(self, 'solver_compute_device_combo') else (self.solver_device_combo.currentText() if hasattr(self, 'solver_device_combo') else 'auto')
+            device = self.solver_compute_device_combo.currentText() if hasattr(self, 'solver_compute_device_combo') else (self.solver_device_combo.currentText() if hasattr(self, 'solver_device_combo') else 'auto-best')
             threads = int(self.solver_compute_threads_spin.value()) if hasattr(self, 'solver_compute_threads_spin') else (int(self.solver_threads_spin.value()) if hasattr(self, 'solver_threads_spin') else 0)
             ordering = self.solver_compute_ordering_combo.currentText() if hasattr(self, 'solver_compute_ordering_combo') else 'auto'
             preconditioner = self.solver_compute_preconditioner_combo.currentText() if hasattr(self, 'solver_compute_preconditioner_combo') else 'auto'
             solver_strategy = self.solver_compute_strategy_combo.currentText() if hasattr(self, 'solver_compute_strategy_combo') else 'auto'
             warp_preconditioner = self.solver_compute_warp_preconditioner_combo.currentText() if hasattr(self, 'solver_compute_warp_preconditioner_combo') else 'diag'
+            multi_gpu_mode = self.solver_compute_multi_gpu_combo.currentText() if hasattr(self, 'solver_compute_multi_gpu_combo') else 'single'
             profile = self.solver_compute_profile_combo.currentText() if hasattr(self, 'solver_compute_profile_combo') else 'manual'
             tol_text = self.solver_compute_iter_tol_edit.text().strip() if hasattr(self, 'solver_compute_iter_tol_edit') else '1e-10'
             maxiter = int(self.solver_compute_iter_max_spin.value()) if hasattr(self, 'solver_compute_iter_max_spin') else 2000
@@ -349,13 +497,16 @@ def launch_main_window() -> None:
                 warp_interface_enabled=bool(self.solver_compute_interface_check.isChecked()) if hasattr(self, 'solver_compute_interface_check') else True,
                 warp_structural_enabled=bool(self.solver_compute_structural_check.isChecked()) if hasattr(self, 'solver_compute_structural_check') else True,
                 warp_unified_block_merge=bool(self.solver_compute_block_merge_check.isChecked()) if hasattr(self, 'solver_compute_block_merge_check') else True,
+                stage_state_sync=bool(self.solver_compute_stage_sync_check.isChecked()) if hasattr(self, 'solver_compute_stage_sync_check') else True,
                 ordering=ordering,
                 preconditioner=preconditioner,
                 solver_strategy=solver_strategy,
                 warp_preconditioner=warp_preconditioner,
+                multi_gpu_mode=multi_gpu_mode,
                 iterative_tolerance=iter_tol,
                 iterative_maxiter=maxiter,
                 block_size=3,
+                selected_gpu_aliases=tuple(self._selected_gpu_aliases()),
             )
 
         def _apply_compute_preferences_to_controls(self, prefs: BackendComputePreferences, *, update_summary: bool = True) -> None:
@@ -371,6 +522,11 @@ def launch_main_window() -> None:
                         self.solver_compute_device_combo.setCurrentIndex(idx)
                 if hasattr(self, 'solver_compute_threads_spin'):
                     self.solver_compute_threads_spin.setValue(int(prefs.thread_count))
+                if hasattr(self, 'solver_compute_multi_gpu_combo'):
+                    idx = self.solver_compute_multi_gpu_combo.findText(getattr(prefs, 'multi_gpu_mode', 'single'))
+                    if idx >= 0:
+                        self.solver_compute_multi_gpu_combo.setCurrentIndex(idx)
+                self._populate_gpu_device_list(getattr(prefs, 'selected_gpu_aliases', ()))
                 if hasattr(self, 'solver_compute_require_warp_check'):
                     self.solver_compute_require_warp_check.setChecked(bool(prefs.require_warp))
                 if hasattr(self, 'solver_compute_hex8_check'):
@@ -387,6 +543,8 @@ def launch_main_window() -> None:
                     self.solver_compute_structural_check.setChecked(bool(prefs.warp_structural_enabled))
                 if hasattr(self, 'solver_compute_block_merge_check'):
                     self.solver_compute_block_merge_check.setChecked(bool(prefs.warp_unified_block_merge))
+                if hasattr(self, 'solver_compute_stage_sync_check'):
+                    self.solver_compute_stage_sync_check.setChecked(bool(getattr(prefs, 'stage_state_sync', True)))
                 if hasattr(self, 'solver_compute_ordering_combo'):
                     idx = self.solver_compute_ordering_combo.findText(prefs.ordering)
                     if idx >= 0:
@@ -431,7 +589,7 @@ def launch_main_window() -> None:
             prefs = self._read_solver_compute_preferences()
             cpu_total = getattr(self, '_cpu_core_total', max(1, int(os.cpu_count() or 1)))
             summary = prefs.summary(cpu_total=cpu_total, cuda_available=getattr(self, '_cuda_available', False))
-            hw = f"Detected CPU cores: {cpu_total} | CUDA available: {'yes' if getattr(self, '_cuda_available', False) else 'no'}"
+            hw = f"Detected CPU cores: {cpu_total} | {describe_cuda_hardware(self._selected_gpu_aliases())}"
             if hasattr(self, 'solver_compute_summary_label'):
                 self.solver_compute_summary_label.setText(self._tt(summary))
             if hasattr(self, 'solver_compute_hardware_label'):
@@ -575,11 +733,11 @@ def launch_main_window() -> None:
 
             self.page_stack = QtWidgets.QStackedWidget()
             self.page_stack.setMinimumWidth(460)
-            self.page_stack.addWidget(self._wrap_scroll_page(self._build_project_page()))
-            self.page_stack.addWidget(self._wrap_scroll_page(self._build_geometry_page()))
-            self.page_stack.addWidget(self._build_material_page())
-            self.page_stack.addWidget(self._build_stage_page())
-            self.page_stack.addWidget(self._wrap_scroll_page(self._build_results_page()))
+            self.page_stack.addWidget(self._wrap_scroll_page(ProjectPage(self)))
+            self.page_stack.addWidget(self._wrap_scroll_page(GeometryPage(self)))
+            self.page_stack.addWidget(MaterialPage(self))
+            self.page_stack.addWidget(StagePage(self))
+            self.page_stack.addWidget(self._wrap_scroll_page(ResultsPage(self)))
             splitter.addWidget(self.page_stack)
             splitter.setSizes([920, 560])
             self._build_inspector_dock()
@@ -711,7 +869,7 @@ def launch_main_window() -> None:
             self.solver_prefer_sparse = QtWidgets.QCheckBox(); self.solver_prefer_sparse.setChecked(True)
             self.solver_line_search = QtWidgets.QCheckBox(); self.solver_line_search.setChecked(True)
             self.solver_max_cutbacks_spin = QtWidgets.QSpinBox(); self.solver_max_cutbacks_spin.setRange(0, 20); self.solver_max_cutbacks_spin.setValue(5)
-            self.solver_device_combo = QtWidgets.QComboBox(); self.solver_device_combo.addItems(['auto','cpu','cuda'])
+            self.solver_device_combo = QtWidgets.QComboBox(); self.solver_device_combo.addItems(['auto-best','auto-round-robin','cpu'])
             self.solver_threads_spin = QtWidgets.QSpinBox(); self.solver_threads_spin.setRange(0, 64); self.solver_threads_spin.setValue(0)
             fol.addRow('Max iterations', self.solver_max_iter_spin)
             fol.addRow('Tolerance', self.solver_tol_edit)
@@ -1166,7 +1324,8 @@ def launch_main_window() -> None:
             cgl.addLayout(preset_row)
             cform = QtWidgets.QFormLayout()
             self.solver_compute_backend_combo = QtWidgets.QComboBox(); self.solver_compute_backend_combo.addItems(['warp'])
-            self.solver_compute_device_combo = QtWidgets.QComboBox(); self.solver_compute_device_combo.addItems(['auto', 'cpu', 'cuda'])
+            self.solver_compute_device_combo = QtWidgets.QComboBox(); self.solver_compute_device_combo.addItems(['auto-best', 'auto-round-robin', 'cpu'])
+            self.solver_compute_multi_gpu_combo = QtWidgets.QComboBox(); self.solver_compute_multi_gpu_combo.addItems(['single', 'round-robin'])
             self.solver_compute_threads_spin = QtWidgets.QSpinBox(); self.solver_compute_threads_spin.setRange(0, 128); self.solver_compute_threads_spin.setValue(0)
             self.solver_compute_require_warp_check = QtWidgets.QCheckBox(); self.solver_compute_require_warp_check.setChecked(True)
             self.solver_compute_hex8_check = QtWidgets.QCheckBox(); self.solver_compute_hex8_check.setChecked(True)
@@ -1176,6 +1335,7 @@ def launch_main_window() -> None:
             self.solver_compute_interface_check = QtWidgets.QCheckBox(); self.solver_compute_interface_check.setChecked(True)
             self.solver_compute_structural_check = QtWidgets.QCheckBox(); self.solver_compute_structural_check.setChecked(True)
             self.solver_compute_block_merge_check = QtWidgets.QCheckBox(); self.solver_compute_block_merge_check.setChecked(True)
+            self.solver_compute_stage_sync_check = QtWidgets.QCheckBox(); self.solver_compute_stage_sync_check.setChecked(True)
             self.solver_compute_ordering_combo = QtWidgets.QComboBox(); self.solver_compute_ordering_combo.addItems(['auto', 'rcm', 'colamd', 'amd', 'mmd_ata', 'mmd_at_plus_a', 'natural'])
             self.solver_compute_preconditioner_combo = QtWidgets.QComboBox(); self.solver_compute_preconditioner_combo.addItems(['auto', 'block-jacobi', 'spilu', 'jacobi', 'none'])
             self.solver_compute_strategy_combo = QtWidgets.QComboBox(); self.solver_compute_strategy_combo.addItems(['auto', 'cg', 'minres', 'bicgstab', 'gmres', 'direct'])
@@ -1185,6 +1345,7 @@ def launch_main_window() -> None:
             cform.addRow('Backend', self.solver_compute_backend_combo)
             cform.addRow('设备 Device', self.solver_compute_device_combo)
             cform.addRow('CPU 核心数 / Threads (0=auto)', self.solver_compute_threads_spin)
+            cform.addRow('多卡策略 Multi-GPU', self.solver_compute_multi_gpu_combo)
             cform.addRow('必须使用 Warp', self.solver_compute_require_warp_check)
             cform.addRow('Warp Hex8 装配', self.solver_compute_hex8_check)
             cform.addRow('Warp 非线性连续体', self.solver_compute_nonlinear_check)
@@ -1193,6 +1354,7 @@ def launch_main_window() -> None:
             cform.addRow('GPU Interface 装配', self.solver_compute_interface_check)
             cform.addRow('GPU Structural 合并', self.solver_compute_structural_check)
             cform.addRow('统一 Block Merge', self.solver_compute_block_merge_check)
+            cform.addRow('多 Stage 状态同步', self.solver_compute_stage_sync_check)
             cform.addRow('重排序 Ordering', self.solver_compute_ordering_combo)
             cform.addRow('预条件 Preconditioner', self.solver_compute_preconditioner_combo)
             cform.addRow('求解策略 Strategy', self.solver_compute_strategy_combo)
@@ -1204,9 +1366,18 @@ def launch_main_window() -> None:
             self.solver_compute_hardware_label.setWordWrap(True)
             self.solver_compute_summary_label = QtWidgets.QLabel('')
             self.solver_compute_summary_label.setWordWrap(True)
+            self.solver_gpu_hint_label = QtWidgets.QLabel('')
+            self.solver_gpu_hint_label.setWordWrap(True)
+            self.solver_gpu_list = QtWidgets.QListWidget()
+            self.solver_gpu_list.setObjectName('gpuDeviceList')
+            self.solver_gpu_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+            self.solver_gpu_list.setMaximumHeight(112)
             cgl.addWidget(self.solver_compute_hardware_label)
             cgl.addWidget(self.solver_compute_summary_label)
-            for _w in (self.solver_compute_backend_combo, self.solver_compute_device_combo, self.solver_compute_threads_spin, self.solver_compute_require_warp_check, self.solver_compute_hex8_check, self.solver_compute_nonlinear_check, self.solver_compute_full_gpu_check, self.solver_compute_gpu_assembly_check, self.solver_compute_interface_check, self.solver_compute_structural_check, self.solver_compute_block_merge_check, self.solver_compute_ordering_combo, self.solver_compute_preconditioner_combo, self.solver_compute_strategy_combo, self.solver_compute_warp_preconditioner_combo, self.solver_compute_iter_tol_edit, self.solver_compute_iter_max_spin):
+            cgl.addWidget(QtWidgets.QLabel('参与调度的显卡 / Highlight GPUs for scheduling'))
+            cgl.addWidget(self.solver_gpu_hint_label)
+            cgl.addWidget(self.solver_gpu_list)
+            for _w in (self.solver_compute_backend_combo, self.solver_compute_device_combo, self.solver_compute_multi_gpu_combo, self.solver_compute_threads_spin, self.solver_compute_require_warp_check, self.solver_compute_hex8_check, self.solver_compute_nonlinear_check, self.solver_compute_full_gpu_check, self.solver_compute_gpu_assembly_check, self.solver_compute_interface_check, self.solver_compute_structural_check, self.solver_compute_block_merge_check, self.solver_compute_stage_sync_check, self.solver_compute_ordering_combo, self.solver_compute_preconditioner_combo, self.solver_compute_strategy_combo, self.solver_compute_warp_preconditioner_combo, self.solver_compute_iter_tol_edit, self.solver_compute_iter_max_spin, self.solver_gpu_list):
                 try:
                     _w.currentTextChanged.connect(self._update_solver_compute_summary)
                 except Exception:
@@ -1223,6 +1394,7 @@ def launch_main_window() -> None:
                     _w.textChanged.connect(self._update_solver_compute_summary)
                 except Exception:
                     pass
+            self.solver_gpu_list.itemSelectionChanged.connect(self._update_solver_compute_summary)
             sgl.addWidget(compute_group)
 
             sform = QtWidgets.QFormLayout()
@@ -2572,9 +2744,26 @@ def launch_main_window() -> None:
                 for col, value in enumerate(vals):
                     self.load_table.setItem(row, col, QtWidgets.QTableWidgetItem(value))
 
-        def _show_model(self) -> None:
-            self.plotter.clear()
+        def _clear_plotter_cached_actors(self) -> None:
+            removed = False
+            for meta in list(getattr(self, '_viewer_actor_map', {}).values()):
+                actor = meta.get('actor') if isinstance(meta, dict) else None
+                if actor is None:
+                    continue
+                try:
+                    self.plotter.remove_actor(actor, reset_camera=False, render=False)
+                    removed = True
+                except Exception:
+                    pass
+            if not removed:
+                try:
+                    self.plotter.clear()
+                except Exception:
+                    pass
             self._viewer_actor_map = {}
+
+        def _show_model(self) -> None:
+            self._clear_plotter_cached_actors()
             if self.current_model is None:
                 return
             field = self.result_field_combo.currentText()

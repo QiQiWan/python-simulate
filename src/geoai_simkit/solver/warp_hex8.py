@@ -2,12 +2,15 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
+import time
 import numpy as np
 
+from geoai_simkit.solver.gpu_runtime import choose_cuda_device
 from geoai_simkit.solver.linear_algebra import _optional_import
 
 
 _WARP_HEX8_FAILURES: dict[str, str] = {}
+_WARP_HEX8_DEVICE_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
 
 
 @dataclass(slots=True)
@@ -29,6 +32,9 @@ class WarpHex8AssemblyInfo:
     precision: str
     warnings: list[str] = field(default_factory=list)
     element_count: int = 0
+    cache_hit: bool = False
+    upload_seconds: float = 0.0
+    uploaded_bytes: int = 0
 
 
 @dataclass(slots=True)
@@ -100,6 +106,21 @@ def resolve_warp_hex8_config(metadata: dict[str, Any] | None = None) -> WarpHex8
         gpu_global_assembly=bool(meta.get("warp_gpu_global_assembly", DEFAULT_WARP_HEX8_CONFIG.gpu_global_assembly)),
     )
 
+
+
+
+def _hex8_cache_key(device: str, points: np.ndarray, elements: np.ndarray, young: np.ndarray, nu: np.ndarray, rho: np.ndarray, pattern: BlockSparsePattern) -> tuple[Any, ...]:
+    return (str(device), int(id(points)), int(id(elements)), int(id(young)), int(id(nu)), int(id(rho)), int(id(pattern)))
+
+
+def _bytes_of_arrays(*arrays: np.ndarray) -> int:
+    total = 0
+    for arr in arrays:
+        try:
+            total += int(np.asarray(arr).nbytes)
+        except Exception:
+            pass
+    return total
 
 def _build_element_dof_map(elements: np.ndarray) -> np.ndarray:
     elems = np.asarray(elements, dtype=np.int64)
@@ -539,13 +560,8 @@ def _get_warp_kernel_bundle() -> Any | None:
     return wp, _hex8_linear_kernel, _scatter_blocks_kernel
 
 
-def _pick_warp_device(requested_device: str) -> str:
-    req = str(requested_device or "auto").lower()
-    if req == "auto":
-        return "cuda:0"
-    if req == "cuda":
-        return "cuda:0"
-    return req
+def _pick_warp_device(requested_device: str, *, round_robin_index: int = 0) -> str:
+    return choose_cuda_device(requested_device, round_robin_index=round_robin_index)
 
 
 def try_warp_hex8_linear_assembly(
@@ -625,11 +641,31 @@ def try_warp_hex8_linear_assembly(
     pattern = block_pattern or build_block_sparse_pattern(elems)
 
     try:
-        points_wp = wp.from_numpy(pts, dtype=wp.vec3, device=device)
-        elems_wp = wp.from_numpy(elems, dtype=wp.int32, device=device)
-        e_wp = wp.from_numpy(e, dtype=wp.float32, device=device)
-        n_wp = wp.from_numpy(n, dtype=wp.float32, device=device)
-        r_wp = wp.from_numpy(r, dtype=wp.float32, device=device)
+        upload_started = time.perf_counter()
+        cache_key = _hex8_cache_key(device, points, elements, young, nu, rho, pattern)
+        cached = _WARP_HEX8_DEVICE_CACHE.get(cache_key)
+        upload_bytes = 0
+        if cached is None:
+            info.cache_hit = False
+            points_wp = wp.from_numpy(pts, dtype=wp.vec3, device=device)
+            elems_wp = wp.from_numpy(elems, dtype=wp.int32, device=device)
+            e_wp = wp.from_numpy(e, dtype=wp.float32, device=device)
+            n_wp = wp.from_numpy(n, dtype=wp.float32, device=device)
+            r_wp = wp.from_numpy(r, dtype=wp.float32, device=device)
+            cached = {'points_wp': points_wp, 'elems_wp': elems_wp, 'e_wp': e_wp, 'n_wp': n_wp, 'r_wp': r_wp}
+            upload_bytes += _bytes_of_arrays(pts, elems, e, n, r)
+            if len(_WARP_HEX8_DEVICE_CACHE) > 12:
+                _WARP_HEX8_DEVICE_CACHE.clear()
+            _WARP_HEX8_DEVICE_CACHE[cache_key] = cached
+        else:
+            info.cache_hit = True
+        points_wp = cached['points_wp']
+        elems_wp = cached['elems_wp']
+        e_wp = cached['e_wp']
+        n_wp = cached['n_wp']
+        r_wp = cached['r_wp']
+        info.uploaded_bytes = int(upload_bytes)
+        info.upload_seconds = float(time.perf_counter() - upload_started)
         ke_wp = wp.zeros((elems.shape[0], 24 * 24), dtype=wp.float32, device=device)
         fe_wp = wp.zeros((elems.shape[0], 24), dtype=wp.float32, device=device)
         valid_wp = wp.zeros(elems.shape[0], dtype=wp.int32, device=device)
@@ -667,7 +703,13 @@ def try_warp_hex8_linear_assembly(
     try:
         block_vals_wp = wp.zeros((max(1, pattern.rows.shape[0]), 3, 3), dtype=wp.float32, device=device)
         force_wp = wp.zeros(ndof, dtype=wp.float32, device=device)
-        slots_wp = wp.from_numpy(np.asarray(pattern.elem_block_slots, dtype=np.int32), dtype=wp.int32, device=device)
+        slots_cache_key = (cache_key, 'slots')
+        slots_wp = _WARP_HEX8_DEVICE_CACHE.get(slots_cache_key)
+        if slots_wp is None:
+            slots_wp = wp.from_numpy(np.asarray(pattern.elem_block_slots, dtype=np.int32), dtype=wp.int32, device=device)
+            _WARP_HEX8_DEVICE_CACHE[slots_cache_key] = slots_wp
+            info.uploaded_bytes += int(np.asarray(pattern.elem_block_slots, dtype=np.int32).nbytes)
+            info.upload_seconds = float(info.upload_seconds + max(0.0, time.perf_counter() - upload_started))
         wp.launch(
             kernel=scatter_kernel,
             dim=int(elems.shape[0]),

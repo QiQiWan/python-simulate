@@ -19,7 +19,7 @@ def test_line_search_accepts_full_increment_vector():
     target = np.zeros_like(u_guess)
     du_full = np.arange(8, dtype=float)
 
-    best_u, alpha = solver._line_search(
+    best_u, alpha, warnings = solver._line_search(
         u_guess=u_guess,
         du=du_full,
         free=free,
@@ -39,3 +39,6 @@ def test_line_search_accepts_full_increment_vector():
     assert alpha == 1.0
     np.testing.assert_allclose(best_u[free], du_full[free])
     assert best_u[0] == 2.0
+    assert warnings == []
+
+
