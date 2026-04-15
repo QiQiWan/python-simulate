@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import importlib
-from typing import Any
+from typing import Any, Iterable
 
 
 def _optional_import(name: str) -> Any | None:
@@ -84,23 +84,12 @@ def has_cuda() -> bool:
 
 
 
-def _normalize_allowed_aliases(allowed_aliases: list[str] | tuple[str, ...] | None) -> list[str] | None:
-    if not allowed_aliases:
-        return None
-    vals = []
-    for item in allowed_aliases:
-        alias = str(item or '').strip().lower()
-        if alias and alias not in vals:
-            vals.append(alias)
-    return vals or None
-
-
-def choose_cuda_device(requested: str | None, *, round_robin_index: int = 0, allowed_aliases: list[str] | tuple[str, ...] | None = None) -> str:
+def choose_cuda_device(requested: str | None, *, round_robin_index: int = 0, allowed_devices: Iterable[str] | None = None) -> str:
     req = str(requested or 'auto').strip().lower()
     devices = detect_cuda_devices()
-    allowed = _normalize_allowed_aliases(allowed_aliases)
+    allowed = {str(item).strip().lower() for item in (allowed_devices or []) if str(item).strip()}
     if allowed:
-        devices = [dev for dev in devices if dev.alias.lower() in allowed]
+        devices = [d for d in devices if d.alias.lower() in allowed]
     aliases = [d.alias.lower() for d in devices]
     if req in {'cpu'}:
         return 'cpu'
@@ -126,14 +115,9 @@ def choose_cuda_device(requested: str | None, *, round_robin_index: int = 0, all
 
 
 
-def describe_cuda_hardware(selected_aliases: list[str] | tuple[str, ...] | None = None) -> str:
+def describe_cuda_hardware() -> str:
     devices = detect_cuda_devices()
     if not devices:
         return 'CUDA available: no'
-    selected = set(_normalize_allowed_aliases(selected_aliases) or [])
-    parts = []
-    for dev in devices:
-        tag = ' [selected]' if dev.alias.lower() in selected and selected else ''
-        mem = f' {dev.memory_gib:.1f}GiB' if dev.memory_bytes > 0 else ''
-        parts.append(f'{dev.alias}={dev.name}{mem}{tag}')
+    parts = [f'{dev.alias}={dev.name}{f" {dev.memory_gib:.1f}GiB" if dev.memory_bytes > 0 else ""}' for dev in devices]
     return 'CUDA available: yes | GPUs: ' + '; '.join(parts)

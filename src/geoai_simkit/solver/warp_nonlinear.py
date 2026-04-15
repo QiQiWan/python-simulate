@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
 
-import time
 import numpy as np
 
 from geoai_simkit.materials.base import MaterialState
@@ -31,15 +30,47 @@ class WarpNonlinearAssemblyInfo:
     warnings: list[str] = field(default_factory=list)
     element_count: int = 0
     material_family: str = "unsupported"
-    cache_hit: bool = False
-    upload_seconds: float = 0.0
-    uploaded_bytes: int = 0
 
 
 DEFAULT_WARP_NL_CONFIG = WarpNonlinearConfig()
 _WARP_NONLINEAR_FAILURES: dict[str, str] = {}
-_WARP_NONLINEAR_DEVICE_CACHE: dict[tuple[Any, ...], dict[str, Any]] = {}
+_WARP_NL_DEVICE_CACHE: dict[tuple[str, tuple[Any, ...]], tuple[Any, ...]] = {}
+_WARP_NL_MATERIAL_CACHE: dict[tuple[str, str, tuple[Any, ...]], tuple[Any, ...]] = {}
 
+
+def _array_signature(arr: np.ndarray) -> tuple[Any, ...]:
+    a = np.asarray(arr)
+    if a.size == 0:
+        return (str(a.dtype), tuple(a.shape), 0.0, 0.0)
+    flat = a.reshape(-1)
+    head = flat[: min(16, flat.size)]
+    tail = flat[-min(16, flat.size):]
+    return (str(a.dtype), tuple(a.shape), float(np.sum(head, dtype=np.float64)), float(np.sum(tail, dtype=np.float64)))
+
+
+def _nl_cache_key(device: str, *arrays: np.ndarray) -> tuple[str, tuple[Any, ...]]:
+    return (str(device), tuple(_array_signature(a) for a in arrays))
+
+
+
+
+def _material_signature(materials: list[Any], family: str) -> tuple[Any, ...]:
+    sig: list[Any] = [family, len(materials)]
+    if family == "hss":
+        for m in materials:
+            sig.extend([float(m.E50ref), float(m.Eoedref), float(m.Eurref), float(m.nu_ur), float(m.pref), float(m.m), float(m.c), float(m.phi_deg), float(m.psi_deg), float(m.G0ref or 0.0), float(m.gamma07 or 0.0), float(m.Rf)])
+    elif family == "mohr-coulomb":
+        for m in materials:
+            sig.extend([float(m.E), float(m.nu), float(m.cohesion), float(m.friction_deg), float(m.dilation_deg)])
+    return tuple(sig)
+
+
+def _prune_small_cache(cache: dict[Any, Any], max_items: int = 16) -> None:
+    while len(cache) > max_items:
+        try:
+            cache.pop(next(iter(cache)))
+        except Exception:
+            break
 
 def resolve_warp_nonlinear_config(metadata: dict[str, Any] | None = None) -> WarpNonlinearConfig:
     meta = metadata or {}
@@ -51,29 +82,6 @@ def resolve_warp_nonlinear_config(metadata: dict[str, Any] | None = None) -> War
         mc_surrogate=bool(meta.get('warp_mc_surrogate', DEFAULT_WARP_NL_CONFIG.mc_surrogate)),
     )
 
-
-
-
-def _material_signature(materials: list[Any], family: str) -> tuple[Any, ...]:
-    if family == 'hss':
-        return tuple((round(float(m.E50ref), 6), round(float(m.Eoedref), 6), round(float(m.Eurref), 6), round(float(m.nu_ur), 6), round(float(m.pref), 6), round(float(m.m), 6), round(float(m.c), 6), round(float(m.phi_deg), 6), round(float(m.psi_deg), 6), round(float(m.G0ref or 0.0), 6), round(float(m.gamma07 or 0.0), 12), round(float(m.Rf), 6)) for m in materials)
-    if family == 'mohr-coulomb':
-        return tuple((round(float(m.E), 6), round(float(m.nu), 6), round(float(m.cohesion), 6), round(float(m.friction_deg), 6), round(float(m.dilation_deg), 6)) for m in materials)
-    return tuple()
-
-
-def _device_cache_key(device: str, points: np.ndarray, elements: np.ndarray, pattern: BlockSparsePattern, family: str, materials: list[Any]) -> tuple[Any, ...]:
-    return (str(device), int(id(points)), int(id(elements)), int(id(pattern)), family, _material_signature(materials, family))
-
-
-def _bytes_of_arrays(*arrays: np.ndarray) -> int:
-    total = 0
-    for arr in arrays:
-        try:
-            total += int(np.asarray(arr).nbytes)
-        except Exception:
-            pass
-    return total
 
 def _pick_warp_device(requested_device: str, *, round_robin_index: int = 0) -> str:
     return choose_cuda_device(requested_device, round_robin_index=round_robin_index)
@@ -791,6 +799,7 @@ def try_warp_nonlinear_continuum_assembly(
     requested_device: str,
     solver_metadata: dict[str, Any] | None,
     block_pattern: BlockSparsePattern | None = None,
+    progress_callback=None,
 ) -> tuple[Any | None, np.ndarray | None, list[list[MaterialState]] | None, np.ndarray | None, np.ndarray | None, np.ndarray | None, WarpNonlinearAssemblyInfo]:
     cfg = resolve_warp_nonlinear_config(solver_metadata)
     family, family_warnings = _detect_material_family(materials, cfg)
@@ -847,78 +856,38 @@ def try_warp_nonlinear_continuum_assembly(
     n_nodes = int(points.shape[0])
     trans_ndof = n_nodes * 3
     try:
-        upload_started = time.perf_counter()
-        cache_key = _device_cache_key(device, points, elements, pattern, family, materials)
-        cached = _WARP_NONLINEAR_DEVICE_CACHE.get(cache_key)
-        upload_bytes = 0
+        cache_key = _nl_cache_key(device, pts, elems, np.asarray(pattern.elem_block_slots, dtype=np.int32))
+        cached = _WARP_NL_DEVICE_CACHE.get(cache_key) if bool((solver_metadata or {}).get("warp_resident_cache", True)) else None
         if cached is None:
-            cache_hit = False
+            if progress_callback is not None:
+                try:
+                    upload_mb = (pts.nbytes + elems.nbytes + np.asarray(pattern.elem_block_slots, dtype=np.int32).nbytes) / float(1024**2)
+                    progress_callback({"phase": "gpu-data-upload", "message": f"Uploading nonlinear mesh data to {device}", "device": device, "upload_mb": float(upload_mb), "upload_scope": "nonlinear-continuum"})
+                except Exception:
+                    pass
+            t0 = __import__('time').perf_counter()
             pts_wp = wp.from_numpy(pts, dtype=wp.vec3, device=device)
             elems_wp = wp.from_numpy(elems, dtype=wp.int32, device=device)
             slots_wp = wp.from_numpy(np.asarray(pattern.elem_block_slots, dtype=np.int32), dtype=wp.int32, device=device)
-            upload_bytes += _bytes_of_arrays(pts, elems, np.asarray(pattern.elem_block_slots, dtype=np.int32))
-            cached = {'pts_wp': pts_wp, 'elems_wp': elems_wp, 'slots_wp': slots_wp}
-            if family == 'hss':
-                cached.update({
-                    'E50_wp': wp.from_numpy(np.asarray([float(m.E50ref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'Eoed_wp': wp.from_numpy(np.asarray([float(m.Eoedref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'Eur_wp': wp.from_numpy(np.asarray([float(m.Eurref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'nu_wp': wp.from_numpy(np.asarray([float(m.nu_ur) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'pref_wp': wp.from_numpy(np.asarray([float(m.pref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'm_wp': wp.from_numpy(np.asarray([float(m.m) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'c_wp': wp.from_numpy(np.asarray([float(m.c) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'phi_wp': wp.from_numpy(np.asarray([float(m.phi_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'psi_wp': wp.from_numpy(np.asarray([float(m.psi_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'G0_wp': wp.from_numpy(np.asarray([float(m.G0ref or 0.0) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'g07_wp': wp.from_numpy(np.asarray([float(m.gamma07 or 0.0) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'Rf_wp': wp.from_numpy(np.asarray([float(m.Rf) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                })
-                upload_bytes += _bytes_of_arrays(
-                    np.asarray([float(m.E50ref) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.Eoedref) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.Eurref) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.nu_ur) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.pref) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.m) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.c) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.phi_deg) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.psi_deg) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.G0ref or 0.0) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.gamma07 or 0.0) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.Rf) for m in materials], dtype=np.float32),
-                )
-            else:
-                cached.update({
-                    'E_wp': wp.from_numpy(np.asarray([float(m.E) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'nu_wp': wp.from_numpy(np.asarray([float(m.nu) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'c_wp': wp.from_numpy(np.asarray([float(m.cohesion) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'phi_wp': wp.from_numpy(np.asarray([float(m.friction_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                    'psi_wp': wp.from_numpy(np.asarray([float(m.dilation_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
-                })
-                upload_bytes += _bytes_of_arrays(
-                    np.asarray([float(m.E) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.nu) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.cohesion) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.friction_deg) for m in materials], dtype=np.float32),
-                    np.asarray([float(m.dilation_deg) for m in materials], dtype=np.float32),
-                )
-            if len(_WARP_NONLINEAR_DEVICE_CACHE) > 12:
-                _WARP_NONLINEAR_DEVICE_CACHE.clear()
-            _WARP_NONLINEAR_DEVICE_CACHE[cache_key] = cached
+            _WARP_NL_DEVICE_CACHE[cache_key] = (pts_wp, elems_wp, slots_wp)
+            _prune_small_cache(_WARP_NL_DEVICE_CACHE, max_items=16)
+            if progress_callback is not None:
+                try:
+                    progress_callback({"phase": "gpu-data-ready", "message": f"Nonlinear mesh data ready on {device}", "device": device, "upload_scope": "nonlinear-continuum", "upload_seconds": float(__import__('time').perf_counter()-t0)})
+                except Exception:
+                    pass
         else:
-            cache_hit = True
-        info.cache_hit = cache_hit
-        pts_wp = cached['pts_wp']
-        elems_wp = cached['elems_wp']
-        slots_wp = cached['slots_wp']
+            pts_wp, elems_wp, slots_wp = cached
+            if progress_callback is not None:
+                try:
+                    progress_callback({"phase": "gpu-data-ready", "message": f"Reusing resident GPU cache on {device}", "device": device, "upload_scope": "nonlinear-continuum", "cache_hit": True})
+                except Exception:
+                    pass
         u_wp = wp.from_numpy(u_nodes_np, dtype=wp.vec3, device=device)
         base_stress_wp = wp.from_numpy(base_stress, dtype=wp.float32, device=device)
         base_strain_wp = wp.from_numpy(base_strain, dtype=wp.float32, device=device)
         base_pstrain_wp = wp.from_numpy(base_pstrain, dtype=wp.float32, device=device)
         base_aux_wp = wp.from_numpy(base_aux, dtype=wp.float32, device=device)
-        upload_bytes += _bytes_of_arrays(u_nodes_np, base_stress, base_strain, base_pstrain, base_aux)
-        info.uploaded_bytes = int(upload_bytes)
-        info.upload_seconds = float(time.perf_counter() - upload_started)
         block_vals_wp = wp.zeros((max(1, pattern.rows.shape[0]), 3, 3), dtype=wp.float32, device=device)
         fint_wp = wp.zeros(trans_ndof, dtype=wp.float32, device=device)
         out_stress_wp = wp.zeros(base_stress.shape, dtype=wp.float32, device=device)
@@ -932,20 +901,57 @@ def try_warp_nonlinear_continuum_assembly(
         cell_yield_wp = wp.zeros(elems.shape[0], dtype=wp.float32, device=device)
         cell_eqp_wp = wp.zeros(elems.shape[0], dtype=wp.float32, device=device)
 
+        mat_cache_key = (str(device), family, _material_signature(materials, family))
+        mat_cached = _WARP_NL_MATERIAL_CACHE.get(mat_cache_key) if bool((solver_metadata or {}).get("warp_resident_cache", True)) else None
+        if mat_cached is None:
+            if progress_callback is not None:
+                try:
+                    progress_callback({"phase": "gpu-material-upload", "message": f"Uploading material constants to {device}", "device": device, "upload_scope": "nonlinear-materials"})
+                except Exception:
+                    pass
+            mat_t0 = __import__('time').perf_counter()
+            if family == 'hss':
+                kernel = hss_kernel
+                mat_cached = (
+                    wp.from_numpy(np.asarray([float(m.E50ref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.Eoedref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.Eurref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.nu_ur) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.pref) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.m) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.c) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.phi_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.psi_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.G0ref or 0.0) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.gamma07 or 0.0) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.Rf) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                )
+            else:
+                kernel = mc_kernel
+                mat_cached = (
+                    wp.from_numpy(np.asarray([float(m.E) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.nu) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.cohesion) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.friction_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                    wp.from_numpy(np.asarray([float(m.dilation_deg) for m in materials], dtype=np.float32), dtype=wp.float32, device=device),
+                )
+            _WARP_NL_MATERIAL_CACHE[mat_cache_key] = mat_cached
+            _prune_small_cache(_WARP_NL_MATERIAL_CACHE, max_items=16)
+            if progress_callback is not None:
+                try:
+                    progress_callback({"phase": "gpu-material-ready", "message": f"Material constants ready on {device}", "device": device, "upload_scope": "nonlinear-materials", "upload_seconds": float(__import__('time').perf_counter()-mat_t0)})
+                except Exception:
+                    pass
+        else:
+            kernel = hss_kernel if family == 'hss' else mc_kernel
+            if progress_callback is not None:
+                try:
+                    progress_callback({"phase": "gpu-material-ready", "message": f"Reusing resident material cache on {device}", "device": device, "upload_scope": "nonlinear-materials", "cache_hit": True})
+                except Exception:
+                    pass
+
         if family == 'hss':
-            kernel = hss_kernel
-            E50_wp = cached['E50_wp']
-            Eoed_wp = cached['Eoed_wp']
-            Eur_wp = cached['Eur_wp']
-            nu_wp = cached['nu_wp']
-            pref_wp = cached['pref_wp']
-            m_wp = cached['m_wp']
-            c_wp = cached['c_wp']
-            phi_wp = cached['phi_wp']
-            psi_wp = cached['psi_wp']
-            G0_wp = cached['G0_wp']
-            g07_wp = cached['g07_wp']
-            Rf_wp = cached['Rf_wp']
+            E50_wp, Eoed_wp, Eur_wp, nu_wp, pref_wp, m_wp, c_wp, phi_wp, psi_wp, G0_wp, g07_wp, Rf_wp = mat_cached
             wp.launch(
                 kernel=kernel,
                 dim=int(elems.shape[0]),
@@ -954,12 +960,7 @@ def try_warp_nonlinear_continuum_assembly(
                 device=device,
             )
         else:
-            kernel = mc_kernel
-            E_wp = cached['E_wp']
-            nu_wp = cached['nu_wp']
-            c_wp = cached['c_wp']
-            phi_wp = cached['phi_wp']
-            psi_wp = cached['psi_wp']
+            E_wp, nu_wp, c_wp, phi_wp, psi_wp = mat_cached
             wp.launch(
                 kernel=kernel,
                 dim=int(elems.shape[0]),

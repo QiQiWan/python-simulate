@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import asdict
+import csv
+import json
 import os
 import time
 import traceback
 from typing import Any
 
 from geoai_simkit.app.validation import validate_model
+from geoai_simkit.app.boundary_presets import (
+    DEFAULT_GLOBAL_BOUNDARY_PRESET_KEY,
+    DEFAULT_STAGE_BOUNDARY_PRESET_KEY,
+    available_boundary_presets,
+    boundary_preset_definition,
+    build_boundary_conditions_from_preset,
+)
 from geoai_simkit.app.presolve import analyze_presolve_state, ensure_default_global_bcs, ProgressEtaEstimator, format_seconds
 from geoai_simkit.app.mesh_check import analyze_mesh, MeshCheckReport
 from geoai_simkit.app.ifc_suggestions import apply_suggestion_subset, apply_suggestions, build_suggestions
 from geoai_simkit.app.i18n import translate_text
+from geoai_simkit.app.performance_audit import analyze_ui_and_model_performance
 from geoai_simkit.validation_rules import (
     ParameterIssue,
     validate_bc_inputs,
@@ -29,10 +40,50 @@ from geoai_simkit.core.model import (
     MaterialDefinition,
     SimulationModel,
 )
-from geoai_simkit.geometry.ifc_import import IfcImportOptions, IfcImporter
+try:
+    from geoai_simkit.geometry.ifc_import import IfcImportOptions, IfcImporter
+    _IFC_IMPORT_ERROR: Exception | None = None
+except Exception as exc:  # pragma: no cover - optional dependency at startup
+    IfcImportOptions = None  # type: ignore[assignment]
+    IfcImporter = None  # type: ignore[assignment]
+    _IFC_IMPORT_ERROR = exc
+
 from geoai_simkit.geometry.parametric import ParametricPitScene
-from geoai_simkit.geometry.voxelize import VoxelMesher, VoxelizeOptions
-from geoai_simkit.geometry.gmsh_mesher import GmshMesher, GmshMesherOptions
+from geoai_simkit.geometry.mesh_engine import MeshEngine, MeshEngineOptions, normalize_element_family
+from geoai_simkit.geometry.demo_pit import (
+    build_demo_stages,
+    configure_demo_coupling,
+    coupling_wizard_summary,
+    demo_solver_preset_payload,
+    enabled_interface_groups,
+    enabled_support_groups,
+    enabled_interface_region_overrides,
+    explain_interface_policy,
+    explain_solver_preset,
+    interface_group_options,
+    interface_policy_options,
+    interface_region_override_options,
+    normalize_solver_preset,
+    solver_preset_options,
+    summarize_demo_coupling,
+    support_group_options,
+)
+
+try:
+    from geoai_simkit.geometry.voxelize import VoxelMesher, VoxelizeOptions
+    _VOXEL_IMPORT_ERROR: Exception | None = None
+except Exception as exc:  # pragma: no cover - optional dependency at startup
+    VoxelMesher = None  # type: ignore[assignment]
+    VoxelizeOptions = None  # type: ignore[assignment]
+    _VOXEL_IMPORT_ERROR = exc
+
+try:
+    from geoai_simkit.geometry.gmsh_mesher import GmshMesher, GmshMesherOptions
+    _GMSH_IMPORT_ERROR: Exception | None = None
+except Exception as exc:  # pragma: no cover - optional dependency at startup
+    GmshMesher = None  # type: ignore[assignment]
+    GmshMesherOptions = None  # type: ignore[assignment]
+    _GMSH_IMPORT_ERROR = exc
 from geoai_simkit.materials import registry
 from geoai_simkit.post.exporters import ExportManager
 from geoai_simkit.post.viewer import PreviewBuilder
@@ -53,38 +104,58 @@ MATERIAL_SPECS: dict[str, list[tuple[str, float]]] = {
 STEP_NAMES = ['1 项目', '2 几何 / IFC', '3 区域 / 材料', '4 Stage / 工况', '5 求解 / 结果']
 STEP_KEYS = ['项目', '几何', '区域/材料', '边界/阶段', '求解/结果']
 
+INVALID_STYLE = "QWidget { border: 1px solid #d9534f; background-color: rgba(217,83,79,0.10); }"
+VALID_STYLE = ""
+WARNING_STYLE = "QWidget { border: 1px solid #f0ad4e; background-color: rgba(240,173,78,0.08); }"
+
+
+
+
+
+
 class UIStyle:
-    INVALID_STYLE = "QWidget { border: 1px solid #d9534f; background-color: rgba(217,83,79,0.10); border-radius: 6px; }"
-    VALID_STYLE = ""
-    WARNING_STYLE = "QWidget { border: 1px solid #f0ad4e; background-color: rgba(240,173,78,0.08); border-radius: 6px; }"
+    INVALID_STYLE = INVALID_STYLE
+    VALID_STYLE = VALID_STYLE
+    WARNING_STYLE = WARNING_STYLE
 
     @staticmethod
-    def modern_stylesheet() -> str:
+    def app_stylesheet() -> str:
         return """
-        QMainWindow { background: #f6f7fb; }
-        QToolBar { spacing: 6px; padding: 6px; border-bottom: 1px solid #d9dee7; background: #ffffff; }
-        QGroupBox { font-weight: 600; border: 1px solid #d9dee7; border-radius: 10px; margin-top: 10px; padding-top: 10px; background: #ffffff; }
-        QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #1f2937; }
-        QPushButton { background: #ffffff; border: 1px solid #cfd6e3; border-radius: 8px; padding: 6px 12px; }
-        QPushButton:hover { background: #eef4ff; border-color: #8fb4ff; }
-        QPushButton:pressed { background: #dbe8ff; }
-        QPushButton:disabled { color: #9aa4b2; background: #f2f4f7; }
-        QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QListWidget, QTreeWidget, QTableWidget, QTabWidget::pane { background: #ffffff; border: 1px solid #d9dee7; border-radius: 8px; }
-        QTabBar::tab { background: #eef2f7; border: 1px solid #d9dee7; border-bottom: none; border-top-left-radius: 8px; border-top-right-radius: 8px; padding: 6px 10px; margin-right: 4px; }
-        QTabBar::tab:selected { background: #ffffff; color: #0f172a; }
-        QProgressBar { border: 1px solid #d9dee7; border-radius: 7px; background: #eef2f7; text-align: center; }
-        QProgressBar::chunk { background: #4f8cff; border-radius: 7px; }
-        QListWidget#gpuDeviceList::item:selected { background: #dbeafe; color: #0f172a; border-radius: 6px; }
+        QMainWindow, QWidget { background: #f5f7fb; color: #1f2937; }
+        QGroupBox { font-weight: 600; border: 1px solid #d7deea; border-radius: 10px; margin-top: 10px; background: #ffffff; }
+        QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }
+        QPushButton { background: #e9eef8; border: 1px solid #c9d4e6; border-radius: 8px; padding: 6px 10px; }
+        QPushButton:hover { background: #dde7f7; }
+        QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox, QListWidget, QPlainTextEdit, QTextEdit { background: #ffffff; border: 1px solid #cfd8e3; border-radius: 8px; padding: 4px; }
+        QProgressBar { border: 1px solid #cfd8e3; border-radius: 6px; background: #ffffff; text-align: center; }
+        QProgressBar::chunk { background: #3b82f6; border-radius: 6px; }
+        QListWidget::item:selected { background: #dbeafe; color: #111827; border-radius: 6px; }
         """
-
-
-INVALID_STYLE = UIStyle.INVALID_STYLE
-VALID_STYLE = UIStyle.VALID_STYLE
-WARNING_STYLE = UIStyle.WARNING_STYLE
-
 
 def resolve_app_icon() -> Path:
     return Path(__file__).resolve().parents[1] / 'assets' / 'geoai_simkit.ico'
+
+def _startup_optional_dependency_messages() -> list[str]:
+    messages: list[str] = []
+    if _IFC_IMPORT_ERROR is not None:
+        messages.append(f"IFC import is unavailable until optional dependencies are installed: {_IFC_IMPORT_ERROR}")
+    if _VOXEL_IMPORT_ERROR is not None:
+        messages.append(f"Voxel meshing is unavailable until optional dependencies are installed: {_VOXEL_IMPORT_ERROR}")
+    if _GMSH_IMPORT_ERROR is not None:
+        messages.append(f"Gmsh meshing is unavailable until optional dependencies are installed: {_GMSH_IMPORT_ERROR}")
+    return messages
+
+
+def _feature_import_error(feature: str) -> RuntimeError:
+    mapping = {
+        'ifc': _IFC_IMPORT_ERROR,
+        'voxel': _VOXEL_IMPORT_ERROR,
+        'gmsh': _GMSH_IMPORT_ERROR,
+    }
+    exc = mapping.get(feature)
+    if exc is None:
+        return RuntimeError(f"Feature '{feature}' is unavailable.")
+    return RuntimeError(str(exc))
 
 def _set_table_item(table, row: int, col: int, value: str, editable: bool = False):
     item = table.item(row, col)
@@ -120,6 +191,35 @@ def _parse_values(text: str, fallback_len: int = 3) -> tuple[float, ...]:
     return tuple(0.0 for _ in range(fallback_len))
 
 
+def _widget_text(widget) -> str:
+    if hasattr(widget, 'currentText'):
+        try:
+            return str(widget.currentText())
+        except Exception:
+            pass
+    if hasattr(widget, 'text'):
+        try:
+            return str(widget.text())
+        except Exception:
+            pass
+    return ''
+
+
+def _set_widget_text(widget, value: str) -> None:
+    if hasattr(widget, 'setCurrentText'):
+        try:
+            widget.setCurrentText(str(value))
+            return
+        except Exception:
+            pass
+    if hasattr(widget, 'setText'):
+        try:
+            widget.setText(str(value))
+            return
+        except Exception:
+            pass
+
+
 TYPE_COLOR_MAP = {
     'IfcWall': '#5c6f82', 'IfcSlab': '#c28743', 'IfcBeam': '#8b6f3a', 'IfcColumn': '#6c7a89', 'IfcBuildingElementProxy': '#c95f5f',
     'soil': '#b9965b', 'wall': '#5c6f82', 'support': '#6b8e23', 'beam': '#8b6f3a', 'column': '#6c7a89', 'slab': '#c28743', 'boundary': '#7b68ee', 'opening': '#e67e22',
@@ -144,46 +244,6 @@ def launch_main_window() -> None:
     QtCore = optional_import('PySide6.QtCore')
     QtGui = optional_import('PySide6.QtGui')
     QtInteractor = optional_import('pyvistaqt').QtInteractor
-
-    class _LogicalPage(QtWidgets.QWidget):
-        page_name = 'page'
-
-        def __init__(self, owner, builder) -> None:
-            super().__init__()
-            self.owner = owner
-            layout = QtWidgets.QVBoxLayout(self)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.addWidget(builder())
-
-    class ProjectPage(_LogicalPage):
-        page_name = 'project'
-
-        def __init__(self, owner) -> None:
-            super().__init__(owner, owner._build_project_page)
-
-    class GeometryPage(_LogicalPage):
-        page_name = 'geometry'
-
-        def __init__(self, owner) -> None:
-            super().__init__(owner, owner._build_geometry_page)
-
-    class MaterialPage(_LogicalPage):
-        page_name = 'material'
-
-        def __init__(self, owner) -> None:
-            super().__init__(owner, owner._build_material_page)
-
-    class StagePage(_LogicalPage):
-        page_name = 'stage'
-
-        def __init__(self, owner) -> None:
-            super().__init__(owner, owner._build_stage_page)
-
-    class ResultsPage(_LogicalPage):
-        page_name = 'results'
-
-        def __init__(self, owner) -> None:
-            super().__init__(owner, owner._build_results_page)
 
     class SolverWorker(QtCore.QObject):
         progress = QtCore.Signal(object)
@@ -222,55 +282,24 @@ def launch_main_window() -> None:
         finished = QtCore.Signal(object, str)
         failed = QtCore.Signal(str)
 
-        def __init__(self, model: SimulationModel, method: str, element_size: float, padding: float) -> None:
+        def __init__(self, model: SimulationModel, options: MeshEngineOptions) -> None:
             super().__init__()
             self.model = model
-            self.method = method
-            self.element_size = float(element_size)
-            self.padding = float(padding)
+            self.options = options
 
         @QtCore.Slot()
         def run(self) -> None:
             try:
-                self.progress.emit({'phase': 'prepare', 'value': 5, 'message': 'Preparing meshing job', 'log': True})
-                model = self.model
-
-                def _forward(payload: object) -> None:
-                    if isinstance(payload, dict):
-                        self.progress.emit(payload)
-
-                if self.method == 'gmsh_tet':
-                    self.progress.emit({'phase': 'gmsh-start', 'value': 12, 'message': 'Launching local gmsh mesher', 'log': True})
-                    try:
-                        model = GmshMesher(
-                            GmshMesherOptions(element_size=self.element_size),
-                            progress_callback=_forward,
-                        ).mesh_model(model)
-                    except Exception as exc:
-                        self.progress.emit({
-                            'phase': 'gmsh-fallback',
-                            'value': 18,
-                            'message': f'Gmsh failed and will fall back to voxelization: {exc}',
-                            'severity': 'warning',
-                            'hint': 'Inspect the gmsh diagnostics and consider fixing non-closed solids later.',
-                            'log': True,
-                        })
-                        model = VoxelMesher(
-                            VoxelizeOptions(cell_size=self.element_size, padding=self.padding),
-                            progress_callback=_forward,
-                        ).voxelize_model(model)
-                        self.method = 'voxel_hex8'
-                else:
-                    self.progress.emit({'phase': 'voxelize-start', 'value': 12, 'message': 'Voxelizing model', 'log': True})
-                    model = VoxelMesher(
-                        VoxelizeOptions(cell_size=self.element_size, padding=self.padding),
-                        progress_callback=_forward,
-                    ).voxelize_model(model)
-                model.ensure_regions()
-                self.progress.emit({'phase': 'finalize', 'value': 95, 'message': 'Finalizing mesh data', 'log': True})
-                self.finished.emit(model, self.method)
+                engine = MeshEngine(self.options, progress_callback=self._on_progress)
+                self.progress.emit({'phase': 'prepare', 'value': 4, 'message': 'Preparing geometry-first mesh job', 'log': True})
+                meshed = engine.mesh_model(self.model)
+                self.progress.emit({'phase': 'finalize', 'value': 96, 'message': 'Finalizing mesh data', 'log': True})
+                self.finished.emit(meshed, normalize_element_family(self.options.element_family))
             except Exception:
                 self.failed.emit(traceback.format_exc())
+
+        def _on_progress(self, payload: object) -> None:
+            self.progress.emit(payload)
 
     class MainWindow(QtWidgets.QMainWindow):
         def __init__(self) -> None:
@@ -318,10 +347,11 @@ def launch_main_window() -> None:
             self._flash_timer.setInterval(180)
             self._flash_timer.timeout.connect(self._on_flash_tick)
             self._flash_payload = None
+            self._startup_dependency_messages = _startup_optional_dependency_messages()
 
+            self.setStyleSheet(UIStyle.app_stylesheet())
             self._build_ui()
-            self._apply_modern_ui_style()
-            self._apply_action_icons()
+            self._apply_standard_icons(QtWidgets)
             self._apply_screen_adaptive_layout()
             self._configure_default_compute_preferences()
             QtWidgets.QApplication.instance().installEventFilter(self)
@@ -329,53 +359,12 @@ def launch_main_window() -> None:
             self._rebuild_material_param_form()
             self._update_validation()
             self._refresh_form_validation()
+            if self._startup_dependency_messages:
+                self._set_status(self._tt('Startup completed with optional feature warnings. See logs for details.'))
+                for msg in self._startup_dependency_messages:
+                    self._append_diagnostic('warning', 'startup', msg, self._tt('Install the missing optional dependency or keep using the available modules.'))
+                    self._log(msg)
 
-
-        def _apply_modern_ui_style(self) -> None:
-            try:
-                self.setStyleSheet(UIStyle.modern_stylesheet())
-            except Exception:
-                pass
-
-        def _standard_icon(self, pixmap_name: str):
-            try:
-                return self.style().standardIcon(getattr(QtWidgets.QStyle.StandardPixmap, pixmap_name))
-            except Exception:
-                return QtGui.QIcon()
-
-        def _apply_action_icons(self) -> None:
-            icon_map = {
-                'act_new_demo': 'SP_FileDialogNewFolder',
-                'act_import_ifc': 'SP_DialogOpenButton',
-                'act_run': 'SP_MediaPlay',
-                'act_cancel': 'SP_BrowserStop',
-                'act_export': 'SP_DialogSaveButton',
-                'act_export_bundle': 'SP_DriveFDIcon',
-                'act_hide_selected': 'SP_TitleBarShadeButton',
-                'act_show_all_objects': 'SP_DialogResetButton',
-                'act_clear_selection': 'SP_DialogDiscardButton',
-                'act_toggle_inspector': 'SP_FileDialogDetailedView',
-            }
-            for name, pix in icon_map.items():
-                obj = getattr(self, name, None)
-                if obj is not None:
-                    try:
-                        obj.setIcon(self._standard_icon(pix))
-                    except Exception:
-                        pass
-            for btn_name, pix in {
-                'btn_run_solver': 'SP_MediaPlay',
-                'btn_cancel_solver': 'SP_BrowserStop',
-                'btn_solver_profile_auto': 'SP_BrowserReload',
-                'btn_solver_profile_cpu': 'SP_ComputerIcon',
-                'btn_solver_profile_gpu': 'SP_DriveHDIcon',
-            }.items():
-                btn = getattr(self, btn_name, None)
-                if btn is not None:
-                    try:
-                        btn.setIcon(self._standard_icon(pix))
-                    except Exception:
-                        pass
 
         def _apply_window_icon(self) -> None:
             try:
@@ -385,6 +374,90 @@ def launch_main_window() -> None:
             except Exception:
                 pass
 
+        def _standard_icon(self, widgets_module, icon_name: str):
+            try:
+                style = self.style() if hasattr(self, 'style') else widgets_module.QApplication.style()
+                enum = getattr(widgets_module.QStyle.StandardPixmap, icon_name, None)
+                if enum is None:
+                    enum = getattr(widgets_module.QStyle, icon_name, None)
+                if style is None or enum is None:
+                    return QtGui.QIcon()
+                return style.standardIcon(enum)
+            except Exception:
+                return QtGui.QIcon()
+
+        def _apply_standard_icons(self, widgets_module) -> None:
+            icon_map = {
+                'btn_run_solver': 'SP_MediaPlay',
+                'btn_cancel_solver': 'SP_BrowserStop',
+                'btn_solver_profile_auto': 'SP_BrowserReload',
+                'btn_solver_profile_cpu': 'SP_ComputerIcon',
+                'btn_solver_profile_gpu': 'SP_DriveNetIcon',
+                'btn_check_mesh': 'SP_DialogApplyButton',
+                'btn_locate_mesh_region': 'SP_FileDialogContentsView',
+                'btn_build_parametric': 'SP_BrowserReload',
+                'btn_import_ifc': 'SP_DialogOpenButton',
+                'btn_voxelize': 'SP_CommandLink',
+                'btn_apply_suggestions': 'SP_DialogYesButton',
+                'btn_build_suggestions': 'SP_FileDialogDetailedView',
+                'btn_accept_suggestions': 'SP_DialogApplyButton',
+                'btn_reject_suggestions': 'SP_DialogCancelButton',
+                'btn_apply_accepted': 'SP_DialogSaveButton',
+                'btn_assign_new_region': 'SP_FileDialogNewFolder',
+                'btn_assign_existing_region': 'SP_ArrowRight',
+                'btn_merge_region': 'SP_ArrowDown',
+                'btn_apply_object_role': 'SP_DialogApplyButton',
+                'btn_new_material': 'SP_FileDialogNewFolder',
+                'btn_save_material': 'SP_DialogSaveButton',
+                'btn_delete_material': 'SP_TrashIcon',
+                'btn_assign_material': 'SP_ArrowRight',
+                'btn_assign_custom_material': 'SP_DialogApplyButton',
+                'btn_clear_material': 'SP_DialogResetButton',
+                'btn_add_stage': 'SP_FileDialogNewFolder',
+                'btn_remove_stage': 'SP_TrashIcon',
+                'btn_apply_stage': 'SP_DialogSaveButton',
+                'btn_clone_stage': 'SP_FileDialogToParent',
+                'btn_add_bc': 'SP_DialogApplyButton',
+                'btn_remove_bc': 'SP_TrashIcon',
+                'btn_add_load': 'SP_DialogApplyButton',
+                'btn_remove_load': 'SP_TrashIcon',
+                'btn_export_current': 'SP_DialogSaveButton',
+                'btn_export_bundle': 'SP_DriveHDIcon',
+                'btn_apply_selected_suggestions': 'SP_DialogApplyButton',
+                'btn_reject_selected_suggestions': 'SP_DialogCancelButton',
+                'btn_accept_all_suggestions': 'SP_DialogYesButton',
+                'btn_rename_region': 'SP_FileDialogDetailedView',
+                'inspector_hide_btn': 'SP_DialogCloseButton',
+                'inspector_show_btn': 'SP_DialogOpenButton',
+                'inspector_lock_btn': 'SP_MessageBoxWarning',
+                'inspector_unlock_btn': 'SP_DialogResetButton',
+                'inspector_assign_new_btn': 'SP_FileDialogNewFolder',
+                'inspector_assign_existing_btn': 'SP_ArrowRight',
+                'inspector_merge_regions_btn': 'SP_ArrowDown',
+                'inspector_apply_role_btn': 'SP_DialogApplyButton',
+                'inspector_apply_nudge_btn': 'SP_ArrowUp',
+            }
+            for attr_name, icon_name in icon_map.items():
+                widget = getattr(self, attr_name, None)
+                if widget is None or not hasattr(widget, 'setIcon'):
+                    continue
+                icon = self._standard_icon(widgets_module, icon_name)
+                if not icon.isNull():
+                    try:
+                        widget.setIcon(icon)
+                    except Exception:
+                        pass
+
+            gpu_widget = getattr(self, 'solver_gpu_device_list', None)
+            if gpu_widget is not None:
+                try:
+                    gpu_widget.setAlternatingRowColors(True)
+                    gpu_widget.setUniformItemSizes(True)
+                    gpu_widget.setSelectionRectVisible(True)
+                    gpu_widget.setSpacing(2)
+                except Exception:
+                    pass
+
         def _detect_cuda_available(self) -> bool:
             return bool(detect_cuda_devices())
 
@@ -393,35 +466,6 @@ def launch_main_window() -> None:
                 return detect_cuda_devices()
             except Exception:
                 return []
-
-        def _selected_gpu_aliases(self) -> list[str]:
-            if not hasattr(self, 'solver_gpu_list'):
-                return []
-            vals: list[str] = []
-            for item in self.solver_gpu_list.selectedItems():
-                alias = str(item.data(QtCore.Qt.ItemDataRole.UserRole) or '').strip()
-                if alias:
-                    vals.append(alias)
-            return vals
-
-        def _populate_gpu_device_list(self, selected_aliases: list[str] | tuple[str, ...] | None = None) -> None:
-            if not hasattr(self, 'solver_gpu_list'):
-                return
-            selected = {str(v).lower() for v in (selected_aliases or []) if str(v).strip()}
-            devices = self._detected_cuda_devices()
-            self.solver_gpu_list.blockSignals(True)
-            self.solver_gpu_list.clear()
-            for dev in devices:
-                item = QtWidgets.QListWidgetItem(f"{dev.alias}  |  {dev.name}  |  {dev.memory_gib:.1f} GiB")
-                item.setData(QtCore.Qt.ItemDataRole.UserRole, dev.alias)
-                item.setToolTip(self._tt(f'Select / highlight {dev.alias} to include it in GPU scheduling.'))
-                self.solver_gpu_list.addItem(item)
-                if not selected or dev.alias.lower() in selected:
-                    item.setSelected(True)
-            self.solver_gpu_list.blockSignals(False)
-            if hasattr(self, 'solver_gpu_hint_label'):
-                count = max(0, self.solver_gpu_list.count())
-                self.solver_gpu_hint_label.setText(self._tt(f'Detected GPUs: {count}. Highlight one or more devices to constrain scheduling.'))
 
         def _populate_solver_compute_device_options(self) -> None:
             devices = self._detected_cuda_devices()
@@ -455,7 +499,6 @@ def launch_main_window() -> None:
             self._cuda_available = self._detect_cuda_available()
             self._cuda_devices = self._detected_cuda_devices()
             self._populate_solver_compute_device_options()
-            self._populate_gpu_device_list()
             if hasattr(self, 'solver_threads_spin'):
                 self.solver_threads_spin.setRange(0, max(8, total))
                 self.solver_threads_spin.setValue(half)
@@ -467,6 +510,13 @@ def launch_main_window() -> None:
                 self.solver_compute_threads_spin.setRange(0, max(8, total))
             prefs = recommended_compute_preferences('gpu-throughput' if self._cuda_available else 'cpu-safe', cuda_available=self._cuda_available, cpu_total=total)
             self._apply_compute_preferences_to_controls(prefs, update_summary=False)
+            gpu_widget = getattr(self, 'solver_gpu_device_list', None)
+            if gpu_widget is not None:
+                allowed = {str(x).strip().lower() for x in getattr(prefs, 'allowed_gpu_devices', []) if str(x).strip()}
+                for i in range(gpu_widget.count()):
+                    item = gpu_widget.item(i)
+                    alias = str(item.data(QtCore.Qt.UserRole) or '').strip().lower()
+                    item.setSelected((not allowed) or (alias in allowed))
             self._update_solver_compute_summary()
 
         def _read_solver_compute_preferences(self) -> BackendComputePreferences:
@@ -476,7 +526,6 @@ def launch_main_window() -> None:
             preconditioner = self.solver_compute_preconditioner_combo.currentText() if hasattr(self, 'solver_compute_preconditioner_combo') else 'auto'
             solver_strategy = self.solver_compute_strategy_combo.currentText() if hasattr(self, 'solver_compute_strategy_combo') else 'auto'
             warp_preconditioner = self.solver_compute_warp_preconditioner_combo.currentText() if hasattr(self, 'solver_compute_warp_preconditioner_combo') else 'diag'
-            multi_gpu_mode = self.solver_compute_multi_gpu_combo.currentText() if hasattr(self, 'solver_compute_multi_gpu_combo') else 'single'
             profile = self.solver_compute_profile_combo.currentText() if hasattr(self, 'solver_compute_profile_combo') else 'manual'
             tol_text = self.solver_compute_iter_tol_edit.text().strip() if hasattr(self, 'solver_compute_iter_tol_edit') else '1e-10'
             maxiter = int(self.solver_compute_iter_max_spin.value()) if hasattr(self, 'solver_compute_iter_max_spin') else 2000
@@ -502,11 +551,10 @@ def launch_main_window() -> None:
                 preconditioner=preconditioner,
                 solver_strategy=solver_strategy,
                 warp_preconditioner=warp_preconditioner,
-                multi_gpu_mode=multi_gpu_mode,
                 iterative_tolerance=iter_tol,
                 iterative_maxiter=maxiter,
                 block_size=3,
-                selected_gpu_aliases=tuple(self._selected_gpu_aliases()),
+                allowed_gpu_devices=self._selected_gpu_devices(),
             )
 
         def _apply_compute_preferences_to_controls(self, prefs: BackendComputePreferences, *, update_summary: bool = True) -> None:
@@ -522,11 +570,6 @@ def launch_main_window() -> None:
                         self.solver_compute_device_combo.setCurrentIndex(idx)
                 if hasattr(self, 'solver_compute_threads_spin'):
                     self.solver_compute_threads_spin.setValue(int(prefs.thread_count))
-                if hasattr(self, 'solver_compute_multi_gpu_combo'):
-                    idx = self.solver_compute_multi_gpu_combo.findText(getattr(prefs, 'multi_gpu_mode', 'single'))
-                    if idx >= 0:
-                        self.solver_compute_multi_gpu_combo.setCurrentIndex(idx)
-                self._populate_gpu_device_list(getattr(prefs, 'selected_gpu_aliases', ()))
                 if hasattr(self, 'solver_compute_require_warp_check'):
                     self.solver_compute_require_warp_check.setChecked(bool(prefs.require_warp))
                 if hasattr(self, 'solver_compute_hex8_check'):
@@ -585,11 +628,77 @@ def launch_main_window() -> None:
                 return
             self._apply_solver_compute_profile(profile)
 
+        def _selected_gpu_devices(self) -> list[str]:
+            widget = getattr(self, 'solver_gpu_device_list', None)
+            if widget is None:
+                return []
+            selected: list[str] = []
+            try:
+                items = widget.selectedItems()
+            except Exception:
+                items = []
+            for item in items or []:
+                try:
+                    alias = str(item.data(QtCore.Qt.UserRole) or item.text() or '').strip()
+                except Exception:
+                    alias = ''
+                if alias:
+                    selected.append(alias)
+            out: list[str] = []
+            seen: set[str] = set()
+            for alias in selected:
+                low = alias.lower()
+                if low not in seen:
+                    out.append(alias)
+                    seen.add(low)
+            return out
+
+        def _populate_gpu_device_list(self) -> None:
+            widget = getattr(self, 'solver_gpu_device_list', None)
+            if widget is None:
+                return
+            previous = {str(x).strip().lower() for x in self._selected_gpu_devices() if str(x).strip()}
+            widget.blockSignals(True)
+            widget.clear()
+            devices = list(getattr(self, '_cuda_devices', []) or self._detected_cuda_devices())
+            devices.sort(key=lambda d: (-(int(getattr(d, 'memory_total', 0) or 0)), str(getattr(d, 'alias', '') or '')))
+            for dev in devices:
+                try:
+                    alias = str(getattr(dev, 'alias', '') or '').strip()
+                    name = str(getattr(dev, 'name', alias) or alias).strip()
+                    mem_bytes = int(getattr(dev, 'memory_total', 0) or 0)
+                except Exception:
+                    alias, name, mem_bytes = '', '', 0
+                if not alias:
+                    continue
+                mem_gib = (float(mem_bytes) / float(1024 ** 3)) if mem_bytes > 0 else 0.0
+                label = f"{alias} | {name}" + (f" | {mem_gib:.1f} GiB" if mem_gib > 0 else '')
+                item = QtWidgets.QListWidgetItem(label)
+                item.setData(QtCore.Qt.UserRole, alias)
+                item.setToolTip(self._tt(f'Select this GPU to allow the solver to run on {alias}. Hold Ctrl or Shift to multi-select devices for round-robin scheduling.'))
+                try:
+                    icon = self._standard_icon(QtWidgets, 'SP_DriveNetIcon')
+                    if not icon.isNull():
+                        item.setIcon(icon)
+                except Exception:
+                    pass
+                widget.addItem(item)
+                if not previous or alias.lower() in previous:
+                    item.setSelected(True)
+            widget.blockSignals(False)
+            try:
+                widget.setEnabled(widget.count() > 0)
+            except Exception:
+                pass
+
         def _update_solver_compute_summary(self, *_args) -> None:
             prefs = self._read_solver_compute_preferences()
             cpu_total = getattr(self, '_cpu_core_total', max(1, int(os.cpu_count() or 1)))
             summary = prefs.summary(cpu_total=cpu_total, cuda_available=getattr(self, '_cuda_available', False))
-            hw = f"Detected CPU cores: {cpu_total} | {describe_cuda_hardware(self._selected_gpu_aliases())}"
+            selected = self._selected_gpu_devices()
+            selected_text = ', '.join(selected) if selected else self._tt('all detected GPUs')
+            summary = f"{summary} | Selected GPUs: {selected_text}"
+            hw = f"Detected CPU cores: {cpu_total} | {describe_cuda_hardware()}"
             if hasattr(self, 'solver_compute_summary_label'):
                 self.solver_compute_summary_label.setText(self._tt(summary))
             if hasattr(self, 'solver_compute_hardware_label'):
@@ -733,11 +842,11 @@ def launch_main_window() -> None:
 
             self.page_stack = QtWidgets.QStackedWidget()
             self.page_stack.setMinimumWidth(460)
-            self.page_stack.addWidget(self._wrap_scroll_page(ProjectPage(self)))
-            self.page_stack.addWidget(self._wrap_scroll_page(GeometryPage(self)))
-            self.page_stack.addWidget(MaterialPage(self))
-            self.page_stack.addWidget(StagePage(self))
-            self.page_stack.addWidget(self._wrap_scroll_page(ResultsPage(self)))
+            self.page_stack.addWidget(self._wrap_scroll_page(self._build_project_page()))
+            self.page_stack.addWidget(self._wrap_scroll_page(self._build_geometry_page()))
+            self.page_stack.addWidget(self._build_material_page())
+            self.page_stack.addWidget(self._build_stage_page())
+            self.page_stack.addWidget(self._wrap_scroll_page(self._build_results_page()))
             splitter.addWidget(self.page_stack)
             splitter.setSizes([920, 560])
             self._build_inspector_dock()
@@ -952,6 +1061,76 @@ def launch_main_window() -> None:
                 form.addRow(name, w); self._param_inputs[name] = w
             lay.addWidget(param_box)
 
+            coupling_box = QtWidgets.QGroupBox('示例墙-土界面与支撑自动化')
+            coupling_form = QtWidgets.QFormLayout(coupling_box)
+            self.demo_wall_mode_combo = QtWidgets.QComboBox()
+            self.demo_wall_mode_combo.addItem('仅显示 wall（不参与求解）', 'display_only')
+            self.demo_wall_mode_combo.addItem('自动墙-土 interface', 'auto_interface')
+            self.demo_wall_mode_combo.addItem('PLAXIS-like 自动耦合（墙+界面+支撑）', 'plaxis_like_auto')
+            self.demo_wall_mode_combo.setCurrentIndex(2)
+            self.demo_interface_policy_combo = QtWidgets.QComboBox()
+            for key, label in interface_policy_options().items():
+                self.demo_interface_policy_combo.addItem(f'{key} | {label}', key)
+            idx = self.demo_interface_policy_combo.findData('manual_like_nearest_soil')
+            if idx >= 0:
+                self.demo_interface_policy_combo.setCurrentIndex(idx)
+            self.demo_nearest_radius_factor_spin = QtWidgets.QDoubleSpinBox()
+            self.demo_nearest_radius_factor_spin.setRange(1.0, 6.0)
+            self.demo_nearest_radius_factor_spin.setDecimals(2)
+            self.demo_nearest_radius_factor_spin.setSingleStep(0.25)
+            self.demo_nearest_radius_factor_spin.setValue(1.75)
+            self.demo_solver_preset_combo = QtWidgets.QComboBox()
+            for key, label in solver_preset_options().items():
+                self.demo_solver_preset_combo.addItem(f'{key} | {label}', key)
+            preset_idx = self.demo_solver_preset_combo.findData('balanced')
+            if preset_idx >= 0:
+                self.demo_solver_preset_combo.setCurrentIndex(preset_idx)
+            self.demo_interface_group_checks = {}
+            interface_groups_widget = QtWidgets.QWidget(); interface_groups_layout = QtWidgets.QHBoxLayout(interface_groups_widget); interface_groups_layout.setContentsMargins(0, 0, 0, 0)
+            for key, label in interface_group_options().items():
+                cb = QtWidgets.QCheckBox(label)
+                cb.setChecked(True)
+                self.demo_interface_group_checks[key] = cb
+                interface_groups_layout.addWidget(cb)
+            interface_groups_layout.addStretch(1)
+            self.demo_interface_region_override_combos = {}
+            override_widget = QtWidgets.QWidget(); override_layout = QtWidgets.QGridLayout(override_widget); override_layout.setContentsMargins(0, 0, 0, 0)
+            override_layout.setHorizontalSpacing(8); override_layout.setVerticalSpacing(4)
+            override_layout.addWidget(QtWidgets.QLabel('界面组'), 0, 0)
+            override_layout.addWidget(QtWidgets.QLabel('优先土层'), 0, 1)
+            region_override_options = interface_region_override_options()
+            interface_labels = interface_group_options()
+            row_idx = 1
+            for key in ('outer', 'inner_upper', 'inner_lower'):
+                override_layout.addWidget(QtWidgets.QLabel(interface_labels.get(key, key)), row_idx, 0)
+                combo = QtWidgets.QComboBox()
+                for opt_key, opt_label in region_override_options.items():
+                    combo.addItem(opt_label, opt_key)
+                combo.setCurrentIndex(0)
+                combo.setToolTip('为该界面组手动指定优先匹配的土层；保持“自动选择最近土层”时，系统按默认分层逻辑自动选择。')
+                self.demo_interface_region_override_combos[key] = combo
+                override_layout.addWidget(combo, row_idx, 1)
+                row_idx += 1
+            self.demo_support_group_checks = {}
+            support_groups_widget = QtWidgets.QWidget(); support_groups_layout = QtWidgets.QHBoxLayout(support_groups_widget); support_groups_layout.setContentsMargins(0, 0, 0, 0)
+            for key, label in support_group_options().items():
+                cb = QtWidgets.QCheckBox(label)
+                cb.setChecked(True)
+                self.demo_support_group_checks[key] = cb
+                support_groups_layout.addWidget(cb)
+            support_groups_layout.addStretch(1)
+            self.demo_interface_note = QtWidgets.QLabel('默认按类似 PLAXIS 的思路自动创建墙-土 node-pair 界面；若墙节点与土体节点不共点，系统会自动吸附到最近土层节点。现在可直接勾选要参与自动生成的界面组与支撑组、调整最近土层吸附半径，并为 outer / inner_upper / inner_lower 手动指定优先土层。')
+            self.demo_interface_note.setWordWrap(True)
+            coupling_form.addRow('围护墙模式', self.demo_wall_mode_combo)
+            coupling_form.addRow('界面匹配策略', self.demo_interface_policy_combo)
+            coupling_form.addRow('最近土层吸附半径因子', self.demo_nearest_radius_factor_spin)
+            coupling_form.addRow('求解稳健性预设', self.demo_solver_preset_combo)
+            coupling_form.addRow('启用界面组', interface_groups_widget)
+            coupling_form.addRow('界面组优先土层', override_widget)
+            coupling_form.addRow('启用支撑组', support_groups_widget)
+            coupling_form.addRow(self.demo_interface_note)
+            lay.addWidget(coupling_box)
+
             ifc_box = QtWidgets.QGroupBox('IFC 导入选项')
             ifc_form = QtWidgets.QFormLayout(ifc_box)
             self.ifc_include_entities_edit = QtWidgets.QLineEdit('IfcWall,IfcBeam,IfcBuildingElementProxy,IfcSlab,IfcColumn')
@@ -978,16 +1157,24 @@ def launch_main_window() -> None:
             lay.addWidget(self.geometry_validation_label)
             lay.addWidget(self.ifc_validation_label)
 
-            mesh_box = QtWidgets.QGroupBox('网格划分流程')
+            mesh_box = QtWidgets.QGroupBox('网格引擎 / Geometry-first')
             mesh_form = QtWidgets.QFormLayout(mesh_box)
-            self.mesh_method_combo = QtWidgets.QComboBox(); self.mesh_method_combo.addItems(['voxel_hex8', 'gmsh_tet'])
+            self.mesh_method_combo = QtWidgets.QComboBox(); self.mesh_method_combo.addItems(['auto', 'tet4', 'hex8'])
             self.mesh_size_spin = QtWidgets.QDoubleSpinBox(); self.mesh_size_spin.setRange(0.05, 1.0e6); self.mesh_size_spin.setDecimals(3); self.mesh_size_spin.setValue(2.0)
             self.mesh_padding_spin = QtWidgets.QDoubleSpinBox(); self.mesh_padding_spin.setRange(0.0, 1000.0); self.mesh_padding_spin.setDecimals(3); self.mesh_padding_spin.setValue(0.0)
-            self.mesh_workflow_note = QtWidgets.QLabel('若 IFC 导入的是表面几何，请先执行网格划分；gmsh 不可用时会提示回退到体素化。')
+            self.mesh_local_refine_check = QtWidgets.QCheckBox(); self.mesh_local_refine_check.setChecked(True)
+            self.mesh_only_material_check = QtWidgets.QCheckBox(); self.mesh_only_material_check.setChecked(True)
+            self.mesh_refine_ratio_spin = QtWidgets.QDoubleSpinBox(); self.mesh_refine_ratio_spin.setRange(0.1, 1.0); self.mesh_refine_ratio_spin.setDecimals(2); self.mesh_refine_ratio_spin.setSingleStep(0.05); self.mesh_refine_ratio_spin.setValue(0.65)
+            self.mesh_density_trigger_spin = QtWidgets.QSpinBox(); self.mesh_density_trigger_spin.setRange(2, 100); self.mesh_density_trigger_spin.setValue(4)
+            self.mesh_workflow_note = QtWidgets.QLabel('先导入点/线/面几何并关联材料，再由独立网格引擎生成体网格。网格任务会在后台执行，并持续给出进度提示，避免界面无响应。')
             self.mesh_workflow_note.setWordWrap(True)
-            mesh_form.addRow('方法', self.mesh_method_combo)
-            mesh_form.addRow('单元尺寸', self.mesh_size_spin)
+            mesh_form.addRow('求解单元类型', self.mesh_method_combo)
+            mesh_form.addRow('全局单元尺寸', self.mesh_size_spin)
             mesh_form.addRow('Padding', self.mesh_padding_spin)
+            mesh_form.addRow('自动局部加密', self.mesh_local_refine_check)
+            mesh_form.addRow('材料已关联几何优先', self.mesh_only_material_check)
+            mesh_form.addRow('局部加密倍率', self.mesh_refine_ratio_spin)
+            mesh_form.addRow('加密触发对象数', self.mesh_density_trigger_spin)
             mesh_form.addRow(self.mesh_workflow_note)
             lay.addWidget(mesh_box)
             mesh_tools = QtWidgets.QHBoxLayout()
@@ -1018,6 +1205,7 @@ def launch_main_window() -> None:
 
             btn_row = QtWidgets.QHBoxLayout()
             self.btn_build_parametric = QtWidgets.QPushButton('重建参数化几何')
+            self.btn_demo_interface_wizard = QtWidgets.QPushButton('界面向导 / 诊断')
             self.btn_import_ifc = QtWidgets.QPushButton('导入 IFC')
             self.btn_voxelize = QtWidgets.QPushButton('执行网格划分')
             self.btn_apply_suggestions = QtWidgets.QPushButton('自动建议角色/材料')
@@ -1026,6 +1214,7 @@ def launch_main_window() -> None:
             self.btn_reject_suggestions = QtWidgets.QPushButton('拒绝选中建议')
             self.btn_apply_accepted = QtWidgets.QPushButton('应用已接受建议')
             self.btn_build_parametric.clicked.connect(self.create_demo)
+            self.btn_demo_interface_wizard.clicked.connect(self.show_demo_interface_wizard)
             self.btn_import_ifc.clicked.connect(self.import_ifc)
             self.btn_voxelize.clicked.connect(self.run_meshing_workflow)
             self.btn_apply_suggestions.clicked.connect(self.apply_ifc_role_material_suggestions)
@@ -1033,7 +1222,7 @@ def launch_main_window() -> None:
             self.btn_accept_suggestions.clicked.connect(self.accept_selected_suggestions)
             self.btn_reject_suggestions.clicked.connect(self.reject_selected_suggestions)
             self.btn_apply_accepted.clicked.connect(self.apply_accepted_suggestions)
-            btn_row.addWidget(self.btn_build_parametric); btn_row.addWidget(self.btn_import_ifc); btn_row.addWidget(self.btn_voxelize); btn_row.addWidget(self.btn_apply_suggestions); btn_row.addWidget(self.btn_build_suggestions)
+            btn_row.addWidget(self.btn_build_parametric); btn_row.addWidget(self.btn_demo_interface_wizard); btn_row.addWidget(self.btn_import_ifc); btn_row.addWidget(self.btn_voxelize); btn_row.addWidget(self.btn_apply_suggestions); btn_row.addWidget(self.btn_build_suggestions)
             lay.addLayout(btn_row)
             quick_row = QtWidgets.QHBoxLayout()
             quick_row.addWidget(self.btn_accept_suggestions)
@@ -1199,15 +1388,24 @@ def launch_main_window() -> None:
             form = QtWidgets.QFormLayout()
             self.stage_name_edit = QtWidgets.QLineEdit('stage_1')
             self.stage_steps_spin = QtWidgets.QSpinBox(); self.stage_steps_spin.setRange(1, 10000); self.stage_steps_spin.setValue(6)
-            self.stage_initial_increment = QtWidgets.QDoubleSpinBox(); self.stage_initial_increment.setDecimals(3); self.stage_initial_increment.setRange(0.001, 1.0); self.stage_initial_increment.setValue(0.25)
+            self.stage_initial_increment = QtWidgets.QDoubleSpinBox(); self.stage_initial_increment.setDecimals(3); self.stage_initial_increment.setRange(0.001, 1.0); self.stage_initial_increment.setValue(0.05)
             self.stage_max_iterations = QtWidgets.QSpinBox(); self.stage_max_iterations.setRange(1, 200); self.stage_max_iterations.setValue(24)
             self.stage_line_search = QtWidgets.QCheckBox(); self.stage_line_search.setChecked(True)
+            self.stage_solver_preset_combo = QtWidgets.QComboBox()
+            self.stage_solver_preset_combo.addItem('custom | 保持当前数值', 'custom')
+            for key, label in solver_preset_options().items():
+                self.stage_solver_preset_combo.addItem(f'{key} | {label}', key)
+            self.btn_apply_stage_solver_preset = QtWidgets.QPushButton('预设 -> 当前 Stage')
+            self.btn_apply_solver_preset_all = QtWidgets.QPushButton('预设 -> 全部 Stage')
+            preset_btn_row = QtWidgets.QHBoxLayout(); preset_btn_row.addWidget(self.btn_apply_stage_solver_preset); preset_btn_row.addWidget(self.btn_apply_solver_preset_all)
             self.stage_notes_edit = QtWidgets.QPlainTextEdit(); self.stage_notes_edit.setMaximumHeight(70)
             form.addRow('阶段名称', self.stage_name_edit)
             form.addRow('步数', self.stage_steps_spin)
             form.addRow('初始增量', self.stage_initial_increment)
             form.addRow('最大迭代', self.stage_max_iterations)
             form.addRow('线搜索', self.stage_line_search)
+            form.addRow('求解稳健性预设', self.stage_solver_preset_combo)
+            form.addRow('', preset_btn_row)
             form.addRow('备注', self.stage_notes_edit)
             sl.addLayout(form)
             self.stage_activation_tree = QtWidgets.QTreeWidget()
@@ -1227,6 +1425,8 @@ def launch_main_window() -> None:
             sl.addWidget(self.stage_validation_label)
             self.btn_apply_stage.clicked.connect(self.save_current_stage)
             self.btn_clone_stage.clicked.connect(self.clone_current_stage)
+            self.btn_apply_stage_solver_preset.clicked.connect(self.apply_selected_solver_preset_to_stage)
+            self.btn_apply_solver_preset_all.clicked.connect(self.apply_selected_solver_preset_to_all_stages)
             sl.addLayout(stage_btns)
             editor.addTab(stage_editor, 'Stage 编辑器')
             # Boundary conditions
@@ -1235,10 +1435,32 @@ def launch_main_window() -> None:
             self.bc_table.setHorizontalHeaderLabels(['Name', 'Kind', 'Target', 'Values'])
             self.bc_table.horizontalHeader().setStretchLastSection(True)
             bcl.addWidget(self.bc_table)
+            preset_box = QtWidgets.QGroupBox('边界条件预置模板')
+            preset_layout = QtWidgets.QVBoxLayout(preset_box)
+            preset_row = QtWidgets.QHBoxLayout()
+            self.bc_preset_combo = QtWidgets.QComboBox()
+            for preset in available_boundary_presets():
+                self.bc_preset_combo.addItem(preset.label, preset.key)
+            default_preset_index = self.bc_preset_combo.findData(DEFAULT_STAGE_BOUNDARY_PRESET_KEY)
+            if default_preset_index >= 0:
+                self.bc_preset_combo.setCurrentIndex(default_preset_index)
+            self.btn_apply_bc_preset_stage = QtWidgets.QPushButton('预置 -> 当前 Stage')
+            self.btn_apply_bc_preset_global = QtWidgets.QPushButton('预置 -> 全局')
+            self.btn_clear_stage_bcs = QtWidgets.QPushButton('清空当前 Stage BC')
+            preset_row.addWidget(self.bc_preset_combo, 1)
+            preset_row.addWidget(self.btn_apply_bc_preset_stage)
+            preset_row.addWidget(self.btn_apply_bc_preset_global)
+            preset_row.addWidget(self.btn_clear_stage_bcs)
+            preset_layout.addLayout(preset_row)
+            self.bc_preset_help = QtWidgets.QLabel('')
+            self.bc_preset_help.setWordWrap(True)
+            preset_layout.addWidget(self.bc_preset_help)
+            bcl.addWidget(preset_box)
+
             bc_form = QtWidgets.QFormLayout()
             self.bc_name_edit = QtWidgets.QLineEdit('bc_1')
             self.bc_kind_combo = QtWidgets.QComboBox(); self.bc_kind_combo.addItems(['displacement', 'roller', 'symmetry'])
-            self.bc_target_edit = QtWidgets.QLineEdit('bottom')
+            self.bc_target_edit = QtWidgets.QComboBox(); self.bc_target_edit.setEditable(True); self.bc_target_edit.addItems(['bottom', 'top', 'left', 'right', 'front', 'back', 'xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'all']); self.bc_target_edit.setCurrentText('bottom')
             self.bc_components_edit = QtWidgets.QLineEdit('0,1,2')
             self.bc_values_edit = QtWidgets.QLineEdit('0,0,0')
             bc_form.addRow('名称', self.bc_name_edit)
@@ -1253,6 +1475,11 @@ def launch_main_window() -> None:
             bc_btns.addWidget(self.btn_add_bc); bc_btns.addWidget(self.btn_remove_bc)
             self.btn_add_bc.clicked.connect(self.add_or_update_bc)
             self.btn_remove_bc.clicked.connect(self.remove_selected_bc)
+            self.btn_apply_bc_preset_stage.clicked.connect(self.apply_selected_boundary_preset_to_stage)
+            self.btn_apply_bc_preset_global.clicked.connect(self.apply_selected_boundary_preset_globally)
+            self.btn_clear_stage_bcs.clicked.connect(self.clear_stage_boundary_conditions)
+            self.bc_preset_combo.currentIndexChanged.connect(self._refresh_boundary_preset_help)
+            self._refresh_boundary_preset_help()
             bcl.addLayout(bc_btns)
             self.bc_validation_label = QtWidgets.QLabel('')
             self.bc_validation_label.setWordWrap(True)
@@ -1268,7 +1495,7 @@ def launch_main_window() -> None:
             load_form = QtWidgets.QFormLayout()
             self.load_name_edit = QtWidgets.QLineEdit('load_1')
             self.load_kind_combo = QtWidgets.QComboBox(); self.load_kind_combo.addItems(['nodal_force', 'gravity_scale', 'pressure'])
-            self.load_target_edit = QtWidgets.QLineEdit('top')
+            self.load_target_edit = QtWidgets.QComboBox(); self.load_target_edit.setEditable(True); self.load_target_edit.addItems(['top', 'bottom', 'left', 'right', 'front', 'back', 'xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax', 'all']); self.load_target_edit.setCurrentText('top')
             self.load_values_edit = QtWidgets.QLineEdit('0,0,-1000')
             load_form.addRow('名称', self.load_name_edit)
             load_form.addRow('类型', self.load_kind_combo)
@@ -1325,7 +1552,6 @@ def launch_main_window() -> None:
             cform = QtWidgets.QFormLayout()
             self.solver_compute_backend_combo = QtWidgets.QComboBox(); self.solver_compute_backend_combo.addItems(['warp'])
             self.solver_compute_device_combo = QtWidgets.QComboBox(); self.solver_compute_device_combo.addItems(['auto-best', 'auto-round-robin', 'cpu'])
-            self.solver_compute_multi_gpu_combo = QtWidgets.QComboBox(); self.solver_compute_multi_gpu_combo.addItems(['single', 'round-robin'])
             self.solver_compute_threads_spin = QtWidgets.QSpinBox(); self.solver_compute_threads_spin.setRange(0, 128); self.solver_compute_threads_spin.setValue(0)
             self.solver_compute_require_warp_check = QtWidgets.QCheckBox(); self.solver_compute_require_warp_check.setChecked(True)
             self.solver_compute_hex8_check = QtWidgets.QCheckBox(); self.solver_compute_hex8_check.setChecked(True)
@@ -1345,7 +1571,6 @@ def launch_main_window() -> None:
             cform.addRow('Backend', self.solver_compute_backend_combo)
             cform.addRow('设备 Device', self.solver_compute_device_combo)
             cform.addRow('CPU 核心数 / Threads (0=auto)', self.solver_compute_threads_spin)
-            cform.addRow('多卡策略 Multi-GPU', self.solver_compute_multi_gpu_combo)
             cform.addRow('必须使用 Warp', self.solver_compute_require_warp_check)
             cform.addRow('Warp Hex8 装配', self.solver_compute_hex8_check)
             cform.addRow('Warp 非线性连续体', self.solver_compute_nonlinear_check)
@@ -1361,23 +1586,16 @@ def launch_main_window() -> None:
             cform.addRow('Warp 预条件', self.solver_compute_warp_preconditioner_combo)
             cform.addRow('迭代容差', self.solver_compute_iter_tol_edit)
             cform.addRow('迭代上限', self.solver_compute_iter_max_spin)
+            self.solver_gpu_device_list = QtWidgets.QListWidget(); self.solver_gpu_device_list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection); self.solver_gpu_device_list.setMaximumHeight(96)
+            cform.addRow('参与计算的 GPU 列表', self.solver_gpu_device_list)
             cgl.addLayout(cform)
             self.solver_compute_hardware_label = QtWidgets.QLabel('')
             self.solver_compute_hardware_label.setWordWrap(True)
             self.solver_compute_summary_label = QtWidgets.QLabel('')
             self.solver_compute_summary_label.setWordWrap(True)
-            self.solver_gpu_hint_label = QtWidgets.QLabel('')
-            self.solver_gpu_hint_label.setWordWrap(True)
-            self.solver_gpu_list = QtWidgets.QListWidget()
-            self.solver_gpu_list.setObjectName('gpuDeviceList')
-            self.solver_gpu_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
-            self.solver_gpu_list.setMaximumHeight(112)
             cgl.addWidget(self.solver_compute_hardware_label)
             cgl.addWidget(self.solver_compute_summary_label)
-            cgl.addWidget(QtWidgets.QLabel('参与调度的显卡 / Highlight GPUs for scheduling'))
-            cgl.addWidget(self.solver_gpu_hint_label)
-            cgl.addWidget(self.solver_gpu_list)
-            for _w in (self.solver_compute_backend_combo, self.solver_compute_device_combo, self.solver_compute_multi_gpu_combo, self.solver_compute_threads_spin, self.solver_compute_require_warp_check, self.solver_compute_hex8_check, self.solver_compute_nonlinear_check, self.solver_compute_full_gpu_check, self.solver_compute_gpu_assembly_check, self.solver_compute_interface_check, self.solver_compute_structural_check, self.solver_compute_block_merge_check, self.solver_compute_stage_sync_check, self.solver_compute_ordering_combo, self.solver_compute_preconditioner_combo, self.solver_compute_strategy_combo, self.solver_compute_warp_preconditioner_combo, self.solver_compute_iter_tol_edit, self.solver_compute_iter_max_spin, self.solver_gpu_list):
+            for _w in (self.solver_compute_backend_combo, self.solver_compute_device_combo, self.solver_compute_threads_spin, self.solver_compute_require_warp_check, self.solver_compute_hex8_check, self.solver_compute_nonlinear_check, self.solver_compute_full_gpu_check, self.solver_compute_gpu_assembly_check, self.solver_compute_interface_check, self.solver_compute_structural_check, self.solver_compute_block_merge_check, self.solver_compute_stage_sync_check, self.solver_compute_ordering_combo, self.solver_compute_preconditioner_combo, self.solver_compute_strategy_combo, self.solver_compute_warp_preconditioner_combo, self.solver_compute_iter_tol_edit, self.solver_compute_iter_max_spin):
                 try:
                     _w.currentTextChanged.connect(self._update_solver_compute_summary)
                 except Exception:
@@ -1394,7 +1612,11 @@ def launch_main_window() -> None:
                     _w.textChanged.connect(self._update_solver_compute_summary)
                 except Exception:
                     pass
-            self.solver_gpu_list.itemSelectionChanged.connect(self._update_solver_compute_summary)
+            try:
+                self.solver_gpu_device_list.itemSelectionChanged.connect(self._update_solver_compute_summary)
+            except Exception:
+                pass
+            self._populate_gpu_device_list()
             sgl.addWidget(compute_group)
 
             sform = QtWidgets.QFormLayout()
@@ -2221,7 +2443,7 @@ def launch_main_window() -> None:
                 return
             added = ensure_default_global_bcs(self.current_model)
             if added and announce:
-                self._set_status('已自动赋默认边界条件：四周与底部位移固定。')
+                self._set_status('已自动赋默认边界模板：基坑-刚性箱体（底部+四周位移固定）。')
 
         def _estimate_progress_fraction(self, payload: dict) -> float:
             explicit = payload.get('fraction', payload.get('stage_fraction', None))
@@ -2296,10 +2518,237 @@ def launch_main_window() -> None:
                     self.current_model.upsert_material_definition(item)
 
         def _create_demo_object_records(self, model: SimulationModel) -> None:
-            model.object_records = [
-                GeometryObjectRecord(key='soil', name='soil', object_type='Volume', region_name='soil', source_block='soil', metadata={'source': 'parametric'}),
-                GeometryObjectRecord(key='retaining_wall', name='retaining_wall', object_type='RetainingWall', region_name='wall', source_block='retaining_wall', metadata={'source': 'parametric'}),
-            ]
+            records: list[GeometryObjectRecord] = []
+            if model.get_region('soil_mass') is not None:
+                records.append(GeometryObjectRecord(key='soil_mass', name='soil_mass', object_type='Volume', region_name='soil_mass', source_block='soil_mass', metadata={'source': 'parametric', 'role': 'soil'}))
+            if model.get_region('soil_excavation_1') is not None:
+                records.append(GeometryObjectRecord(key='soil_excavation_1', name='soil_excavation_1', object_type='Volume', region_name='soil_excavation_1', source_block='soil_excavation_1', metadata={'source': 'parametric', 'role': 'soil', 'excavation_stage': 1}))
+            if model.get_region('soil_excavation_2') is not None:
+                records.append(GeometryObjectRecord(key='soil_excavation_2', name='soil_excavation_2', object_type='Volume', region_name='soil_excavation_2', source_block='soil_excavation_2', metadata={'source': 'parametric', 'role': 'soil', 'excavation_stage': 2}))
+            if model.get_region('wall') is not None:
+                records.append(GeometryObjectRecord(key='retaining_wall', name='retaining_wall', object_type='RetainingWall', region_name='wall', source_block='retaining_wall', metadata={'source': 'parametric', 'role': 'wall', 'display_only': True}))
+            model.object_records = records
+
+        def _selected_demo_interface_groups(self) -> list[str]:
+            if not hasattr(self, 'demo_interface_group_checks'):
+                return []
+            return [key for key, cb in self.demo_interface_group_checks.items() if cb.isChecked()]
+
+        def _selected_demo_support_groups(self) -> list[str]:
+            if not hasattr(self, 'demo_support_group_checks'):
+                return []
+            return [key for key, cb in self.demo_support_group_checks.items() if cb.isChecked()]
+
+        def _selected_demo_interface_region_overrides(self) -> dict[str, str]:
+            combos = getattr(self, 'demo_interface_region_override_combos', {})
+            out: dict[str, str] = {}
+            for key, combo in combos.items():
+                value = str(combo.currentData() if combo.currentData() is not None else 'auto')
+                if value and value != 'auto':
+                    out[key] = value
+            return out
+
+        def _selected_demo_coupling_settings(self) -> tuple[bool, bool, str, float, str, list[str], list[str], dict[str, str]]:
+            wall_mode = str(self.demo_wall_mode_combo.currentData() if hasattr(self, 'demo_wall_mode_combo') else 'plaxis_like_auto')
+            interface_policy = str(self.demo_interface_policy_combo.currentData() if hasattr(self, 'demo_interface_policy_combo') and self.demo_interface_policy_combo.currentData() is not None else 'manual_like_nearest_soil')
+            prefer_wall_solver = wall_mode != 'display_only'
+            auto_supports = wall_mode == 'plaxis_like_auto'
+            nearest_radius_factor = float(self.demo_nearest_radius_factor_spin.value() if hasattr(self, 'demo_nearest_radius_factor_spin') else 1.75)
+            solver_preset = normalize_solver_preset(self.demo_solver_preset_combo.currentData() if hasattr(self, 'demo_solver_preset_combo') else 'balanced')
+            interface_groups = self._selected_demo_interface_groups()
+            support_groups = self._selected_demo_support_groups()
+            region_overrides = self._selected_demo_interface_region_overrides()
+            return prefer_wall_solver, auto_supports, interface_policy, nearest_radius_factor, solver_preset, interface_groups, support_groups, region_overrides
+
+        def _apply_demo_coupling_settings(self, model: SimulationModel) -> str:
+            prefer_wall_solver, auto_supports, interface_policy, nearest_radius_factor, solver_preset, interface_groups, support_groups, region_overrides = self._selected_demo_coupling_settings()
+            model.metadata['demo_requested_wall_mode'] = 'plaxis_like_auto' if auto_supports and prefer_wall_solver else ('auto_interface' if prefer_wall_solver else 'display_only')
+            model.metadata['demo_interface_auto_policy'] = interface_policy
+            model.metadata['demo_interface_auto_policy_label'] = explain_interface_policy(interface_policy)
+            model.metadata['demo_interface_nearest_radius_factor'] = nearest_radius_factor
+            model.metadata['demo_solver_preset'] = solver_preset
+            model.metadata['demo_solver_preset_label'] = explain_solver_preset(solver_preset)
+            model.metadata['demo_enabled_interface_groups'] = interface_groups
+            model.metadata['demo_enabled_support_groups'] = support_groups
+            model.metadata['demo_interface_region_overrides'] = region_overrides
+            return configure_demo_coupling(model, prefer_wall_solver=prefer_wall_solver, auto_supports=auto_supports, interface_policy=interface_policy)
+
+        def _summarize_demo_coupling_message(self, model: SimulationModel, prefix: str = '已创建参数化基坑示例。') -> str:
+            summary = summarize_demo_coupling(model)
+            wizard = coupling_wizard_summary(model)
+            msg = prefix
+            if summary.interface_count > 0:
+                msg += f" 已自动创建 {summary.interface_count} 组墙-土 interface。"
+                modes = wizard.get('selection_modes') or []
+                if modes:
+                    msg += f" 接口选点模式: {'/'.join(str(m) for m in modes)}。"
+                enabled_ifaces = wizard.get('enabled_interface_groups') or []
+                if enabled_ifaces:
+                    msg += f" 界面组: {', '.join(str(m) for m in enabled_ifaces)}。"
+                msg += f" 策略: {wizard.get('interface_policy', 'manual_like_nearest_soil')}。"
+                overrides = wizard.get('interface_region_overrides') or {}
+                if overrides:
+                    msg += ' 土层优先覆盖: ' + ', '.join(f"{k}->{v}" for k, v in overrides.items()) + '。'
+            if summary.structure_count > 0:
+                msg += f" 已自动创建 {summary.structure_count} 个结构支撑/冠梁单元。"
+                enabled_supports = wizard.get('enabled_support_groups') or []
+                if enabled_supports:
+                    msg += f" 支撑组: {', '.join(str(m) for m in enabled_supports)}。"
+            solver_preset = str(wizard.get('solver_preset') or model.metadata.get('demo_solver_preset') or '')
+            if solver_preset:
+                msg += f" 求解预设: {solver_preset}。"
+            max_pair = float(wizard.get('max_pair_distance') or 0.0)
+            if max_pair > 0.0:
+                msg += f" 最大界面配对距离约 {max_pair:.4g}。"
+            return msg
+
+        def show_demo_interface_wizard(self) -> None:
+            if self.current_model is None or self.current_model.metadata.get('source') != 'parametric_pit':
+                QtWidgets.QMessageBox.information(self, '界面向导', '当前没有参数化基坑示例。请先创建参数化示例，再查看墙-土界面与支撑向导。')
+                return
+            wizard = coupling_wizard_summary(self.current_model)
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle('示例界面向导 / 诊断')
+            dialog.resize(980, 620)
+            root = QtWidgets.QVBoxLayout(dialog)
+            summary_label = QtWidgets.QLabel(
+                f"wall 模式: {wizard.get('wall_mode')} | 界面策略: {wizard.get('interface_policy')} | 吸附半径因子: {float(wizard.get('nearest_radius_factor') or 0.0):.2f}\n"
+                f"说明: {wizard.get('interface_policy_label')}\n"
+                f"界面组: {', '.join(str(x) for x in wizard.get('enabled_interface_groups') or []) or '无'} | 支撑组: {', '.join(str(x) for x in wizard.get('enabled_support_groups') or []) or '无'}\n"
+                f"优先土层覆盖: {', '.join(f'{k}->{v}' for k, v in (wizard.get('interface_region_overrides') or {}).items()) or '无'}\n"
+                f"interface={wizard.get('interface_count')} 组, structures={wizard.get('structure_count')} 个, "
+                f"exact={wizard.get('exact_pairs')}, nearest={wizard.get('nearest_pairs')}, max_pair_distance={float(wizard.get('max_pair_distance') or 0.0):.4g}"
+            )
+            summary_label.setWordWrap(True)
+            root.addWidget(summary_label)
+            table = QtWidgets.QTableWidget(0, 10)
+            table.setHorizontalHeaderLabels(['Face', 'Group', 'Stages', 'Regions', 'Preferred', 'Mode', 'Pairs', 'Unmatched', 'MaxDist', 'Status'])
+            table.horizontalHeader().setStretchLastSection(True)
+            rows = wizard.get('report_rows') or []
+            table.setRowCount(len(rows))
+            for row_idx, row in enumerate(rows):
+                max_dist = float(row.get('max_pair_distance') or 0.0)
+                unmatched = int(row.get('unmatched_wall_points') or 0)
+                if unmatched > 0:
+                    status = '存在未匹配墙节点'
+                elif max_dist > 0.75:
+                    status = '吸附跨度偏大'
+                elif str(row.get('selection_mode', '')) == 'nearest_soil_auto':
+                    status = '自动最近土层'
+                else:
+                    status = '精确共点'
+                values = [
+                    str(row.get('name', '')),
+                    str(row.get('group_label', row.get('group', ''))),
+                    ', '.join(str(x) for x in row.get('active_stages', []) or []),
+                    ', '.join(str(x) for x in row.get('matched_regions', []) or []),
+                    str(row.get('preferred_region_override') or ','.join(str(x) for x in row.get('preferred_regions', []) or [])),
+                    str(row.get('selection_mode', '')),
+                    str(row.get('pair_count', '')),
+                    str(unmatched),
+                    f"{max_dist:.4g}",
+                    status,
+                ]
+                for col, value in enumerate(values):
+                    item = QtWidgets.QTableWidgetItem(value)
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
+                    table.setItem(row_idx, col, item)
+            root.addWidget(table, 1)
+            action_row = QtWidgets.QHBoxLayout()
+            info = QtWidgets.QLabel('可在本窗口导出界面诊断，或先回到“参数化几何”页调整围护墙模式、界面组、支撑组与吸附半径，再点击重建。')
+            info.setWordWrap(True)
+            action_row.addWidget(info, 1)
+            export_json_btn = QtWidgets.QPushButton('导出诊断 JSON')
+            export_csv_btn = QtWidgets.QPushButton('导出诊断 CSV')
+            recommend_btn = QtWidgets.QPushButton('应用推荐设置')
+            rebuild_btn = QtWidgets.QPushButton('按当前设置重建自动耦合')
+            close_btn = QtWidgets.QPushButton('关闭')
+            action_row.addWidget(export_json_btn)
+            action_row.addWidget(export_csv_btn)
+            action_row.addWidget(recommend_btn)
+            action_row.addWidget(rebuild_btn)
+            action_row.addWidget(close_btn)
+            root.addLayout(action_row)
+
+            def _export_json() -> None:
+                payload = coupling_wizard_summary(self.current_model) if self.current_model is not None else wizard
+                path_str, _ = QtWidgets.QFileDialog.getSaveFileName(dialog, '导出界面诊断 JSON', str(Path.cwd() / 'demo_interface_report.json'), 'JSON Files (*.json)')
+                if not path_str:
+                    return
+                Path(path_str).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+                self._set_status(f'已导出界面诊断 JSON: {path_str}')
+
+            def _export_csv() -> None:
+                payload = coupling_wizard_summary(self.current_model) if self.current_model is not None else wizard
+                rows_local = payload.get('report_rows') or []
+                path_str, _ = QtWidgets.QFileDialog.getSaveFileName(dialog, '导出界面诊断 CSV', str(Path.cwd() / 'demo_interface_report.csv'), 'CSV Files (*.csv)')
+                if not path_str:
+                    return
+                with open(path_str, 'w', encoding='utf-8-sig', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['face', 'group', 'group_label', 'stages', 'matched_regions', 'preferred_regions', 'preferred_region_override', 'mode', 'pairs', 'unmatched', 'max_pair_distance'])
+                    for row in rows_local:
+                        writer.writerow([
+                            row.get('name', ''),
+                            row.get('group', ''),
+                            row.get('group_label', ''),
+                            '|'.join(str(x) for x in row.get('active_stages', []) or []),
+                            '|'.join(str(x) for x in row.get('matched_regions', []) or []),
+                            '|'.join(str(x) for x in row.get('preferred_regions', []) or []),
+                            row.get('preferred_region_override', ''),
+                            row.get('selection_mode', ''),
+                            row.get('pair_count', ''),
+                            row.get('unmatched_wall_points', ''),
+                            row.get('max_pair_distance', ''),
+                        ])
+                self._set_status(f'已导出界面诊断 CSV: {path_str}')
+
+            def _apply_recommended() -> None:
+                if hasattr(self, 'demo_wall_mode_combo'):
+                    idx = self.demo_wall_mode_combo.findData('plaxis_like_auto')
+                    if idx >= 0:
+                        self.demo_wall_mode_combo.setCurrentIndex(idx)
+                if hasattr(self, 'demo_interface_policy_combo'):
+                    idx = self.demo_interface_policy_combo.findData('manual_like_nearest_soil')
+                    if idx >= 0:
+                        self.demo_interface_policy_combo.setCurrentIndex(idx)
+                if hasattr(self, 'demo_nearest_radius_factor_spin'):
+                    self.demo_nearest_radius_factor_spin.setValue(1.75)
+                if hasattr(self, 'demo_solver_preset_combo'):
+                    idx = self.demo_solver_preset_combo.findData('balanced')
+                    if idx >= 0:
+                        self.demo_solver_preset_combo.setCurrentIndex(idx)
+                for cb in getattr(self, 'demo_interface_group_checks', {}).values():
+                    cb.setChecked(True)
+                for cb in getattr(self, 'demo_support_group_checks', {}).values():
+                    cb.setChecked(True)
+                for combo in getattr(self, 'demo_interface_region_override_combos', {}).values():
+                    idx = combo.findData('auto')
+                    if idx >= 0:
+                        combo.setCurrentIndex(idx)
+                self._set_status('已恢复推荐的自动界面/支撑设置。')
+
+            def _rebuild() -> None:
+                if self.current_model is None:
+                    return
+                wall_mode = self._apply_demo_coupling_settings(self.current_model)
+                wall_record = self.current_model.object_record('retaining_wall')
+                if wall_record is not None:
+                    wall_record.metadata['display_only'] = wall_mode == 'display_only'
+                    wall_record.metadata['auto_interface'] = wall_mode in {'auto_interface', 'plaxis_like_auto'}
+                    wall_record.metadata['plaxis_like_auto'] = wall_mode == 'plaxis_like_auto'
+                self.current_model.stages = build_demo_stages(self.current_model, wall_active=(wall_mode in {'auto_interface', 'plaxis_like_auto'}))
+                self._apply_default_boundary_conditions()
+                self._sync_all_views()
+                self._set_status(self._summarize_demo_coupling_message(self.current_model, prefix='已重建示例自动耦合。'))
+                dialog.accept()
+
+            export_json_btn.clicked.connect(_export_json)
+            export_csv_btn.clicked.connect(_export_csv)
+            recommend_btn.clicked.connect(_apply_recommended)
+            rebuild_btn.clicked.connect(_rebuild)
+            close_btn.clicked.connect(dialog.accept)
+            dialog.exec()
 
         def create_demo(self) -> None:
             if self._apply_validation_result('geometry', self._validate_geometry_form(), block=True, title='参数化几何校验失败'):
@@ -2308,26 +2757,39 @@ def launch_main_window() -> None:
             data = scene.build()
             model = SimulationModel(name='pit-demo', mesh=data)
             model.metadata['source'] = 'parametric_pit'
+            model.metadata['geometry_state'] = 'meshed'
             model.metadata['parametric_scene'] = {k: float(v.value()) if hasattr(v, 'decimals') else int(v.value()) for k, v in self._param_inputs.items()}
+            model.metadata['demo_version'] = '0.1.37'
+            model.metadata['boundary_preset'] = DEFAULT_GLOBAL_BOUNDARY_PRESET_KEY
             model.ensure_regions()
             self._create_demo_object_records(model)
             self.current_model = model
             self._apply_default_object_roles()
             for item in self._default_material_definitions():
                 model.upsert_material_definition(item)
-            model.assign_material_definition(['soil'], 'Soil_MC')
-            model.assign_material_definition(['wall'], 'Wall_Elastic')
-            activation_map = {region.name: True for region in model.region_tags}
-            model.stages = [
-                AnalysisStage(name='initial', steps=4, metadata={'activation_map': dict(activation_map), 'initial_increment': 0.25, 'max_iterations': 24, 'line_search': True}),
-                AnalysisStage(name='excavate_level_1', steps=6, metadata={'activation_map': dict(activation_map), 'initial_increment': 0.25, 'max_iterations': 24, 'line_search': True}),
-                AnalysisStage(name='excavate_level_2', steps=6, metadata={'activation_map': dict(activation_map), 'initial_increment': 0.25, 'max_iterations': 24, 'line_search': True}),
-            ]
+            soil_regions = [name for name in ('soil_mass', 'soil_excavation_1', 'soil_excavation_2') if model.get_region(name) is not None]
+            if soil_regions:
+                model.assign_material_definition(soil_regions, 'Soil_MC')
+            if model.get_region('wall') is not None:
+                model.assign_material_definition(['wall'], 'Wall_Elastic')
+            wall_mode = self._apply_demo_coupling_settings(model)
+            wall_record = model.object_record('retaining_wall')
+            if wall_record is not None:
+                wall_record.metadata['display_only'] = wall_mode == 'display_only'
+                wall_record.metadata['auto_interface'] = wall_mode in {'auto_interface', 'plaxis_like_auto'}
+                wall_record.metadata['plaxis_like_auto'] = wall_mode == 'plaxis_like_auto'
+            model.stages = build_demo_stages(model, wall_active=(wall_mode in {'auto_interface', 'plaxis_like_auto'}))
             self._apply_default_boundary_conditions()
             self._sync_all_views()
-            self._set_status('已创建参数化基坑示例。')
+            self._set_status(self._summarize_demo_coupling_message(model))
 
         def import_ifc(self) -> None:
+            if IfcImporter is None or IfcImportOptions is None:
+                msg = self._tt(f'IFC import is unavailable: {_feature_import_error("ifc")}')
+                QtWidgets.QMessageBox.critical(self, self._tt('IFC import unavailable'), msg)
+                self._append_diagnostic('error', 'startup', msg, self._tt('Install IFC dependencies before importing IFC files.'))
+                self._log(msg)
+                return
             filename, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open IFC', str(Path.cwd()), 'IFC files (*.ifc)')
             if not filename:
                 return
@@ -2352,6 +2814,7 @@ def launch_main_window() -> None:
             model = SimulationModel(name=Path(filename).stem, mesh=blocks)
             model.metadata['source'] = 'ifc'
             model.metadata['ifc_summary'] = summary
+            model.metadata['geometry_state'] = 'geometry'
             model.object_records = records
             self.current_model = model
             self._apply_default_object_roles()
@@ -2364,42 +2827,87 @@ def launch_main_window() -> None:
             if self._latest_suggestions:
                 mapped = sum(1 for s in self._latest_suggestions if s.material_definition)
                 self.suggestion_summary_label.setText(f'Generated {len(self._latest_suggestions)} IFC suggestions, including {mapped} material suggestions.')
+            audit = analyze_ui_and_model_performance(model)
+            model.metadata['ui_performance_audit'] = [asdict(finding) for finding in audit.findings]
             self._sync_all_views()
-            self._set_status(f'已导入 IFC: {filename} | objects={summary.get("n_objects", 0)}。请继续执行网格划分。')
+            if int(summary.get('n_objects', 0) or 0) > 120 and hasattr(self, 'mesh_show_edges_check'):
+                self.mesh_show_edges_check.setChecked(False)
+            self._set_status(f'已导入 IFC 几何体: {filename} | objects={summary.get("n_objects", 0)}。下一步先关联材料，再执行独立网格引擎。')
+            if audit.findings:
+                self._append_diagnostic('info', 'workflow', audit.summary, self._tt('Use the dedicated mesh engine panel to generate volume elements only after material association.'))
 
         def voxelize_current(self) -> None:
             if self.current_model is None:
                 self._set_status('请先创建或导入模型。')
                 return
-            value = float(self.mesh_size_spin.value()) if hasattr(self, 'mesh_size_spin') else 2.0
-            self._set_status(f'开始体素化，cell size={value:g} ...')
-            mesher = VoxelMesher(VoxelizeOptions(cell_size=float(value), padding=float(self.mesh_padding_spin.value()) if hasattr(self, 'mesh_padding_spin') else 0.0))
-            self.current_model = mesher.voxelize_model(self.current_model)
-            self.current_model.ensure_regions()
-            self._sync_all_views()
-            if hasattr(self, 'mesh_show_edges_check'): self.mesh_show_edges_check.setChecked(True)
-            self.run_mesh_check()
-            self._set_status(f'体素化完成，cell size={value:g}')
+            if hasattr(self, 'mesh_method_combo'):
+                self.mesh_method_combo.setCurrentText('hex8')
+            self.run_meshing_workflow()
+
+        def _mesh_engine_options(self) -> MeshEngineOptions:
+            return MeshEngineOptions(
+                element_family=self.mesh_method_combo.currentText() if hasattr(self, 'mesh_method_combo') else 'auto',
+                global_size=float(self.mesh_size_spin.value()) if hasattr(self, 'mesh_size_spin') else 2.0,
+                padding=float(self.mesh_padding_spin.value()) if hasattr(self, 'mesh_padding_spin') else 0.0,
+                local_refinement=bool(self.mesh_local_refine_check.isChecked()) if hasattr(self, 'mesh_local_refine_check') else True,
+                refinement_trigger_count=int(self.mesh_density_trigger_spin.value()) if hasattr(self, 'mesh_density_trigger_spin') else 4,
+                refinement_ratio=float(self.mesh_refine_ratio_spin.value()) if hasattr(self, 'mesh_refine_ratio_spin') else 0.65,
+                only_material_bound_geometry=bool(self.mesh_only_material_check.isChecked()) if hasattr(self, 'mesh_only_material_check') else True,
+                keep_geometry_copy=True,
+            )
 
         def run_meshing_workflow(self) -> None:
             if self.current_model is None:
                 self._set_status('请先创建或导入模型。')
                 return
-            method = self.mesh_method_combo.currentText() if hasattr(self, 'mesh_method_combo') else 'voxel_hex8'
-            h = float(self.mesh_size_spin.value()) if hasattr(self, 'mesh_size_spin') else 2.0
-            if method == 'gmsh_tet':
-                try:
-                    self.current_model = GmshMesher(GmshMesherOptions(element_size=h)).mesh_model(self.current_model)
-                    self.current_model.ensure_regions()
-                    self._sync_all_views()
-                    if hasattr(self, 'mesh_show_edges_check'): self.mesh_show_edges_check.setChecked(True)
-                    self.run_mesh_check()
-                    self._set_status(f'Gmsh 网格划分完成，size={h:g}')
+            if hasattr(self.current_model, 'geometry_state') and self.current_model.geometry_state() == 'meshed':
+                answer = QtWidgets.QMessageBox.question(
+                    self,
+                    self._tt('Model already meshed'),
+                    self._tt('The current model already contains a volume mesh. Re-run the mesh engine to remesh it?'),
+                    QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                    QtWidgets.QMessageBox.StandardButton.No,
+                )
+                if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+                    self._set_status(self._tt('Mesh generation canceled. The current model is already meshed.'))
                     return
-                except Exception as exc:
-                    QtWidgets.QMessageBox.warning(self, 'Gmsh 网格划分失败', f'{exc}\n将回退到体素化流程。')
-                    self._log(traceback.format_exc())
-            self.voxelize_current()
+            if self._meshing_thread is not None:
+                self._set_status(self._tt('Meshing is already running in background.'))
+                return
+            options = self._mesh_engine_options()
+            if options.only_material_bound_geometry and not self.current_model.materials:
+                answer = QtWidgets.QMessageBox.question(
+                    self,
+                    self._tt('No material bindings yet'),
+                    self._tt('No material assignments were found. Mesh all imported geometry anyway?'),
+                    QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                    QtWidgets.QMessageBox.StandardButton.No,
+                )
+                if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+                    self._set_status(self._tt('Mesh generation canceled. Assign materials first, then retry.'))
+                    return
+                options.only_material_bound_geometry = False
+            summary = f"{normalize_element_family(options.element_family)} | size={options.global_size:g} | local_refine={'on' if options.local_refinement else 'off'}"
+            self._append_task_row(self._tt('Meshing'), '-', self._tt('Running'), self._tt(f'Background mesh generation started: {summary}'), self._tt('The UI stays responsive while the mesh engine analyzes geometry, materials, and local refinement targets.'))
+            self._set_status(self._tt(f'网格引擎已启动：{summary}'))
+            self.btn_voxelize.setEnabled(False); self.btn_import_ifc.setEnabled(False); self.btn_build_parametric.setEnabled(False)
+            if hasattr(self, 'btn_demo_interface_wizard'):
+                self.btn_demo_interface_wizard.setEnabled(False)
+            self._create_meshing_progress_dialog()
+            self._meshing_started_at = time.time()
+            self._last_meshing_payload = None
+            self._meshing_heartbeat_timer.start()
+            self._meshing_thread = QtCore.QThread(self)
+            self._meshing_worker = MeshingWorker(self.current_model, options)
+            self._meshing_worker.moveToThread(self._meshing_thread)
+            self._meshing_thread.started.connect(self._meshing_worker.run)
+            self._meshing_worker.progress.connect(self._on_meshing_progress)
+            self._meshing_worker.finished.connect(self._on_meshing_finished)
+            self._meshing_worker.failed.connect(self._on_meshing_failed)
+            self._meshing_worker.finished.connect(self._meshing_thread.quit)
+            self._meshing_worker.failed.connect(self._meshing_thread.quit)
+            self._meshing_thread.finished.connect(self._cleanup_meshing_thread)
+            self._meshing_thread.start()
 
         def _on_meshing_progress(self, payload: object) -> None:
             if not isinstance(payload, dict):
@@ -2411,24 +2919,31 @@ def launch_main_window() -> None:
             self._update_meshing_progress_dialog(value, message)
             self.status_label.setText(self._tt(message))
             self._update_task_status(self._tt('Running'), message)
-            if payload.get('log') or phase in {'object-complete', 'object-failed', 'object-warning', 'gmsh-object-complete', 'gmsh-object-failed', 'gmsh-fallback'}:
+            if payload.get('log') or phase in {'object-complete', 'object-failed', 'object-warning', 'gmsh-object-complete', 'gmsh-object-failed', 'gmsh-fallback', 'mesh-engine-target', 'mesh-engine-target-done', 'mesh-engine-target-failed', 'mesh-engine-fallback'}:
                 self._log(message)
-            if phase in {'object-failed', 'gmsh-object-failed'}:
+            if phase in {'object-failed', 'gmsh-object-failed', 'mesh-engine-target-failed'}:
                 self._append_diagnostic('error', 'mesh', message, self._tt(str(payload.get('hint', 'Check object geometry closure, mesh size, and meshing dependencies.'))))
-            elif phase in {'object-warning', 'gmsh-fallback'}:
+            elif phase in {'object-warning', 'gmsh-fallback', 'mesh-engine-fallback'}:
                 self._append_diagnostic('warning', 'mesh', message, self._tt(str(payload.get('hint', 'Review logs and consider switching meshing method.'))))
 
         def _on_meshing_finished(self, meshed_model: object, method: str) -> None:
             self.current_model = meshed_model
+            if hasattr(self.current_model, 'set_geometry_state'):
+                self.current_model.set_geometry_state('meshed')
             self._meshing_heartbeat_timer.stop()
             summary_text = self._mesh_summary_text(self.current_model)
+            audit = analyze_ui_and_model_performance(self.current_model)
+            self.current_model.metadata['ui_performance_audit'] = [asdict(finding) for finding in audit.findings]
             self._update_meshing_progress_dialog(100, self._tt('Meshing finished'))
             self._sync_all_views()
             if hasattr(self, 'mesh_show_edges_check'):
-                self.mesh_show_edges_check.setChecked(True)
+                cells = int(self.current_model.metadata.get('mesh_summary', {}).get('cells', 0) or 0) if hasattr(self.current_model, 'metadata') else 0
+                self.mesh_show_edges_check.setChecked(cells <= 50000)
             self.run_mesh_check()
             self._set_status(self._tt(f'{method} meshing finished. {summary_text}'))
             self._update_task_status(self._tt('Completed'), self._tt(f'{method} meshing finished. {summary_text}'), self._tt('Review mesh statistics, region counts, and quality indicators before solving.'))
+            if audit.findings:
+                self._append_diagnostic('info', 'performance', audit.summary, self._tt('The geometry-first workflow keeps import responsive; use the audit findings to simplify scene tree refreshes and edge rendering on large models.'))
             self._log(summary_text)
             for warning in (self.current_model.metadata.get('mesh_warnings', []) or [])[:8]:
                 self._append_diagnostic('warning', 'mesh', str(warning), self._tt('Review the object and meshing method; warnings may indicate coarse fallback or geometry defects.'))
@@ -2436,8 +2951,8 @@ def launch_main_window() -> None:
 
         def _on_meshing_failed(self, error_text: str) -> None:
             self._meshing_heartbeat_timer.stop()
-            self._update_task_status(self._tt('Failed'), self._tt('Meshing failed; see logs and diagnostics.'), self._tt('Try voxel_hex8, check IFC closure, or verify local gmsh/meshio availability.'))
-            self._append_diagnostic('error', 'mesh', self._tt('Meshing failed; see logs and diagnostics.'), self._tt('Try voxel_hex8, check IFC closure, or verify local gmsh/meshio availability.'))
+            self._update_task_status(self._tt('Failed'), self._tt('Meshing failed; see logs and diagnostics.'), self._tt('Try hex8 / tet4, check IFC closure, assign materials first, or verify local gmsh/meshio availability.'))
+            self._append_diagnostic('error', 'mesh', self._tt('Meshing failed; see logs and diagnostics.'), self._tt('Try hex8 / tet4, check IFC closure, assign materials first, or verify local gmsh/meshio availability.'))
             self._log(error_text)
             QtWidgets.QMessageBox.critical(self, self._tt('Meshing failed'), self._tt('Meshing failed. Please review the traceback and diagnostics.') + '\n\n' + error_text.splitlines()[-1])
             self._set_status(self._tt('Meshing failed'))
@@ -2449,6 +2964,8 @@ def launch_main_window() -> None:
             self._meshing_started_at = None
             self._last_meshing_payload = None
             self.btn_voxelize.setEnabled(True); self.btn_import_ifc.setEnabled(True); self.btn_build_parametric.setEnabled(True)
+            if hasattr(self, 'btn_demo_interface_wizard'):
+                self.btn_demo_interface_wizard.setEnabled(True)
             self._meshing_heartbeat_timer.stop()
 
         # ---------- Populate UI ----------
@@ -2553,6 +3070,16 @@ def launch_main_window() -> None:
             if self.current_model is None:
                 self._set_status(self._tt('Please create or import a model first.'))
                 return
+            if hasattr(self.current_model, 'has_volume_mesh') and not self.current_model.has_volume_mesh():
+                msg = self._tt('当前是几何导入状态，尚未生成体网格。请先关联材料，再运行网格引擎。')
+                self.mesh_stats_label.setText(msg)
+                if hasattr(self, 'mesh_quality_label'):
+                    self.mesh_quality_label.setText('-')
+                self.mesh_check_table.setRowCount(0)
+                self._append_diagnostic('info', 'mesh', msg, self._tt('The geometry-first workflow defers mesh quality checks until a volume mesh exists.'))
+                QtWidgets.QMessageBox.information(self, self._tt('Mesh check'), msg)
+                self._set_status(msg)
+                return
             report = analyze_mesh(self.current_model)
             self._last_mesh_report = report
             self.mesh_stats_label.setText(report.summary_text())
@@ -2588,12 +3115,21 @@ def launch_main_window() -> None:
                 status = '已赋值' if binding else '未赋值'
                 center_txt, bounds_txt = '-', '-'
                 try:
-                    grid = self.current_model.to_unstructured_grid()
-                    sub = grid.extract_cells(region.cell_ids)
-                    if int(getattr(sub, 'n_cells', 0) or 0) > 0:
-                        b = tuple(float(x) for x in sub.bounds)
-                        center_txt = f'({(b[0]+b[1])/2:.2f}, {(b[2]+b[3])/2:.2f}, {(b[4]+b[5])/2:.2f})'
-                        bounds_txt = f'[{b[0]:.2f},{b[1]:.2f}] x [{b[2]:.2f},{b[3]:.2f}] x [{b[4]:.2f},{b[5]:.2f}]'
+                    if hasattr(self.current_model, 'has_volume_mesh') and self.current_model.has_volume_mesh():
+                        grid = self.current_model.to_unstructured_grid()
+                        sub = grid.extract_cells(region.cell_ids)
+                        if int(getattr(sub, 'n_cells', 0) or 0) > 0:
+                            b = tuple(float(x) for x in sub.bounds)
+                            center_txt = f'({(b[0]+b[1])/2:.2f}, {(b[2]+b[3])/2:.2f}, {(b[4]+b[5])/2:.2f})'
+                            bounds_txt = f'[{b[0]:.2f},{b[1]:.2f}] x [{b[2]:.2f},{b[3]:.2f}] x [{b[4]:.2f},{b[5]:.2f}]'
+                    else:
+                        rec = next((obj for obj in self.current_model.object_records if obj.region_name == region.name), None)
+                        bbox_min = (rec.metadata.get('bbox_min') if rec else None) or []
+                        bbox_max = (rec.metadata.get('bbox_max') if rec else None) or []
+                        if len(bbox_min) == 3 and len(bbox_max) == 3:
+                            b = (float(bbox_min[0]), float(bbox_max[0]), float(bbox_min[1]), float(bbox_max[1]), float(bbox_min[2]), float(bbox_max[2]))
+                            center_txt = f'({(b[0]+b[1])/2:.2f}, {(b[2]+b[3])/2:.2f}, {(b[4]+b[5])/2:.2f})'
+                            bounds_txt = f'[{b[0]:.2f},{b[1]:.2f}] x [{b[2]:.2f},{b[3]:.2f}] x [{b[4]:.2f},{b[5]:.2f}]'
                 except Exception:
                     pass
                 values = [region.name, str(len(region.cell_ids)), center_txt, bounds_txt, material_name, library_name, status]
@@ -2620,16 +3156,29 @@ def launch_main_window() -> None:
             self.material_library_table.resizeColumnsToContents()
 
         def _populate_stage_table(self) -> None:
+            selected_name = None
+            stage = self._selected_stage()
+            if stage is not None:
+                selected_name = stage.name
+            elif hasattr(self, 'result_stage_combo'):
+                candidate = self.result_stage_combo.currentText().strip()
+                if candidate and candidate != '(latest)':
+                    selected_name = candidate
             self.stage_table.setRowCount(0)
             if self.current_model is None:
                 return
+            selected_row = None
             for row, stage in enumerate(self.current_model.stages):
                 self.stage_table.insertRow(row)
                 vals = [stage.name, str(stage.steps or ''), ', '.join(stage.activate_regions), ', '.join(stage.deactivate_regions), f'{len(stage.boundary_conditions)}/{len(stage.loads)}']
                 for col, value in enumerate(vals):
                     self.stage_table.setItem(row, col, QtWidgets.QTableWidgetItem(value))
+                if selected_name and stage.name == selected_name:
+                    selected_row = row
             self.stage_table.resizeColumnsToContents()
             self._populate_stage_combo()
+            if self.stage_table.rowCount() > 0:
+                self.stage_table.selectRow(selected_row if selected_row is not None else 0)
 
         def _populate_stage_combo(self) -> None:
             current = self.result_stage_combo.currentText()
@@ -2709,8 +3258,26 @@ def launch_main_window() -> None:
             for region in self.current_model.region_tags:
                 is_active = bool(activation_map.get(region.name, True))
                 parent = active_root if is_active else inactive_root
-                item = QtWidgets.QTreeWidgetItem([region.name, '激活' if is_active else '失活'])
+                display_name = region.name
+                tooltip = ''
+                if region.name == 'wall':
+                    wall_mode = self.current_model.metadata.get('demo_wall_mode')
+                    if wall_mode == 'display_only':
+                        display_name = f'{region.name} [display-only]'
+                        tooltip = '示例围护墙当前仅用于显示；若要参与求解，需先创建 interface / tie 或改用结构墙方案。'
+                    elif wall_mode == 'auto_interface':
+                        display_name = f'{region.name} [auto-interface]'
+                        policy = str(self.current_model.metadata.get('demo_interface_auto_policy') or 'manual_like_nearest_soil')
+                        tooltip = f'示例围护墙当前已按 PLAXIS 风格自动创建 node-pair interface；系统会优先复用共点土体节点，并自动吸附到最近土层节点。当前策略: {policy}。'
+                    elif wall_mode == 'plaxis_like_auto':
+                        display_name = f'{region.name} [plaxis-like auto]'
+                        policy = str(self.current_model.metadata.get('demo_interface_auto_policy') or 'manual_like_nearest_soil')
+                        tooltip = f'示例围护墙当前已自动创建墙-土 interface、冠梁和分层支撑；界面会优先匹配共点土体节点，并自动选择最近土层节点参与分阶段耦合求解。当前策略: {policy}。'
+                item = QtWidgets.QTreeWidgetItem([display_name, '激活' if is_active else '失活'])
                 item.setData(0, QtCore.Qt.ItemDataRole.UserRole, region.name)
+                if tooltip:
+                    item.setToolTip(0, tooltip)
+                    item.setToolTip(1, tooltip)
                 item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable | QtCore.Qt.ItemFlag.ItemIsSelectable | QtCore.Qt.ItemFlag.ItemIsEnabled)
                 item.setCheckState(0, QtCore.Qt.CheckState.Checked if is_active else QtCore.Qt.CheckState.Unchecked)
                 parent.addChild(item)
@@ -2744,26 +3311,9 @@ def launch_main_window() -> None:
                 for col, value in enumerate(vals):
                     self.load_table.setItem(row, col, QtWidgets.QTableWidgetItem(value))
 
-        def _clear_plotter_cached_actors(self) -> None:
-            removed = False
-            for meta in list(getattr(self, '_viewer_actor_map', {}).values()):
-                actor = meta.get('actor') if isinstance(meta, dict) else None
-                if actor is None:
-                    continue
-                try:
-                    self.plotter.remove_actor(actor, reset_camera=False, render=False)
-                    removed = True
-                except Exception:
-                    pass
-            if not removed:
-                try:
-                    self.plotter.clear()
-                except Exception:
-                    pass
-            self._viewer_actor_map = {}
-
         def _show_model(self) -> None:
-            self._clear_plotter_cached_actors()
+            self.plotter.clear()
+            self._viewer_actor_map = {}
             if self.current_model is None:
                 return
             field = self.result_field_combo.currentText()
@@ -3191,12 +3741,12 @@ def launch_main_window() -> None:
             self.stage_activation_tree.itemChanged.connect(lambda *_: self._refresh_form_validation())
             self.stage_activation_tree.itemSelectionChanged.connect(self._refresh_form_validation)
             self.bc_name_edit.textChanged.connect(self._refresh_form_validation)
-            self.bc_target_edit.textChanged.connect(self._refresh_form_validation)
+            self.bc_target_edit.currentTextChanged.connect(self._refresh_form_validation)
             self.bc_components_edit.textChanged.connect(self._refresh_form_validation)
             self.bc_values_edit.textChanged.connect(self._refresh_form_validation)
             self.bc_kind_combo.currentTextChanged.connect(self._refresh_form_validation)
             self.load_name_edit.textChanged.connect(self._refresh_form_validation)
-            self.load_target_edit.textChanged.connect(self._refresh_form_validation)
+            self.load_target_edit.currentTextChanged.connect(self._refresh_form_validation)
             self.load_values_edit.textChanged.connect(self._refresh_form_validation)
             self.load_kind_combo.currentTextChanged.connect(self._refresh_form_validation)
             self.solver_max_iter_spin.valueChanged.connect(self._refresh_form_validation)
@@ -3307,7 +3857,7 @@ def launch_main_window() -> None:
             return issues
 
         def _validate_bc_form(self) -> list[ParameterIssue]:
-            issues = validate_bc_inputs(self.bc_name_edit.text(), self.bc_kind_combo.currentText(), self.bc_target_edit.text(), _parse_components(self.bc_components_edit.text()), _parse_values(self.bc_values_edit.text()))
+            issues = validate_bc_inputs(self.bc_name_edit.text(), self.bc_kind_combo.currentText(), _widget_text(self.bc_target_edit), _parse_components(self.bc_components_edit.text()), _parse_values(self.bc_values_edit.text()))
             m = self._field_issue_map(issues)
             for field, widget in [('bc_name', self.bc_name_edit), ('bc_kind', self.bc_kind_combo), ('bc_target', self.bc_target_edit), ('bc_components', self.bc_components_edit), ('bc_values', self.bc_values_edit)]:
                 issue = m.get(field)
@@ -3316,7 +3866,7 @@ def launch_main_window() -> None:
             return issues
 
         def _validate_load_form(self) -> list[ParameterIssue]:
-            issues = validate_load_inputs(self.load_name_edit.text(), self.load_kind_combo.currentText(), self.load_target_edit.text(), _parse_values(self.load_values_edit.text()))
+            issues = validate_load_inputs(self.load_name_edit.text(), self.load_kind_combo.currentText(), _widget_text(self.load_target_edit), _parse_values(self.load_values_edit.text()))
             m = self._field_issue_map(issues)
             for field, widget in [('load_name', self.load_name_edit), ('load_kind', self.load_kind_combo), ('load_target', self.load_target_edit), ('load_values', self.load_values_edit)]:
                 issue = m.get(field)
@@ -3753,6 +4303,28 @@ def launch_main_window() -> None:
                 return None
             return self.current_model.stages[row]
 
+        def _ensure_stage_selected(self) -> AnalysisStage | None:
+            stage = self._selected_stage()
+            if stage is not None:
+                return stage
+            if self.current_model is None or not self.current_model.stages:
+                return None
+            preferred_name = None
+            if hasattr(self, 'result_stage_combo'):
+                current = self.result_stage_combo.currentText().strip()
+                if current and current != '(latest)':
+                    preferred_name = current
+            target_row = 0
+            if preferred_name:
+                for idx, item in enumerate(self.current_model.stages):
+                    if item.name == preferred_name:
+                        target_row = idx
+                        break
+            if self.stage_table.rowCount() > target_row:
+                self.stage_table.selectRow(target_row)
+                QtWidgets.QApplication.processEvents()
+            return self._selected_stage()
+
         def _on_stage_selection_changed(self) -> None:
             stage = self._selected_stage()
             self._loading_stage_editor = True
@@ -3761,9 +4333,15 @@ def launch_main_window() -> None:
                 return
             self.stage_name_edit.setText(stage.name)
             self.stage_steps_spin.setValue(int(stage.steps or 1))
-            self.stage_initial_increment.setValue(float(stage.metadata.get('initial_increment', 0.25)))
+            self.stage_initial_increment.setValue(float(stage.metadata.get('initial_increment', 0.05)))
             self.stage_max_iterations.setValue(int(stage.metadata.get('max_iterations', 24)))
             self.stage_line_search.setChecked(bool(stage.metadata.get('line_search', True)))
+            preset_key = normalize_solver_preset(stage.metadata.get('solver_preset')) if stage.metadata.get('solver_preset') else 'custom'
+            idx = self.stage_solver_preset_combo.findData(preset_key)
+            if idx < 0:
+                idx = self.stage_solver_preset_combo.findData('custom')
+            if idx >= 0:
+                self.stage_solver_preset_combo.setCurrentIndex(idx)
             self.stage_notes_edit.setPlainText(str(stage.metadata.get('notes', '')))
             amap = stage.metadata.get('activation_map') or self._previous_stage_activation_map(stage.name)
             self._populate_stage_region_lists(amap)
@@ -3781,7 +4359,7 @@ def launch_main_window() -> None:
             base = 'stage'
             idx = len(self.current_model.stages) + 1
             inherited = self._previous_stage_activation_map()
-            self.current_model.stages.append(AnalysisStage(name=f'{base}_{idx}', steps=6, metadata={'activation_map': inherited, 'initial_increment': 0.25, 'max_iterations': 24, 'line_search': True}))
+            self.current_model.stages.append(AnalysisStage(name=f'{base}_{idx}', steps=6, metadata={'activation_map': inherited, 'initial_increment': 0.05, 'max_iterations': 32, 'line_search': True, 'compute_profile': 'cpu-safe'}))
             self._populate_stage_table()
             if self.stage_table.rowCount() > 0:
                 self.stage_table.selectRow(self.stage_table.rowCount() - 1)
@@ -3810,7 +4388,14 @@ def launch_main_window() -> None:
             activate = tuple(n for n, s in activation_map.items() if s and not prev.get(n, True))
             deactivate = tuple(n for n, s in activation_map.items() if (not s) and prev.get(n, True))
             metadata = dict(old_stage.metadata) if old_stage else {}
+            preset_key = self.stage_solver_preset_combo.currentData() if hasattr(self, 'stage_solver_preset_combo') else 'custom'
             metadata.update({'activation_map': dict(activation_map), 'initial_increment': float(self.stage_initial_increment.value()), 'max_iterations': int(self.stage_max_iterations.value()), 'line_search': bool(self.stage_line_search.isChecked()), 'notes': self.stage_notes_edit.toPlainText().strip()})
+            if preset_key and preset_key != 'custom':
+                metadata['solver_preset'] = str(preset_key)
+                metadata['solver_preset_label'] = explain_solver_preset(str(preset_key))
+            else:
+                metadata.pop('solver_preset', None)
+                metadata.pop('solver_preset_label', None)
             if old_stage is None:
                 stage = AnalysisStage(name=name, steps=steps, activate_regions=activate, deactivate_regions=deactivate, metadata=metadata)
             else:
@@ -3830,6 +4415,49 @@ def launch_main_window() -> None:
             self.current_model.add_stage(clone)
             self._populate_stage_table(); self._set_status(f'已复制 Stage: {clone.name}')
 
+        def apply_selected_solver_preset_to_stage(self) -> None:
+            if self.current_model is None:
+                return
+            stage = self._ensure_stage_selected()
+            if stage is None:
+                self._set_status('当前没有可编辑的 Stage。')
+                return
+            preset_key = str(self.stage_solver_preset_combo.currentData() or 'custom')
+            if preset_key == 'custom':
+                self._set_status('当前求解预设为 custom；请直接编辑数值后保存 Stage。')
+                return
+            activation_map = dict(stage.metadata.get('activation_map') or self._previous_stage_activation_map(stage.name))
+            coupled = bool(stage.metadata.get('plaxis_like_staged')) and bool(activation_map.get('wall', False))
+            metadata = dict(stage.metadata)
+            metadata.update(demo_solver_preset_payload(preset_key, coupled=coupled))
+            metadata['solver_preset'] = preset_key
+            metadata['solver_preset_label'] = explain_solver_preset(preset_key)
+            updated = AnalysisStage(name=stage.name, activate_regions=stage.activate_regions, deactivate_regions=stage.deactivate_regions, boundary_conditions=stage.boundary_conditions, loads=stage.loads, steps=stage.steps, metadata=metadata)
+            self.current_model.upsert_stage(updated)
+            self._on_stage_selection_changed(); self._populate_stage_table()
+            self._set_status(f'已将求解预设应用到 Stage {stage.name}: {preset_key}')
+
+        def apply_selected_solver_preset_to_all_stages(self) -> None:
+            if self.current_model is None or not self.current_model.stages:
+                return
+            preset_key = str(self.stage_solver_preset_combo.currentData() or 'custom')
+            if preset_key == 'custom':
+                self._set_status('当前求解预设为 custom；请先选择一个内置预设。')
+                return
+            updated_stages = []
+            for stage in self.current_model.stages:
+                activation_map = dict(stage.metadata.get('activation_map') or self._previous_stage_activation_map(stage.name))
+                coupled = bool(stage.metadata.get('plaxis_like_staged')) and bool(activation_map.get('wall', False))
+                metadata = dict(stage.metadata)
+                metadata.update(demo_solver_preset_payload(preset_key, coupled=coupled))
+                metadata['solver_preset'] = preset_key
+                metadata['solver_preset_label'] = explain_solver_preset(preset_key)
+                updated_stages.append(AnalysisStage(name=stage.name, activate_regions=stage.activate_regions, deactivate_regions=stage.deactivate_regions, boundary_conditions=stage.boundary_conditions, loads=stage.loads, steps=stage.steps, metadata=metadata))
+            self.current_model.stages = updated_stages
+            self._populate_stage_table()
+            self._on_stage_selection_changed()
+            self._set_status(f'已将求解预设应用到全部 Stage: {preset_key}')
+
         def _selected_bc_index(self) -> int | None:
             rows = self.bc_table.selectionModel().selectedRows() if self.bc_table.selectionModel() else []
             return rows[0].row() if rows else None
@@ -3845,7 +4473,7 @@ def launch_main_window() -> None:
             bc = stage.boundary_conditions[idx]
             self.bc_name_edit.setText(bc.name)
             self.bc_kind_combo.setCurrentText(bc.kind)
-            self.bc_target_edit.setText(bc.target)
+            _set_widget_text(self.bc_target_edit, bc.target)
             self.bc_components_edit.setText(','.join(str(v) for v in bc.components))
             self.bc_values_edit.setText(','.join(str(v) for v in bc.values))
             self._refresh_form_validation()
@@ -3857,23 +4485,99 @@ def launch_main_window() -> None:
             ld = stage.loads[idx]
             self.load_name_edit.setText(ld.name)
             self.load_kind_combo.setCurrentText(ld.kind)
-            self.load_target_edit.setText(ld.target)
+            _set_widget_text(self.load_target_edit, ld.target)
             self.load_values_edit.setText(','.join(str(v) for v in ld.values))
             self._refresh_form_validation()
+
+        def _selected_boundary_preset_key(self) -> str:
+            key = self.bc_preset_combo.currentData() if hasattr(self, 'bc_preset_combo') else None
+            return str(key or DEFAULT_STAGE_BOUNDARY_PRESET_KEY)
+
+        def _refresh_boundary_preset_help(self) -> None:
+            if not hasattr(self, 'bc_preset_help'):
+                return
+            try:
+                preset = boundary_preset_definition(self._selected_boundary_preset_key())
+                self.bc_preset_help.setText(f'{preset.description}\n将覆盖当前 Stage 的边界条件，或写入全局边界条件，适合直接赋值后求解。')
+            except Exception:
+                self.bc_preset_help.setText('')
+
+        def apply_selected_boundary_preset_to_stage(self) -> None:
+            if self.current_model is None:
+                return
+            stage = self._ensure_stage_selected()
+            if stage is None:
+                self._set_status('当前没有可编辑的 Stage。')
+                return
+            key = self._selected_boundary_preset_key()
+            items = tuple(build_boundary_conditions_from_preset(key))
+            metadata = dict(stage.metadata)
+            metadata['boundary_preset'] = key
+            updated = AnalysisStage(
+                name=stage.name,
+                activate_regions=stage.activate_regions,
+                deactivate_regions=stage.deactivate_regions,
+                boundary_conditions=items,
+                loads=stage.loads,
+                steps=stage.steps,
+                metadata=metadata,
+            )
+            self.current_model.upsert_stage(updated)
+            self._on_stage_selection_changed(); self._populate_stage_table()
+            try:
+                label = boundary_preset_definition(key).label
+            except Exception:
+                label = key
+            self._set_status(f'已将边界预置模板应用到 Stage {stage.name}: {label}')
+
+        def apply_selected_boundary_preset_globally(self) -> None:
+            if self.current_model is None:
+                return
+            key = self._selected_boundary_preset_key()
+            self.current_model.boundary_conditions = list(build_boundary_conditions_from_preset(key))
+            self.current_model.metadata['boundary_preset'] = key
+            try:
+                label = boundary_preset_definition(key).label
+            except Exception:
+                label = key
+            self._sync_all_views()
+            self._set_status(f'已设置全局边界模板: {label}')
+
+        def clear_stage_boundary_conditions(self) -> None:
+            if self.current_model is None:
+                return
+            stage = self._ensure_stage_selected()
+            if stage is None:
+                self._set_status('当前没有可编辑的 Stage。')
+                return
+            metadata = dict(stage.metadata)
+            metadata.pop('boundary_preset', None)
+            updated = AnalysisStage(
+                name=stage.name,
+                activate_regions=stage.activate_regions,
+                deactivate_regions=stage.deactivate_regions,
+                boundary_conditions=(),
+                loads=stage.loads,
+                steps=stage.steps,
+                metadata=metadata,
+            )
+            self.current_model.upsert_stage(updated)
+            self._on_stage_selection_changed(); self._populate_stage_table()
+            self._set_status(f'已清空 Stage {stage.name} 的边界条件。')
 
         def add_or_update_bc(self) -> None:
             if self.current_model is None:
                 return
             if self._apply_validation_result('bc', self._validate_bc_form(), block=True, title='边界条件参数校验失败'):
                 return
-            stage = self._selected_stage()
+            stage = self._ensure_stage_selected()
             if stage is None:
-                self._set_status('请先选择一个 Stage。')
+                self._set_status('当前没有可编辑的 Stage。')
                 return
             bc = BoundaryCondition(
                 name=self.bc_name_edit.text().strip() or 'bc',
                 kind=self.bc_kind_combo.currentText(),
-                target=self.bc_target_edit.text().strip() or 'bottom',
+                target=_widget_text(self.bc_target_edit).strip() or 'bottom',
                 components=_parse_components(self.bc_components_edit.text()),
                 values=_parse_values(self.bc_values_edit.text()),
             )
@@ -3902,14 +4606,14 @@ def launch_main_window() -> None:
                 return
             if self._apply_validation_result('load', self._validate_load_form(), block=True, title='荷载参数校验失败'):
                 return
-            stage = self._selected_stage()
+            stage = self._ensure_stage_selected()
             if stage is None:
-                self._set_status('请先选择一个 Stage。')
+                self._set_status('当前没有可编辑的 Stage。')
                 return
             load = LoadDefinition(
                 name=self.load_name_edit.text().strip() or 'load',
                 kind=self.load_kind_combo.currentText(),
-                target=self.load_target_edit.text().strip() or 'top',
+                target=_widget_text(self.load_target_edit).strip() or 'top',
                 values=_parse_values(self.load_values_edit.text()),
             )
             items = list(stage.loads)
@@ -3963,6 +4667,28 @@ def launch_main_window() -> None:
                 QtWidgets.QMessageBox.warning(self, self._tt('Pre-solve mesh check failed'), msg)
                 self._set_status(self._tt('Pre-solve mesh check failed.'))
                 return
+            presolve_report = analyze_presolve_state(self.current_model)
+            for msg in presolve_report.messages:
+                self._append_diagnostic('error', 'presolve', self._tt('Pre-solve blocking issue'), self._tt(msg))
+            for warn in presolve_report.warnings[:12]:
+                self._append_diagnostic('warning', 'presolve', self._tt('Pre-solve warning'), self._tt(warn))
+            if not presolve_report.ok:
+                msg = '\n'.join(presolve_report.messages[:12])
+                QtWidgets.QMessageBox.warning(self, self._tt('Pre-solve check failed'), msg)
+                self._set_status(self._tt('Pre-solve check failed.'))
+                return
+            if presolve_report.warnings:
+                msg = '\n'.join(presolve_report.warnings[:12])
+                answer = QtWidgets.QMessageBox.question(
+                    self,
+                    self._tt('Pre-solve warnings'),
+                    self._tt('The model has high-risk settings that may cause non-convergence. Continue anyway?') + '\n\n' + msg,
+                    QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                    QtWidgets.QMessageBox.StandardButton.No,
+                )
+                if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+                    self._set_status(self._tt('Solve canceled because of pre-solve warnings.'))
+                    return
             self.current_model.clear_results()
             self._eta_estimator = ProgressEtaEstimator()
             self._clear_diagnostics()
@@ -4005,6 +4731,12 @@ def launch_main_window() -> None:
             if not isinstance(payload, dict):
                 return
             self._last_solver_payload = dict(payload)
+            phase = str(payload.get('phase', ''))
+            if payload.get('log') or phase in {'solver-setup', 'stage-start', 'stage-setup', 'stage-complete', 'gpu-data-upload', 'gpu-data-ready', 'gpu-material-upload', 'gpu-material-ready', 'assembly-start', 'assembly-done', 'linear-solve-start', 'linear-solve-done', 'line-search-start', 'line-search-done', 'cutback', 'efficiency-note', 'step-converged', 'step-stopped'}:
+                try:
+                    self._log(str(payload.get('message', phase or 'solver progress')))
+                except Exception:
+                    pass
             stage_index = int(payload.get('stage_index', 1) or 1)
             stage_count = int(payload.get('stage_count', 1) or 1)
             phase = str(payload.get('phase', ''))
@@ -4020,7 +4752,7 @@ def launch_main_window() -> None:
                 overall = int(100.0 * stage_index / max(stage_count, 1))
                 self.progress_iter.setValue(100)
                 self._append_task_row('Solve', stage, 'Stage complete', detail or 'Stage converged', '')
-            elif 'iteration' in payload:
+            elif 'iteration' in payload and 'ratio' in payload:
                 iteration = int(payload.get('iteration', 0) or 0)
                 step = int(payload.get('step', 0) or 0)
                 ratio = float(payload.get('ratio', 0.0) or 0.0)
@@ -4034,6 +4766,16 @@ def launch_main_window() -> None:
                 elif alpha < 0.25:
                     advice = 'Line search is heavily damping the update; convergence may slow down.'
                 state_text = 'nonlinear iteration'
+            elif 'iteration' in payload:
+                iteration = int(payload.get('iteration', 0) or 0)
+                step = int(payload.get('step', 0) or 0)
+                self.progress_iter.setValue(max(1, min(99, iteration * 8)))
+                detail = f'step={step}, iter={iteration}'
+                if payload.get('line_search_alpha') is not None:
+                    detail += f", alpha={float(payload.get('line_search_alpha', 1.0) or 1.0):.2f}"
+                if payload.get('message'):
+                    detail = f"{detail}, {payload.get('message')}"
+                state_text = phase or 'solver-phase'
             elif phase:
                 state_text = phase
             eta_text = f'ETA {format_seconds(eta)} | Elapsed {format_seconds(elapsed)}'

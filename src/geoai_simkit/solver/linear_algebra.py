@@ -68,6 +68,24 @@ def _optional_import(name: str) -> Any | None:
         return None
 
 
+def _block_values_to_dense(pattern: Any, values: np.ndarray, *, ndof: int) -> np.ndarray:
+    vals = np.asarray(values, dtype=float)
+    if vals.ndim == 1:
+        vals = vals.reshape(-1, 1, 1)
+    if vals.size == 0 or int(ndof) <= 0:
+        return np.zeros((int(ndof), int(ndof)), dtype=float)
+    bs = int(vals.shape[1])
+    K = np.zeros((int(ndof), int(ndof)), dtype=float)
+    rows = np.asarray(pattern.rows, dtype=np.int64)
+    cols = np.asarray(pattern.cols, dtype=np.int64)
+    for slot, (r, c) in enumerate(zip(rows, cols, strict=False)):
+        rs = slice(int(r) * bs, int(r) * bs + bs)
+        cs = slice(int(c) * bs, int(c) * bs + bs)
+        if rs.stop <= int(ndof) and cs.stop <= int(ndof):
+            K[rs, cs] += vals[slot]
+    return K
+
+
 _WARP_SOLVER_FAILURES: dict[tuple[str, str, str], str] = {}
 
 
@@ -812,10 +830,16 @@ def solve_linear_system(
         except Exception:
             if bool(meta.get('require_warp', False)):
                 raise
-        matrix = matrix.to_csr()
-        is_sparse = True
-        A_sparse = matrix.tocsr().astype(float)
-        A_dense = None
+        if sp is not None:
+            matrix = matrix.to_csr()
+            is_sparse = True
+            A_sparse = matrix.tocsr().astype(float)
+            A_dense = None
+        else:
+            A_dense = _block_values_to_dense(matrix.pattern, matrix.host_values(), ndof=int(matrix.ndof))
+            is_sparse = False
+            A_sparse = None
+            warnings.append('SciPy sparse is unavailable; falling back to dense materialization for custom block sparse solve.')
 
     if use_sparse or is_sparse:
         try:

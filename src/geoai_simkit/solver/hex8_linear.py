@@ -18,6 +18,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 from geoai_simkit.core.model import BoundaryCondition, LoadDefinition
 from geoai_simkit.solver.linear_algebra import LinearSolverContext, _optional_import, solve_linear_system
+from geoai_simkit.validation_rules import normalize_boundary_target, normalize_load_kind
 from geoai_simkit.solver.warp_hex8 import build_block_sparse_pattern, resolve_warp_hex8_config, try_warp_hex8_linear_assembly
 
 
@@ -215,7 +216,7 @@ def subset_hex8_submesh(base: Hex8Submesh, mask: np.ndarray) -> Hex8Submesh:
 
 
 def select_bc_nodes(points: np.ndarray, bc: BoundaryCondition, tol: float = 1e-8) -> np.ndarray:
-    target = bc.target.lower()
+    target = normalize_boundary_target(bc.target)
     if target == "all":
         return np.arange(points.shape[0], dtype=np.int64)
     axes = {
@@ -232,9 +233,9 @@ def select_bc_nodes(points: np.ndarray, bc: BoundaryCondition, tol: float = 1e-8
 
 def apply_stage_nodal_loads(F: np.ndarray, points: np.ndarray, loads: tuple[LoadDefinition, ...]) -> None:
     for load in loads:
-        if load.kind.lower() != "point_force":
+        if normalize_load_kind(load.kind) != "point_force":
             continue
-        target = load.target.lower()
+        target = normalize_boundary_target(load.target)
         if target == "all":
             node_ids = np.arange(points.shape[0], dtype=np.int64)
         else:

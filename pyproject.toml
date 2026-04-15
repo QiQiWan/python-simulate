@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "geoai-simkit"
-version = "0.1.27"
+version = "0.1.29"
 description = "Graphics-first AI simulation kernel with mandatory NVIDIA Warp GPU path, IFC import, and VTK export"
 readme = "README.md"
 requires-python = ">=3.10"

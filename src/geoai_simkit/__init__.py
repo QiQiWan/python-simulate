@@ -7,4 +7,4 @@ except Exception:  # pragma: no cover
 
 __all__ = ["AppConfig", "SimulationModel"]
 
-__version__ = "0.1.27"
+__version__ = "0.1.42"

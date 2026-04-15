@@ -86,7 +86,7 @@ class WarpBackend(SolverBackend):
                 pass
         return False
 
-    def _select_runtime_device(self, wp, requested: str, *, round_robin_index: int = 0, allowed_aliases: list[str] | None = None) -> str:
+    def _select_runtime_device(self, wp, requested: str, *, round_robin_index: int = 0, allowed_devices: list[str] | None = None) -> str:
         requested = (requested or "auto-best").lower()
         try:
             has_cuda = self._warp_has_cuda(wp)
@@ -95,7 +95,7 @@ class WarpBackend(SolverBackend):
         if not has_cuda:
             chosen = 'cpu'
         else:
-            chosen = choose_cuda_device(requested, round_robin_index=round_robin_index, allowed_aliases=allowed_aliases)
+            chosen = choose_cuda_device(requested, round_robin_index=round_robin_index, allowed_devices=allowed_devices)
         setter = getattr(wp, "set_device", None)
         if callable(setter):
             try:
@@ -104,30 +104,38 @@ class WarpBackend(SolverBackend):
                 pass
         return chosen
 
-    def _stage_runtime_device(self, wp, requested: str, multi_gpu_mode: str, stage_index: int, fallback_device: str, allowed_aliases: list[str] | None = None) -> str:
-        mode = str(multi_gpu_mode or 'single').lower()
-        req = str(requested or fallback_device or 'auto-best').lower()
-        if wp is None:
-            return fallback_device
-        if mode in {'round-robin', 'stage-round-robin'}:
-            if req in {'auto', 'auto-best', 'best', 'cuda'}:
-                req = 'auto-round-robin'
-            return self._select_runtime_device(wp, req, round_robin_index=max(0, int(stage_index) - 1), allowed_aliases=allowed_aliases)
-        return self._select_runtime_device(wp, req, round_robin_index=max(0, int(stage_index) - 1), allowed_aliases=allowed_aliases)
+    @staticmethod
+    def _emit_progress(progress_callback, payload: dict) -> None:
+        if progress_callback is None:
+            return
+        try:
+            progress_callback(dict(payload))
+        except Exception:
+            pass
+
+    @staticmethod
+    def _choose_stage_device(requested_device: str, metadata: dict, *, active_cells: int, active_dofs: int) -> tuple[str, str | None]:
+        profile = str(metadata.get('compute_profile', 'auto')).lower()
+        require_warp = bool(metadata.get('require_warp', False))
+        adaptive_small = bool(metadata.get('adaptive_small_model_cpu', False))
+        cell_limit = int(metadata.get('small_model_cpu_max_cells', 1800) or 1800)
+        dof_limit = int(metadata.get('small_model_cpu_max_dofs', 18000) or 18000)
+        if str(requested_device).lower().startswith('cuda') and adaptive_small and not require_warp and profile in {'auto', 'gpu-throughput'} and active_cells <= cell_limit and active_dofs <= dof_limit:
+            return 'cpu', f"Adaptive policy switched this stage to CPU because active_cells={active_cells} and active_dofs={active_dofs} are below the efficient GPU threshold ({cell_limit} cells / {dof_limit} dofs)."
+        return requested_device, (f"Model is relatively small (active_cells={active_cells}, active_dofs={active_dofs}); forcing full GPU path may underutilize the device." if str(requested_device).lower().startswith('cuda') and active_cells <= cell_limit and active_dofs <= dof_limit else None)
 
     def solve(self, model: SimulationModel, settings: SolverSettings, progress_callback=None, cancel_check=None) -> SimulationModel:
         model.ensure_regions()
         backend_name = "placeholder-no-warp"
         selected_device = str(settings.device or settings.metadata.get('warp_device') or 'auto-best').lower()
         require_warp = bool(settings.metadata.get('require_warp', False) or str(settings.device or 'auto').lower().startswith('cuda'))
-        allowed_gpu_devices = [str(v).lower() for v in (settings.metadata.get('allowed_gpu_devices', []) or []) if str(v).strip()]
         try:
             wp = self._ensure_warp()
             if wp is None:
                 raise RuntimeError('warp-lang is required but not installed')
             wp.init()
             rr_index = int(model.metadata.get('solve_sequence_index', 0)) if isinstance(model.metadata, dict) else 0
-            selected_device = self._select_runtime_device(wp, settings.metadata.get('warp_device') or selected_device, round_robin_index=rr_index, allowed_aliases=allowed_gpu_devices)
+            selected_device = self._select_runtime_device(wp, settings.metadata.get('warp_device') or selected_device, round_robin_index=rr_index, allowed_devices=list(settings.metadata.get('allowed_gpu_devices', []) or []))
             backend_name = f"warp-{getattr(wp, '__version__', 'unknown')}-{selected_device}"
         except RuntimeError:
             wp = None
@@ -137,28 +145,23 @@ class WarpBackend(SolverBackend):
                 selected_device = 'cpu'
 
         effective_threads = configure_linear_algebra_threads(int(settings.thread_count))
-        if progress_callback is not None and wp is not None:
-            try:
-                progress_callback({'phase': 'gpu-scan', 'message': f'CUDA device scan complete. Using {selected_device}.', 'fraction': 0.005, 'device': selected_device, 'available_devices': [d.alias for d in detect_cuda_devices()], 'selected_devices': allowed_gpu_devices or None})
-            except Exception:
-                pass
-        if progress_callback is not None and wp is not None and str(selected_device).startswith('cuda') and bool(settings.metadata.get('warmup_gpu', True)):
-            try:
-                progress_callback({'phase': 'gpu-warmup', 'message': f'Warming up GPU runtime on {selected_device}', 'fraction': 0.01, 'device': selected_device})
-                optional_import('warp.sparse')
-                optional_import('warp.optim.linear')
-                optional_import('geoai_simkit.solver.warp_hex8')
-                optional_import('geoai_simkit.solver.warp_nonlinear')
-            except Exception:
-                pass
         settings.thread_count = int(effective_threads)
 
         grid = model.to_unstructured_grid()
+        self._emit_progress(progress_callback, {
+            'phase': 'solver-setup',
+            'message': f'Solver setup complete: backend={backend_name}, device={selected_device}, points={grid.n_points}, cells={grid.n_cells}, threads={settings.thread_count}',
+            'backend': backend_name,
+            'device': selected_device,
+            'points': int(grid.n_points),
+            'cells': int(grid.n_cells),
+            'threads': int(settings.thread_count),
+            'log': True,
+        })
         if grid.n_points == 0:
             model.metadata["backend"] = backend_name
             model.metadata['compute_device'] = selected_device
             model.metadata['thread_count'] = int(settings.thread_count)
-            model.metadata['selected_gpu_devices'] = allowed_gpu_devices
             return model
 
         for region in model.region_tags:
@@ -189,21 +192,13 @@ class WarpBackend(SolverBackend):
             rot_full = np.zeros_like(total_u)
 
             stage_contexts = stage_manager.iter_stages()
-            stage_sync_summary: list[dict[str, object]] = []
-            multi_gpu_mode = str(settings.metadata.get('multi_gpu_mode', 'single')).lower()
-            requested_stage_device = str(settings.metadata.get('warp_device') or selected_device)
             for stage_index, stage_ctx in enumerate(stage_contexts, start=1):
                 if cancel_check and cancel_check():
                     model.metadata['solver_warnings'] = model.metadata.get('solver_warnings', []) + ['Solve canceled by user.']
                     break
                 stage = stage_ctx.stage
                 stage_names.append(stage.name)
-                stage_device = self._stage_runtime_device(wp, requested_stage_device, multi_gpu_mode, stage_index, selected_device, allowed_aliases=allowed_gpu_devices) if wp is not None else selected_device
-                if progress_callback is not None:
-                    try:
-                        progress_callback({'phase': 'stage-start', 'stage': stage.name, 'stage_index': stage_index, 'stage_count': len(stage_contexts), 'message': f'Starting stage {stage.name}'})
-                    except Exception:
-                        pass
+                self._emit_progress(progress_callback, {'phase': 'stage-start', 'stage': stage.name, 'stage_index': stage_index, 'stage_count': len(stage_contexts), 'message': f'Starting stage {stage.name}', 'log': True})
                 stage_bcs = tuple(model.boundary_conditions) + tuple(stage.boundary_conditions)
                 stage_loads = tuple(stage.loads)
                 active_hex_mask = np.array([
@@ -214,6 +209,58 @@ class WarpBackend(SolverBackend):
                     notes.append(f"Stage '{stage.name}' had no active Hex8 cells; skipped solve.")
                     continue
                 sub = subset_hex8_submesh(hex_submesh, active_hex_mask)
+                active_stage_cells = int(sub.elements.shape[0])
+                active_stage_dofs = int(sub.points.shape[0] * 3)
+                stage_device, stage_policy_note = self._choose_stage_device(selected_device, settings.metadata, active_cells=active_stage_cells, active_dofs=active_stage_dofs)
+                self._emit_progress(progress_callback, {
+                    'phase': 'stage-setup',
+                    'stage': stage.name,
+                    'stage_index': stage_index,
+                    'stage_count': len(stage_contexts),
+                    'message': f"Stage {stage.name}: active_cells={active_stage_cells}, active_points={sub.points.shape[0]}, active_dofs={active_stage_dofs}, compute_device={stage_device}",
+                    'active_cells': active_stage_cells,
+                    'active_dofs': active_stage_dofs,
+                    'device': stage_device,
+                    'log': True,
+                })
+                if stage_policy_note:
+                    self._emit_progress(progress_callback, {
+                        'phase': 'efficiency-note',
+                        'stage': stage.name,
+                        'stage_index': stage_index,
+                        'stage_count': len(stage_contexts),
+                        'message': stage_policy_note,
+                        'device': stage_device,
+                        'log': True,
+                    })
+                stage_started = __import__('time').perf_counter()
+                stage_solver_meta = dict(settings.metadata)
+                stage_solver_meta.update(dict(stage.metadata or {}))
+                control_profile = str(stage_solver_meta.get('control_strategy', 'commercial')).lower()
+                stage_initial_increment = float(stage_solver_meta.get('initial_increment', max(1.0 / max(1, int(stage.steps or 1)), 1.0e-3)))
+                stage_solver_meta.setdefault('initial_increment', stage_initial_increment)
+                stage_solver_meta.setdefault('max_load_fraction_per_step', stage_initial_increment)
+                if nonlinear_present and control_profile in {'commercial', 'commercial-safe', 'auto'}:
+                    stage_solver_meta.setdefault('adaptive_increment', True)
+                    stage_solver_meta.setdefault('predictor_enabled', True)
+                    stage_solver_meta.setdefault('target_iterations', 6)
+                    stage_solver_meta.setdefault('target_iteration_band_low', 4)
+                    stage_solver_meta.setdefault('target_iteration_band_high', 9)
+                    stage_solver_meta.setdefault('increment_growth', 1.30)
+                    stage_solver_meta.setdefault('increment_shrink', 0.60)
+                    stage_solver_meta.setdefault('stagnation_patience', 2)
+                    stage_solver_meta.setdefault('stagnation_improvement_tol', 0.02)
+                    stage_solver_meta.setdefault('modified_newton_max_reuse', 2)
+                    stage_solver_meta.setdefault('modified_newton_min_improvement', 0.10)
+                    stage_solver_meta.setdefault('modified_newton_ratio_threshold', 0.30)
+                    stage_solver_meta.setdefault('line_search_trigger_ratio', 0.70)
+                    stage_solver_meta.setdefault('line_search_correction_ratio', 0.20)
+                    stage_solver_meta.setdefault('line_search_max_iter', 4 if str(stage_device).lower().startswith('cuda') else 6)
+                    stage_solver_meta.setdefault('max_cutbacks', max(6, int(stage_solver_meta.get('max_cutbacks', settings.max_cutbacks))))
+                    stage_solver_meta.setdefault('min_load_increment', max(1.0e-4, stage_initial_increment * 0.125))
+                    stage_solver_meta.setdefault('max_total_steps', max(int(stage.steps or 1) * 10, int(stage_solver_meta.get('max_total_steps', 0) or 0)))
+                    stage_solver_meta.setdefault('abort_on_step_failure', True)
+                    stage_solver_meta.setdefault('log_solver_phases', True)
                 if nonlinear_present:
                     mats = self._hex_material_models(sub.full_cell_ids, cell_region_map, model)
                     state_store = [
@@ -227,39 +274,63 @@ class WarpBackend(SolverBackend):
                         payload.setdefault('stage', stage.name)
                         payload.setdefault('stage_index', stage_index)
                         payload.setdefault('stage_count', len(stage_contexts))
-                        payload.setdefault('device', stage_device)
                         progress_callback(payload)
                     result = NonlinearHex8Solver(sub, mats, gravity=settings.gravity).solve(
                         bcs=stage_bcs,
                         loads=stage_loads,
                         gp_states=state_store,
                         n_steps=stage.steps or max(4, settings.max_steps // 20),
-                        max_iterations=int(settings.metadata.get("max_nonlinear_iterations", settings.max_iterations)),
-                        tolerance=float(settings.tolerance),
+                        max_iterations=int(stage_solver_meta.get("max_iterations", stage_solver_meta.get("max_nonlinear_iterations", settings.max_iterations))),
+                        tolerance=float(stage_solver_meta.get("tolerance", settings.tolerance)),
                         structures=model.structures_for_stage(stage.name),
                         interfaces=model.interfaces_for_stage(stage.name),
                         interface_states=interface_state_store,
                         prefer_sparse=bool(settings.prefer_sparse),
-                        line_search=bool(settings.line_search),
-                        max_cutbacks=int(settings.max_cutbacks),
+                        line_search=bool(stage_solver_meta.get('line_search', settings.line_search)),
+                        max_cutbacks=int(stage_solver_meta.get('max_cutbacks', settings.max_cutbacks)),
                         thread_count=int(settings.thread_count),
                         progress_callback=_stage_progress,
                         cancel_check=cancel_check,
                         stage_name=stage.name,
-                        solver_metadata=settings.metadata,
+                        solver_metadata=stage_solver_meta,
                         compute_device=stage_device,
                         initial_u_nodes=total_u[sub.global_point_ids] if bool(settings.metadata.get('stage_state_sync', True)) else None,
                         initial_rotations=rot_full[sub.global_point_ids] if bool(settings.metadata.get('stage_state_sync', True)) else None,
                     )
                     u_local = result.u_nodes
                     rot_local = result.structural_rotations
-                    stage_sync_summary.append({'stage': stage.name, 'device': stage_device, 'u_norm': float(np.linalg.norm(u_local)), 'rot_norm': float(np.linalg.norm(rot_local)), 'gp_cells': int(len(result.gp_states))})
                     cell_stress = result.cell_stress
                     cell_vm = result.von_mises
                     for local_idx, fid in enumerate(sub.full_cell_ids):
                         gp_state_store[int(fid)] = result.gp_states[local_idx]
                     interface_state_store = result.interface_states
                     notes.extend(result.warnings)
+                    if not result.converged:
+                        failure_note = (
+                            f"Stage '{stage.name}' stopped at lambda={result.completed_lambda:.4f} after {result.total_steps_taken} load steps. "
+                            "The solver kept the best converged state instead of continuing into an endless cutback loop."
+                        )
+                        notes.append(failure_note)
+                        self._emit_progress(progress_callback, {
+                            'phase': 'stage-failed',
+                            'stage': stage.name,
+                            'stage_index': stage_index,
+                            'stage_count': len(stage_contexts),
+                            'message': failure_note,
+                            'lambda': float(result.completed_lambda),
+                            'log': True,
+                        })
+                        for advice in list(getattr(result, 'convergence_advice', []) or []):
+                            notes.append(f"[advice] {advice}")
+                            self._emit_progress(progress_callback, {
+                                'phase': 'solver-advice',
+                                'stage': stage.name,
+                                'stage_index': stage_index,
+                                'stage_count': len(stage_contexts),
+                                'message': advice,
+                                'lambda': float(result.completed_lambda),
+                                'log': True,
+                            })
                     cell_yield_full[:] = 0.0
                     cell_eqp_full[:] = 0.0
                     cell_yield_full[sub.full_cell_ids] = result.cell_yield_fraction
@@ -276,7 +347,8 @@ class WarpBackend(SolverBackend):
                         prefer_sparse=bool(settings.prefer_sparse),
                         thread_count=int(settings.thread_count),
                         compute_device=stage_device,
-                        solver_metadata=settings.metadata,
+                        solver_metadata=stage_solver_meta,
+                        progress_callback=progress_callback,
                     )
                 if nonlinear_present and bool(settings.metadata.get('stage_state_sync', True)):
                     total_u[sub.global_point_ids] = u_local
@@ -300,13 +372,20 @@ class WarpBackend(SolverBackend):
                     model.add_result(ResultField(name="R_struct", association="point", values=rot_full.copy(), components=3, stage=stage.name))
                     model.add_result(ResultField(name="yield_fraction", association="cell", values=cell_yield_full.copy(), stage=stage.name))
                     model.add_result(ResultField(name="eq_plastic", association="cell", values=cell_eqp_full.copy(), stage=stage.name))
-                if progress_callback is not None:
-                    try:
-                        progress_callback({'phase': 'stage-complete', 'stage': stage.name, 'stage_index': stage_index, 'stage_count': len(stage_contexts), 'message': f'Completed stage {stage.name}'})
-                    except Exception:
-                        pass
+                stage_seconds = __import__('time').perf_counter() - stage_started
+                self._emit_progress(progress_callback, {
+                    'phase': 'stage-complete',
+                    'stage': stage.name,
+                    'stage_index': stage_index,
+                    'stage_count': len(stage_contexts),
+                    'message': f'Completed stage {stage.name} in {stage_seconds:.2f}s',
+                    'stage_seconds': float(stage_seconds),
+                    'device': stage_device,
+                    'log': True,
+                })
+                if nonlinear_present and not result.converged:
+                    break
 
-            model.metadata['stage_sync_summary'] = stage_sync_summary
             grid.point_data["U"] = total_u
             grid.point_data["U_mag"] = np.linalg.norm(total_u, axis=1)
             grid.cell_data["stress"] = cell_stress_full
@@ -322,10 +401,12 @@ class WarpBackend(SolverBackend):
             model.metadata["backend"] = backend_name
             model.metadata['compute_device'] = selected_device
             model.metadata['thread_count'] = int(settings.thread_count)
-            model.metadata['selected_gpu_devices'] = allowed_gpu_devices
             model.metadata["stages_run"] = stage_names
             if nonlinear_present:
                 model.metadata.setdefault("solver_history", {})[stage.name] = result.convergence_history
+                model.metadata.setdefault("step_control_trace", {})[stage.name] = list(getattr(result, 'step_control_trace', []) or [])
+                if getattr(result, 'convergence_advice', None):
+                    model.metadata.setdefault('stage_failure_advice', {})[stage.name] = list(result.convergence_advice)
             model.metadata.setdefault("linear_solver", {})[stage.name] = (result.convergence_history[-1].get("linear_backend") if nonlinear_present and result.convergence_history else ("numpy-dense" if not nonlinear_present else "unknown"))
             if linear_assembly_info is not None:
                 model.metadata.setdefault('linear_element_assembly', {})[stage.name] = linear_assembly_info
@@ -338,6 +419,12 @@ class WarpBackend(SolverBackend):
                 if nonlinear_present else
                 "Executed the small-strain Hex8 linear path."
             )
+            if nonlinear_present and any('stopped at lambda=' in str(n) for n in notes):
+                base_note = "Nonlinear stage stopped early because the current load increment could not converge reliably. The best converged state was kept and remaining stages were not advanced."
+                advice_map = model.metadata.get('stage_failure_advice', {}) if isinstance(model.metadata, dict) else {}
+                if isinstance(advice_map, dict) and advice_map.get(stage.name):
+                    base_note += " Suggested next actions: " + " | ".join(str(x) for x in advice_map.get(stage.name, [])[:3])
+                model.metadata["solver_note"] = base_note
             if notes:
                 model.metadata["solver_warnings"] = notes
             return model

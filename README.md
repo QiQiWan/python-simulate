@@ -1,4 +1,4 @@
-# geoai-simkit v12
+# geoai-simkit v10
 
 `geoai-simkit` is a **graphics-first simulation platform starter** for geotechnical and related engineering problems. It is designed around four ideas:
 
@@ -33,14 +33,14 @@ It is still **not a full commercial-grade nonlinear FEM product**. The main rema
 
 ## What is new in v12
 
-This revision focuses on **GPU residency, multi-GPU control, and clearer desktop UX**:
+This revision focuses on **GPU residency, multi-GPU selection, and UI/runtime modernization**:
 
-- added **resident GPU data caching** for Warp nonlinear and linear Hex8 paths, reducing repeated host-to-device uploads across iterations and stages
-- solver progress now emits explicit **GPU upload / GPU cache reuse** phases so long first-launch data transfers are visible in the UI
-- results page now shows a **highlightable GPU list**; selected GPUs constrain scheduling on multi-card workstations
-- compute preferences now propagate the selected GPU list into the solver metadata and runtime device chooser
-- GUI uses a more modern visual style, standard Qt icons, and lightweight page classes (`ProjectPage`, `GeometryPage`, `MaterialPage`, `StagePage`, `ResultsPage`) while staying in a single file
-- viewer refresh now uses the cached `_viewer_actor_map` to remove known actors first, improving large-model redraw responsiveness
+- added **resident GPU upload caches** for Warp Hex8 and nonlinear continuum paths to reduce repeated host→device uploads
+- solver progress now reports **gpu-data-upload** and **gpu-data-ready** phases, including cache hits and upload timing
+- results page can now **detect all CUDA GPUs**, highlight-select a GPU pool, and pass the selected pool to backend scheduling
+- compute preferences now support **allowed GPU device pools** in addition to single-device and round-robin selection
+- improved default GPU throughput tuning with less aggressive line-search retries and fewer synchronization-heavy checks
+- GUI styling was refreshed and key solver buttons now use standard icons
 
 ## What is new in v11
 
@@ -739,6 +739,19 @@ These are now emitted from the solver compute panel and consumed in the nonlinea
 - 39 passed, 3 skipped
 
 
+## Commercial-style nonlinear control defaults
+
+The GUI now boots safely with a populated GPU selection list on the Solve / Results page.
+
+Nonlinear staged construction also defaults to a more commercial-FEA-like control policy:
+- adaptive increment growth/shrink
+- predictor warm start between steps/stages
+- modified-Newton tangent reuse
+- tighter stagnation detection and cutback control
+- explicit stage abort on repeated failed substeps
+
+These defaults are applied automatically unless stage metadata overrides them.
+
 ## Solver Compute Panel
 
 # Solver Compute Panel
@@ -789,6 +802,19 @@ For debugging or small models:
 - Device: `cpu`
 - Threads: about half of available CPU cores
 
+
+## Commercial-style nonlinear control defaults
+
+The GUI now boots safely with a populated GPU selection list on the Solve / Results page.
+
+Nonlinear staged construction also defaults to a more commercial-FEA-like control policy:
+- adaptive increment growth/shrink
+- predictor warm start between steps/stages
+- modified-Newton tangent reuse
+- tighter stagnation detection and cutback control
+- explicit stage abort on repeated failed substeps
+
+These defaults are applied automatically unless stage metadata overrides them.
 
 ## Solver Strategy Analysis
 
@@ -1138,20 +1164,19 @@ Validation result:
 - `39 passed, 3 skipped`
 
 
-## GPU full-path and staged construction notes
+## Pre-solve convergence guard
 
-- Multi-stage excavation now supports **state synchronization**. The solver carries forward displacements, structural rotations, Gauss-point material state, and interface state from the previous stage as the initial guess for the next stage.
-- The nonlinear solver now uses an **adaptive line-search policy** on CUDA paths. When the stage is warm-started and the Newton increment is already small or the residual is clearly improving, the solver skips expensive backtracking evaluations and applies the full step directly.
-- The compute panel now exposes **multi-GPU mode** (`single` or `round-robin`). On multi-card machines you can keep one GPU per solve or rotate stages across available CUDA devices.
-- Root-level documentation has been consolidated into this `README.md`.
+This build adds a stronger pre-solve checker before launching the background solver. It now blocks or warns on:
 
-### Recommended profiles
+- stages with no effective activation/deactivation/load changes
+- excavation/unloading stages whose activation map does not actually deactivate any region
+- active regions without material assignments
+- stages with no active cells
+- risky nonlinear settings such as overly large `initial_increment`
 
-- `gpu-fullpath`: full GPU-oriented assembly + nonlinear continuum + block sparse path, with adaptive line search and state synchronization enabled.
-- `gpu-throughput`: similar to `gpu-fullpath`, but slightly more conservative on nonlinear tuning.
-- `cpu-safe`: disables Warp/GPU paths and keeps a conservative CPU-only solve path.
+The nonlinear solver also now honors per-stage metadata such as `initial_increment`, `max_iterations`, and `line_search`.
 
-### Troubleshooting when progress appears stalled
 
-If the progress dialog stays in **Running line search** for too long, check the compute panel summary and diagnostics.
-This build now emits more detailed runtime warnings when a nonlinear continuum stage falls back from Warp to CPU, and the adaptive line-search logic tries to skip unnecessary backtracking when the solve is already warm-started.
+
+## Recent updates
+- Added commercial-style adaptive controls with iteration-history-based increment scaling, cutback tracing, and automatic stage-failure advice.

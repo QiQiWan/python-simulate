@@ -42,6 +42,34 @@ def _in_range(value: float | None, low: float | None = None, high: float | None 
     return True
 
 
+
+SUPPORTED_BC_TARGETS = {
+    'all',
+    'xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax',
+    'left', 'right', 'front', 'back', 'bottom', 'top',
+}
+SUPPORTED_LOAD_KINDS = {'nodal_force', 'point_force', 'gravity_scale', 'pressure'}
+
+
+def normalize_boundary_target(target: str) -> str:
+    mapping = {
+        'left': 'xmin',
+        'right': 'xmax',
+        'front': 'ymin',
+        'back': 'ymax',
+        'bottom': 'zmin',
+        'top': 'zmax',
+    }
+    key = str(target or '').strip().lower()
+    return mapping.get(key, key)
+
+
+def normalize_load_kind(kind: str) -> str:
+    key = str(kind or '').strip().lower()
+    if key == 'nodal_force':
+        return 'point_force'
+    return key
+
 def validate_geometry_params(params: Mapping[str, object]) -> list[ParameterIssue]:
     issues: list[ParameterIssue] = []
     req_positive = ["length", "width", "depth", "soil_depth", "wall_thickness"]
@@ -198,8 +226,11 @@ def validate_bc_inputs(name: str, kind: str, target: str, components: Sequence[i
         issues.append(_issue("error", "bc_name", "边界条件名称不能为空。"))
     if kind not in {"displacement", "roller", "symmetry"}:
         issues.append(_issue("error", "bc_kind", "边界条件类型不受支持。"))
+    normalized_target = normalize_boundary_target(target)
     if not str(target).strip():
         issues.append(_issue("error", "bc_target", "边界条件目标不能为空。"))
+    elif normalized_target not in SUPPORTED_BC_TARGETS and normalized_target != 'all':
+        issues.append(_issue("error", "bc_target", "边界条件目标不受支持。可用目标包括 xmin/xmax/ymin/ymax/zmin/zmax 及其 left/right/front/back/bottom/top 别名。"))
     if not components:
         issues.append(_issue("error", "bc_components", "至少需要一个分量。"))
     if any((c < 0 or c > 5) for c in components):
@@ -217,24 +248,25 @@ def validate_load_inputs(name: str, kind: str, target: str, values: Sequence[flo
     issues: list[ParameterIssue] = []
     if not str(name).strip():
         issues.append(_issue("error", "load_name", "荷载名称不能为空。"))
-    if kind not in {"nodal_force", "gravity_scale", "pressure"}:
+    normalized_kind = normalize_load_kind(kind)
+    if normalized_kind not in SUPPORTED_LOAD_KINDS:
         issues.append(_issue("error", "load_kind", "荷载类型不受支持。"))
     if not str(target).strip():
         issues.append(_issue("error", "load_target", "荷载目标不能为空。"))
     if not values:
         issues.append(_issue("error", "load_values", "至少需要一个荷载值。"))
         return issues
-    if kind == "gravity_scale":
+    if normalized_kind == "gravity_scale":
         if len(values) != 1:
             issues.append(_issue("error", "load_values", "gravity_scale 只接受 1 个值。"))
         elif values[0] <= 0:
             issues.append(_issue("error", "load_values", "gravity_scale 必须大于 0。"))
-    elif kind == "pressure":
+    elif normalized_kind == "pressure":
         if len(values) not in {1, 3}:
             issues.append(_issue("error", "load_values", "pressure 建议输入 1 个标量或 3 个分量。"))
-    elif kind == "nodal_force":
+    elif normalized_kind == "point_force":
         if len(values) not in {1, 3}:
-            issues.append(_issue("error", "load_values", "nodal_force 建议输入 1 个标量或 3 个分量。"))
+            issues.append(_issue("error", "load_values", "nodal_force / point_force 建议输入 1 个标量或 3 个分量。"))
     return issues
 
 

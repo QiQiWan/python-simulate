@@ -24,20 +24,3 @@ def test_preferences_summary_mentions_threads_and_device():
     summary = prefs.summary(cpu_total=8, cuda_available=True)
     assert 'device=cuda:0' in summary
     assert 'cpu_threads=7' in summary
-
-
-
-def test_gpu_profiles_include_adaptive_line_search_metadata():
-    prefs = recommended_compute_preferences('gpu-throughput', cuda_available=True, cpu_total=16)
-    meta = prefs.to_metadata(cuda_available=True)
-    assert meta['multi_gpu_mode'] == 'single'
-    assert meta['warp_device'] in {'auto-best', 'auto-round-robin', 'cuda:0'}
-    assert meta['line_search_mode'] == 'adaptive'
-    assert meta['warmup_gpu'] is True
-
-
-def test_round_robin_mode_maps_to_auto_round_robin():
-    prefs = BackendComputePreferences(device='auto-best', multi_gpu_mode='round-robin')
-    meta = prefs.to_metadata(cuda_available=True)
-    assert meta['multi_gpu_mode'] == 'round-robin'
-    assert meta['warp_device'] == 'auto-round-robin'

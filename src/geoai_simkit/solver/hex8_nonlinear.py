@@ -36,8 +36,9 @@ from geoai_simkit.solver.structural_elements import (
     assemble_structural_stiffness,
     build_structural_dof_map,
 )
-from geoai_simkit.solver.warp_hex8 import build_block_sparse_pattern, build_node_block_sparse_pattern, block_values_matvec, block_values_to_csr, resolve_warp_hex8_config, try_warp_hex8_linear_assembly
+from geoai_simkit.solver.warp_hex8 import build_block_sparse_pattern, build_node_block_sparse_pattern, block_values_matvec, block_values_to_csr, block_values_to_dense, resolve_warp_hex8_config, try_warp_hex8_linear_assembly
 from geoai_simkit.solver.warp_nonlinear import try_warp_nonlinear_continuum_assembly
+from geoai_simkit.validation_rules import normalize_boundary_target, normalize_load_kind
 
 
 GAUSS_POINTS = [(xi, eta, zeta) for xi in GAUSS for eta in GAUSS for zeta in GAUSS]
@@ -56,6 +57,11 @@ class NonlinearSolveResult:
     warnings: list[str]
     dof_map: StructuralDofMap
     convergence_history: list[dict[str, float | int | str]] = field(default_factory=list)
+    convergence_advice: list[str] = field(default_factory=list)
+    step_control_trace: list[dict[str, float | int | str]] = field(default_factory=list)
+    converged: bool = True
+    completed_lambda: float = 1.0
+    total_steps_taken: int = 0
 
 
 
@@ -78,6 +84,68 @@ def _clone_gp_states(states: list[list[MaterialState]]) -> list[list[MaterialSta
 
 def _clone_interface_states(states: dict[str, list[InterfaceElementState]]) -> dict[str, list[InterfaceElementState]]:
     return {k: [InterfaceElementState(slip=s.slip.copy(), closed=s.closed, traction=s.traction.copy()) for s in v] for k, v in states.items()}
+
+
+def _build_stage_failure_advice(
+    *,
+    stage_name: str,
+    solver_meta: dict[str, Any],
+    completed_lambda: float,
+    best_metric: float,
+    total_steps_taken: int,
+    cutbacks: int,
+    convergence_history: list[dict[str, float | int | str]],
+    warnings: list[str],
+) -> list[str]:
+    advice: list[str] = []
+    hist = list(convergence_history or [])
+    ratios = [float(entry.get('ratio')) for entry in hist if isinstance(entry, dict) and 'ratio' in entry and np.isfinite(float(entry.get('ratio', np.inf)))]
+    alphas = [float(entry.get('line_search_alpha')) for entry in hist if isinstance(entry, dict) and 'line_search_alpha' in entry and np.isfinite(float(entry.get('line_search_alpha', 1.0)))]
+    linear_backends = {str(entry.get('linear_backend')).lower() for entry in hist if isinstance(entry, dict) and entry.get('linear_backend')}
+    initial_increment = float(solver_meta.get('initial_increment', 0.1) or 0.1)
+    min_increment = float(solver_meta.get('min_load_increment', max(1.0e-4, initial_increment * 0.1)) or max(1.0e-4, initial_increment * 0.1))
+    line_search_enabled = bool(solver_meta.get('line_search', True))
+
+    if completed_lambda < 0.25:
+        advice.append(
+            f"Stage '{stage_name}' stopped very early (lambda={completed_lambda:.3f}). Split this construction stage into smaller sub-stages or reduce initial_increment from {initial_increment:.3f} to about {max(min_increment, initial_increment * 0.5):.3f}."
+        )
+    if cutbacks >= max(2, int(solver_meta.get('max_cutbacks', 4)) // 2):
+        advice.append(
+            f"This stage triggered {cutbacks} cutbacks. Reduce the first load fraction and keep max_load_fraction_per_step near {max(min_increment, initial_increment * 0.5):.3f}."
+        )
+    if ratios:
+        last_ratio = ratios[-1]
+        if len(ratios) >= 3 and last_ratio > max(float(solver_meta.get('tolerance', 1.0e-4)) * 5.0, 1.0e-6):
+            recent = ratios[-3:]
+            if min(recent) > 0.0 and last_ratio >= min(recent) * 0.98:
+                advice.append(
+                    "Residual reduction stagnated over the last few iterations. Check whether the excavation / activation map really changes between stages and whether the current material parameters are too soft or too strong for the chosen increment size."
+                )
+    if line_search_enabled and alphas and min(alphas) <= 1.0e-3:
+        advice.append(
+            "Line search collapsed to a very small alpha. Reduce the initial increment, keep line search enabled, and consider a lower over_relaxation_factor (about 0.7 to 0.9)."
+        )
+    if any('stagnation' in str(w).lower() for w in warnings):
+        advice.append(
+            "Stagnation was detected. Verify support conditions, stage activation / deactivation, and interface strength reduction before forcing more GPU iterations."
+        )
+    if any('non-finite' in str(w).lower() for w in warnings):
+        advice.append(
+            "A non-finite residual appeared. Check for missing restraints, near-zero stiffness materials, or unrealistic water / surcharge jumps within this stage."
+        )
+    if any('dense' in backend for backend in linear_backends):
+        advice.append(
+            "The stage used a dense linear backend during part of the solve. For small models this can still be fine, but if convergence is poor try the 'cpu-safe' compute profile first to isolate constitutive issues from GPU control-flow overhead."
+        )
+    unique: list[str] = []
+    seen: set[str] = set()
+    for item in advice:
+        key = item.strip().lower()
+        if key and key not in seen:
+            unique.append(item)
+            seen.add(key)
+    return unique
 
 
 class NonlinearHex8Solver:
@@ -105,8 +173,6 @@ class NonlinearHex8Solver:
         self._constant_continuum_backend: dict[str, object] = {'backend': 'unset', 'used_warp': False, 'warnings': []}
         self._current_compute_device: str = 'cpu'
         self._current_solver_metadata: dict[str, Any] = {}
-        self._phase_emitter = None
-        self._gpu_upload_notified = False
 
     def _build_gp_cache(self) -> list[list[tuple[np.ndarray, float]]]:
         cache: dict[tuple[float, ...], list[tuple[np.ndarray, float]]] = {}
@@ -158,6 +224,7 @@ class NonlinearHex8Solver:
                 requested_device=str(compute_device),
                 config=warp_cfg,
                 block_pattern=self._block_pattern,
+                progress_callback=getattr(self, "_progress_callback", None),
             )
             backend = {
                 'backend': str(warp_info.backend),
@@ -234,9 +301,9 @@ class NonlinearHex8Solver:
             F[self._element_edofs[eidx]] += self._body_force_for_element(eidx)
         apply_structural_loads(F, self.submesh, dof_map, loads)
         for load in loads:
-            if load.kind.lower() != 'point_force':
+            if normalize_load_kind(load.kind) != 'point_force':
                 continue
-            target = load.target.lower()
+            target = normalize_boundary_target(load.target)
             if target == 'all':
                 local_ids = np.arange(self.submesh.points.shape[0], dtype=np.int64)
             else:
@@ -294,7 +361,7 @@ class NonlinearHex8Solver:
         total_ndof: int,
         *,
         assemble_tangent: bool = True,
-    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray, list[str]]:
+    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray]:
         trans_ndof = int(self.submesh.points.shape[0] * 3)
         Fint = np.zeros(total_ndof, dtype=float)
         K_const = self._constant_continuum_K.to_csr() if hasattr(self._constant_continuum_K, 'to_csr') else self._constant_continuum_K
@@ -335,7 +402,7 @@ class NonlinearHex8Solver:
         total_ndof: int,
         *,
         assemble_tangent: bool = True,
-    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray, list[str]]:
+    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray]:
         use_sparse = bool(assemble_tangent and self._sp is not None and total_ndof >= 900)
         K = None if not assemble_tangent else (self._sp.csr_matrix((total_ndof, total_ndof), dtype=float) if use_sparse else np.zeros((total_ndof, total_ndof), dtype=float))
         Fint = np.zeros(total_ndof, dtype=float)
@@ -394,10 +461,9 @@ class NonlinearHex8Solver:
         assemble_tangent: bool = True,
         compute_device: str = 'cpu',
         solver_metadata: dict[str, Any] | None = None,
-    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray, list[str]]:
+    ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray]:
         if self._all_linear_elastic and self._constant_continuum_K is not None:
-            K, Fint, trial_states, cell_stress, cell_yield, cell_eqp = self._assemble_linear_continuum_response(du_step_trans, base_states, total_ndof, assemble_tangent=assemble_tangent)
-            return K, Fint, trial_states, cell_stress, cell_yield, cell_eqp, []
+            return self._assemble_linear_continuum_response(du_step_trans, base_states, total_ndof, assemble_tangent=assemble_tangent)
         warp_K, warp_Fint, warp_states, warp_cell_stress, warp_cell_yield, warp_cell_eqp, warp_info = try_warp_nonlinear_continuum_assembly(
             points=self.submesh.points,
             elements=self.submesh.elements,
@@ -410,24 +476,9 @@ class NonlinearHex8Solver:
             solver_metadata=solver_metadata,
             block_pattern=self._block_pattern,
         )
-        cont_warnings = list(getattr(warp_info, 'warnings', []) or [])
-        phase_emit = getattr(self, '_phase_emitter', None)
-        if callable(phase_emit) and bool(getattr(warp_info, 'used', False)) and not bool(getattr(self, '_gpu_upload_notified', False)):
-            upload_mb = float(getattr(warp_info, 'uploaded_bytes', 0) or 0.0) / float(1024 ** 2)
-            upload_seconds = float(getattr(warp_info, 'upload_seconds', 0.0) or 0.0)
-            cache_hit = bool(getattr(warp_info, 'cache_hit', False))
-            try:
-                if cache_hit:
-                    phase_emit('gpu-data-ready', f'Reusing resident GPU data cache on {warp_info.device}', phase_fraction=0.16, gpu_cache='warm', gpu_upload_mb=upload_mb, gpu_upload_seconds=upload_seconds)
-                else:
-                    phase_emit('gpu-data-upload', f'Uploading nonlinear continuum data to {warp_info.device}: {upload_mb:.1f} MB in {upload_seconds:.2f}s', phase_fraction=0.16, gpu_cache='cold', gpu_upload_mb=upload_mb, gpu_upload_seconds=upload_seconds)
-            except Exception:
-                pass
-            self._gpu_upload_notified = True
         if warp_states is not None and warp_Fint is not None and warp_cell_stress is not None and warp_cell_yield is not None and warp_cell_eqp is not None:
-            return warp_K, warp_Fint, warp_states, warp_cell_stress, warp_cell_yield, warp_cell_eqp, cont_warnings
-        K, Fint, trial_states, cell_stress, cell_yield, cell_eqp = self._assemble_generic_continuum_response(du_step_trans, base_states, total_ndof, assemble_tangent=assemble_tangent)
-        return K, Fint, trial_states, cell_stress, cell_yield, cell_eqp, cont_warnings
+            return warp_K, warp_Fint, warp_states, warp_cell_stress, warp_cell_yield, warp_cell_eqp
+        return self._assemble_generic_continuum_response(du_step_trans, base_states, total_ndof, assemble_tangent=assemble_tangent)
 
     def _evaluate_state(
         self,
@@ -444,7 +495,7 @@ class NonlinearHex8Solver:
     ) -> tuple[Any, np.ndarray, list[list[MaterialState]], np.ndarray, np.ndarray, np.ndarray, dict[str, list[InterfaceElementState]], list[str]]:
         warnings: list[str] = []
         du_step = u_guess - u_step_base
-        Kc, Fint_c, trial_states, cell_stress, cell_yield, cell_eqp, continuum_warnings = self._assemble_continuum_response(
+        Kc, Fint_c, trial_states, cell_stress, cell_yield, cell_eqp = self._assemble_continuum_response(
             du_step[: n_nodes * 3],
             base_states,
             ndof,
@@ -452,16 +503,18 @@ class NonlinearHex8Solver:
             compute_device=self._current_compute_device,
             solver_metadata=self._current_solver_metadata,
         )
-        warnings.extend([w for w in continuum_warnings if w])
         Fint = Fint_c.copy()
         K = Kc
         use_sparse = bool(assemble_tangent and self._sp is not None and K is not None and self._sp.issparse(K))
         trans_ndof = n_nodes * 3
 
-        def _materialize_current() -> None:
+        def _materialize_current(force_dense: bool = False) -> None:
             nonlocal K, use_sparse
             if K is not None and hasattr(K, 'to_csr'):
-                K = K.to_csr()
+                if force_dense or self._sp is None:
+                    K = block_values_to_dense(K.pattern, K.host_values(), ndof=int(getattr(K, 'ndof', trans_ndof)))
+                else:
+                    K = K.to_csr()
             use_sparse = bool(assemble_tangent and self._sp is not None and K is not None and self._sp.issparse(K))
 
         if struct_K is not None:
@@ -470,28 +523,48 @@ class NonlinearHex8Solver:
                 if trans_vals.size and np.any(np.abs(trans_vals) > 0.0):
                     Fint[:trans_ndof] += block_values_matvec(struct_K.pattern, trans_vals, u_guess[:trans_ndof], block_size=3, ndof=trans_ndof)
                     if assemble_tangent:
-                        if hasattr(K, 'add_host_values') and bool(self._current_solver_metadata.get('warp_unified_block_merge', True)):
+                        if hasattr(K, 'add_host_values') and bool(self._current_solver_metadata.get('warp_unified_block_merge', True)) and int(getattr(K, 'ndof', trans_ndof)) == trans_ndof:
                             K = K.add_host_values(trans_vals)
                         else:
-                            _materialize_current()
-                            K = K + block_values_to_csr(struct_K.pattern, trans_vals, ndof=trans_ndof)
+                            if self._sp is not None:
+                                _materialize_current()
+                                K = K + block_values_to_csr(struct_K.pattern, trans_vals, ndof=trans_ndof)
+                            else:
+                                _materialize_current(force_dense=True)
+                                K[:trans_ndof, :trans_ndof] += block_values_to_dense(struct_K.pattern, trans_vals, ndof=trans_ndof)
                 tail_K = struct_K.tail_K
                 tail_nnz = getattr(tail_K, 'nnz', None)
                 has_tail = bool(tail_nnz) if tail_nnz is not None else bool(np.any(np.abs(np.asarray(tail_K, dtype=float)) > 0.0))
                 if has_tail:
                     Fint += tail_K @ u_guess
                     if assemble_tangent:
-                        _materialize_current()
-                        K = K + tail_K
+                        if self._sp is not None:
+                            _materialize_current()
+                            K = K + tail_K
+                        else:
+                            _materialize_current(force_dense=True)
+                            K = K + np.asarray(tail_K, dtype=float)
+            elif isinstance(struct_K, StructuralAssemblyResult):
+                dense_K = np.asarray(struct_K.K, dtype=float)
+                if dense_K.ndim == 2 and dense_K.size:
+                    Fint += dense_K @ u_guess
+                    if assemble_tangent:
+                        if use_sparse:
+                            _materialize_current()
+                            K = K + self._sp.csr_matrix(dense_K)
+                        else:
+                            K = K + dense_K
             else:
-                if assemble_tangent and K is not None and hasattr(K, 'to_csr'):
-                    _materialize_current()
-                Fint += struct_K @ u_guess
-                if assemble_tangent:
-                    if use_sparse:
-                        K = K + self._sp.csr_matrix(struct_K)
-                    else:
-                        K = K + struct_K
+                dense_K = np.asarray(struct_K, dtype=float)
+                if dense_K.ndim == 2 and dense_K.size:
+                    if assemble_tangent and K is not None and hasattr(K, 'to_csr'):
+                        _materialize_current()
+                    Fint += dense_K @ u_guess
+                    if assemble_tangent:
+                        if use_sparse:
+                            K = K + self._sp.csr_matrix(dense_K)
+                        else:
+                            K = K + dense_K
 
         iface_trial = _clone_interface_states(local_interface_states)
         if interfaces:
@@ -623,6 +696,7 @@ class NonlinearHex8Solver:
         convergence_history: list[dict[str, float | int | str]] = []
         solver_meta = dict(solver_metadata or {})
         self._current_compute_device = str(compute_device)
+        self._progress_callback = progress_callback
         self._current_solver_metadata = solver_meta
         solver_meta.setdefault('block_size', 3)
         solver_meta.setdefault('preconditioner', 'block-jacobi')
@@ -639,11 +713,25 @@ class NonlinearHex8Solver:
         solver_meta.setdefault('warp_structural_enabled', str(compute_device).lower().startswith('cuda'))
         solver_meta.setdefault('warp_unified_block_merge', True)
         solver_meta.setdefault('stage_state_sync', True)
-        solver_meta.setdefault('line_search_max_iter', 2 if str(compute_device).lower().startswith('cuda') else 6)
-        solver_meta.setdefault('line_search_mode', 'adaptive' if str(compute_device).lower().startswith('cuda') else 'always')
-        solver_meta.setdefault('line_search_eval_limit_seconds', 3.0 if str(compute_device).lower().startswith('cuda') else 10.0)
-        solver_meta.setdefault('line_search_small_step_ratio', 2.0e-4 if str(compute_device).lower().startswith('cuda') else 1.0e-5)
-        solver_meta.setdefault('line_search_accept_ratio', 0.85 if str(compute_device).lower().startswith('cuda') else 0.70)
+        solver_meta.setdefault('line_search_max_iter', 3 if str(compute_device).lower().startswith('cuda') else 6)
+        solver_meta.setdefault('modified_newton_max_reuse', 2 if str(compute_device).lower().startswith('cuda') else 1)
+        solver_meta.setdefault('modified_newton_ratio_threshold', 0.35 if str(compute_device).lower().startswith('cuda') else 0.2)
+        solver_meta.setdefault('modified_newton_min_improvement', 0.15)
+        solver_meta.setdefault('adaptive_increment', True)
+        solver_meta.setdefault('target_iterations', 6 if str(compute_device).lower().startswith('cuda') else 5)
+        solver_meta.setdefault('target_iteration_band_low', 4)
+        solver_meta.setdefault('target_iteration_band_high', 8 if str(compute_device).lower().startswith('cuda') else 7)
+        solver_meta.setdefault('increment_growth', 1.35 if str(compute_device).lower().startswith('cuda') else 1.25)
+        solver_meta.setdefault('increment_shrink', 0.55 if str(compute_device).lower().startswith('cuda') else 0.65)
+        solver_meta.setdefault('line_search_trigger_ratio', 0.65)
+        solver_meta.setdefault('line_search_correction_ratio', 0.18)
+        solver_meta.setdefault('displacement_tolerance_ratio', 5.0e-3)
+        solver_meta.setdefault('predictor_enabled', True)
+        solver_meta.setdefault('strict_accuracy', False)
+        solver_meta.setdefault('log_solver_phases', True)
+        if not bool(solver_meta.get('strict_accuracy', False)) and str(solver_meta.get('compute_profile', '')).lower() in {'gpu-throughput', 'gpu-fullpath'} and tolerance < 1.0e-8:
+            warnings.append(f'Relaxing overly strict tolerance from {tolerance:.1e} to 1.0e-7 for throughput-oriented nonlinear solving.')
+            tolerance = 1.0e-7
 
         pattern_parts: list[np.ndarray] = [np.asarray(self.submesh.elements, dtype=np.int32)]
         for iface in interfaces:
@@ -703,10 +791,35 @@ class NonlinearHex8Solver:
 
         total_steps = max(1, int(n_steps))
         current_lambda = 0.0
-        load_increment = 1.0 / total_steps
+        configured_initial_increment = float(solver_meta.get('initial_increment', max(1.0 / float(total_steps), 1.0e-3)))
+        nonlinear_iterations = max(1, int(max_iterations))
+        min_load_increment = float(solver_meta.get('min_load_increment', max(1.0e-4, min(1.0e-3, configured_initial_increment * 0.25))))
+        max_load_fraction_per_step = float(solver_meta.get('max_load_fraction_per_step', max(configured_initial_increment, 1.0 / float(total_steps))))
+        load_increment = min(max_load_fraction_per_step, max(min_load_increment, configured_initial_increment))
         cutbacks = 0
         step_id = 0
-        nonlinear_iterations = max(1, int(max_iterations))
+        adaptive_increment = bool(solver_meta.get('adaptive_increment', True))
+        increment_growth = float(solver_meta.get('increment_growth', 1.25))
+        increment_shrink = float(solver_meta.get('increment_shrink', 0.75))
+        target_iterations = max(2, int(solver_meta.get('target_iterations', 6)))
+        target_iteration_band_low = max(1, int(solver_meta.get('target_iteration_band_low', max(2, target_iterations - 2))))
+        target_iteration_band_high = max(target_iteration_band_low + 1, int(solver_meta.get('target_iteration_band_high', target_iterations + 2)))
+        line_search_trigger_ratio = float(solver_meta.get('line_search_trigger_ratio', 0.65))
+        line_search_correction_ratio = float(solver_meta.get('line_search_correction_ratio', 0.18))
+        displacement_tolerance_ratio = float(solver_meta.get('displacement_tolerance_ratio', 5.0e-3))
+        predictor_enabled = bool(solver_meta.get('predictor_enabled', True))
+        max_total_steps = int(solver_meta.get('max_total_steps', max(total_steps * max(4, max_cutbacks + 1), total_steps + 24)))
+        stagnation_patience = max(2, int(solver_meta.get('stagnation_patience', 3)))
+        stagnation_improvement_tol = float(solver_meta.get('stagnation_improvement_tol', 0.03))
+        abort_on_step_failure = bool(solver_meta.get('abort_on_step_failure', True))
+        phase_timing_rows: list[dict[str, float | int | str]] = []
+        solve_aborted = False
+        abort_reason = ''
+        previous_step_delta = np.zeros(ndof, dtype=float)
+        previous_step_increment = 0.0
+        converged_iteration_history: list[int] = []
+        successful_increment_history: list[float] = []
+        step_control_trace: list[dict[str, float | int | str]] = []
 
         def _emit_progress(payload: dict[str, Any]) -> None:
             if progress_callback is None:
@@ -726,6 +839,8 @@ class NonlinearHex8Solver:
 
         def _emit_phase(phase: str, message: str, *, lam_base: float | None = None, lam_goal: float | None = None, step: int | None = None, iteration: int | None = None, phase_fraction: float = 0.0, **extra: Any) -> None:
             payload: dict[str, Any] = {'phase': phase, 'message': message}
+            if bool(solver_meta.get('log_solver_phases', True)) and phase in {'solver-setup', 'stage-sync', 'step-start', 'assembly-start', 'assembly-done', 'linear-solve-start', 'linear-solve-done', 'line-search-start', 'line-search-done', 'cutback', 'efficiency-note', 'step-converged', 'step-stopped', 'reuse-tangent', 'tolerance-relaxed'}:
+                payload['log'] = True
             if step is not None:
                 payload['step'] = int(step)
             if iteration is not None:
@@ -737,9 +852,9 @@ class NonlinearHex8Solver:
             payload.update(extra)
             _emit_progress(payload)
 
-        self._phase_emitter = _emit_phase
-        self._gpu_upload_notified = False
-        _emit_phase('solver-setup', f'Preparing nonlinear solver: nodes={n_nodes}, cells={self.submesh.elements.shape[0]}, dof={ndof}, device={compute_device}', lam_base=0.0, lam_goal=1.0, phase_fraction=0.01)
+        _emit_phase('solver-setup', f'Preparing nonlinear solver: nodes={n_nodes}, cells={self.submesh.elements.shape[0]}, dof={ndof}, device={compute_device}, tol={tolerance:.1e}, max_iter={nonlinear_iterations}, initial_increment={configured_initial_increment:.3f}, min_increment={min_load_increment:.1e}, max_increment={max_load_fraction_per_step:.3f}, max_total_steps={max_total_steps}', lam_base=0.0, lam_goal=1.0, phase_fraction=0.01)
+        if any('Relaxing overly strict tolerance' in str(w) for w in warnings):
+            _emit_phase('tolerance-relaxed', warnings[-1], lam_base=0.0, lam_goal=1.0, phase_fraction=0.015)
         if np.linalg.norm(u_committed) > 0.0 and bool(solver_meta.get('stage_state_sync', True)):
             _emit_phase('stage-sync', 'Synchronized committed displacement / state from previous stage', lam_base=0.0, lam_goal=1.0, phase_fraction=0.02, sync_norm=float(np.linalg.norm(u_committed)))
 
@@ -747,15 +862,25 @@ class NonlinearHex8Solver:
             if cancel_check and cancel_check():
                 warnings.append('Solve canceled by user.')
                 break
+            if step_id >= max_total_steps:
+                solve_aborted = True
+                abort_reason = f'Maximum nonlinear step budget reached ({max_total_steps}) at lambda={current_lambda:.4f}; stopping to avoid an endless cutback loop.'
+                warnings.append(abort_reason)
+                _emit_phase('step-stopped', abort_reason, lam_base=current_lambda, lam_goal=max(current_lambda, min(1.0, current_lambda + load_increment)), step=step_id, phase_fraction=0.99, ratio=float(np.inf), log=True)
+                break
             lam_target = min(1.0, current_lambda + load_increment)
             step_id += 1
-            _emit_phase('step-start', f'Starting nonlinear load step {step_id}/{total_steps} at lambda={lam_target:.4f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, phase_fraction=0.02, load_increment=float(load_increment))
+            history_target = float(np.mean(converged_iteration_history[-3:])) if converged_iteration_history else float(target_iterations)
+            _emit_phase('step-start', f'Starting nonlinear load step {step_id}/{total_steps} at lambda={lam_target:.4f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, phase_fraction=0.02, load_increment=float(load_increment), target_iteration_history=float(history_target))
             fixed_dofs, fixed_values = self._dirichlet_data(bcs, scale=lam_target, dof_map=dof_map)
             free = np.setdiff1d(all_dofs, fixed_dofs)
             base_states = _clone_gp_states(gp_states)
             iface_base = _clone_interface_states(interface_states)
             u_step_base = u_committed.copy()
             u_guess = u_step_base.copy()
+            if predictor_enabled and previous_step_increment > 1.0e-12 and np.any(previous_step_delta):
+                predictor_scale = float((lam_target - current_lambda) / max(previous_step_increment, 1.0e-12))
+                u_guess = u_step_base + predictor_scale * previous_step_delta
             if fixed_dofs.size:
                 u_guess[fixed_dofs] = fixed_values
             target = F_total * lam_target
@@ -765,6 +890,10 @@ class NonlinearHex8Solver:
             best_iface = iface_base
             converged = False
             prev_metric = np.inf
+            tangent_cache = None
+            tangent_reuse_left = 0
+            iteration_metrics: list[float] = []
+            step_failure_reason = ''
 
             for it in range(1, max(1, max_iterations) + 1):
                 if cancel_check and cancel_check():
@@ -772,8 +901,12 @@ class NonlinearHex8Solver:
                     break
                 if it == 1 and step_id == 1 and str(compute_device).lower().startswith('cuda'):
                     _emit_phase('gpu-prepare', 'Preparing GPU nonlinear kernels / first-launch cache. The first iteration may take longer.', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.01)
+                assemble_tangent = True
+                if tangent_cache is not None and tangent_reuse_left > 0:
+                    assemble_tangent = False
+                    _emit_phase('reuse-tangent', f'Reusing tangent matrix for iteration {it} (remaining reuse budget={tangent_reuse_left})', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.03, reuse_budget=int(tangent_reuse_left))
                 _emit_phase('iteration-start', f'Iteration {it} started', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.02)
-                _emit_phase('assembly-start', 'Assembling continuum/interface response', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.05)
+                _emit_phase('assembly-start', 'Assembling continuum/interface response', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.05, assemble_tangent=bool(assemble_tangent))
                 assembly_started = time.perf_counter()
                 K, Fint, trial_states, cell_stress, cell_yield, cell_eqp, iface_trial, iter_warnings = self._evaluate_state(
                     u_guess,
@@ -784,11 +917,16 @@ class NonlinearHex8Solver:
                     iface_base,
                     ndof,
                     n_nodes,
-                    assemble_tangent=True,
+                    assemble_tangent=assemble_tangent,
                 )
+                if not assemble_tangent:
+                    K = tangent_cache
+                else:
+                    tangent_cache = K
                 assembly_seconds = time.perf_counter() - assembly_started
                 warnings.extend(iter_warnings)
-                _emit_phase('assembly-done', f'Assembly finished in {assembly_seconds:.2f}s', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.32, assembly_seconds=float(assembly_seconds), warning_count=len(iter_warnings))
+                phase_timing_rows.append({'stage': stage_name or '', 'step': step_id, 'iteration': it, 'phase': 'assembly', 'seconds': float(assembly_seconds), 'tangent_reused': int(not assemble_tangent)})
+                _emit_phase('assembly-done', f'Assembly finished in {assembly_seconds:.2f}s ({"reuse" if not assemble_tangent else "rebuild"})', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.32, assembly_seconds=float(assembly_seconds), warning_count=len(iter_warnings), tangent_reused=int(not assemble_tangent))
                 residual = target - Fint
                 if fixed_dofs.size:
                     residual[fixed_dofs] = 0.0
@@ -813,6 +951,24 @@ class NonlinearHex8Solver:
                         progress_callback(dict(entry))
                     except Exception:
                         pass
+                _emit_phase('iteration-metric', f'Iteration {it}: residual ratio={metric:.3e}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.40, ratio=float(metric), residual_norm=float(rnorm), force_norm=float(fnorm), log=True)
+                iteration_metrics.append(float(metric))
+                if not np.isfinite(metric):
+                    step_failure_reason = f'Non-finite residual ratio detected at step {step_id}, iteration {it}; forcing cutback.'
+                    warnings.append(step_failure_reason)
+                    _emit_phase('step-stagnation', step_failure_reason, lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.41, ratio=float(metric), log=True)
+                    break
+                if len(iteration_metrics) >= stagnation_patience + 1 and metric > max(tolerance * 5.0, 1.0e-10):
+                    recent = np.asarray(iteration_metrics[-(stagnation_patience + 1):], dtype=float)
+                    baseline = float(np.min(recent[:-1]))
+                    if baseline > 0.0 and metric >= baseline * (1.0 - stagnation_improvement_tol):
+                        step_failure_reason = (
+                            f'Stagnation detected at step {step_id}, iteration {it}: ratio={metric:.3e}, '
+                            f'best_recent={baseline:.3e}. Triggering cutback / stop.'
+                        )
+                        warnings.append(step_failure_reason)
+                        _emit_phase('step-stagnation', step_failure_reason, lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.42, ratio=float(metric), log=True)
+                        break
                 if metric < best_metric:
                     best_metric = metric
                     best_u = u_guess.copy()
@@ -828,8 +984,44 @@ class NonlinearHex8Solver:
                     interface_states = iface_trial
                     current_lambda = lam_target
                     _emit_phase('step-converged', f'Step {step_id} converged at iteration {it} with ratio={metric:.3e}', lam_base=max(0.0, current_lambda - max(load_increment, 1.0e-12)), lam_goal=current_lambda, step=step_id, iteration=it, phase_fraction=0.99, ratio=float(metric))
-                    if it <= 3 and load_increment < 0.5:
-                        load_increment = min(1.0 - current_lambda, load_increment * 1.25)
+                    proposed_increment = load_increment
+                    control_reason = 'hold'
+                    converged_iteration_history.append(int(it))
+                    successful_increment_history.append(float(load_increment))
+                    hist_window = converged_iteration_history[-4:]
+                    avg_iters = float(np.mean(hist_window)) if hist_window else float(it)
+                    avg_increment = float(np.mean(successful_increment_history[-4:])) if successful_increment_history else float(load_increment)
+                    if adaptive_increment:
+                        if it <= max(2, target_iteration_band_low - 1) and metric < max(tolerance * 0.25, 1.0e-8):
+                            growth_factor = max(1.05, min(1.6, increment_growth * (target_iterations / max(1.0, avg_iters))))
+                            proposed_increment = min(1.0 - current_lambda, max_load_fraction_per_step, max(avg_increment, load_increment) * growth_factor)
+                            control_reason = 'grow-fast-convergence'
+                        elif it <= target_iteration_band_low and avg_iters <= float(target_iteration_band_low):
+                            proposed_increment = min(1.0 - current_lambda, max_load_fraction_per_step, max(avg_increment, load_increment) * min(1.35, increment_growth))
+                            control_reason = 'grow-history'
+                        elif it >= target_iteration_band_high or avg_iters >= float(target_iteration_band_high):
+                            shrink_factor = max(0.2, min(0.95, increment_shrink * min(1.0, target_iterations / max(avg_iters, 1.0))))
+                            proposed_increment = max(min_load_increment, min(max_load_fraction_per_step, min(avg_increment, load_increment) * shrink_factor))
+                            control_reason = 'shrink-history'
+                        else:
+                            proposed_increment = min(1.0 - current_lambda, max_load_fraction_per_step, max(min_load_increment, load_increment))
+                    elif it <= 3 and load_increment < 0.5:
+                        proposed_increment = min(1.0 - current_lambda, load_increment * 1.25)
+                        control_reason = 'grow-basic'
+                    load_increment = max(min_load_increment, min(max_load_fraction_per_step, proposed_increment))
+                    trace_entry = {
+                        'stage': stage_name or '',
+                        'step': int(step_id),
+                        'lambda': float(current_lambda),
+                        'completed_lambda': float(lam_target),
+                        'iterations': int(it),
+                        'next_increment': float(load_increment),
+                        'previous_increment': float(successful_increment_history[-1]),
+                        'control_reason': control_reason,
+                        'average_iterations': float(avg_iters),
+                    }
+                    step_control_trace.append(trace_entry)
+                    _emit_phase('step-control', f'Adaptive step control selected next increment={load_increment:.4f} ({control_reason})', lam_base=max(0.0, current_lambda - max(successful_increment_history[-1], 1.0e-12)), lam_goal=current_lambda, step=step_id, iteration=it, phase_fraction=0.995, next_increment=float(load_increment), average_iterations=float(avg_iters), control_reason=control_reason, log=True)
                     break
                 if free.size == 0:
                     break
@@ -877,27 +1069,13 @@ class NonlinearHex8Solver:
                     du_full = np.zeros_like(u_guess)
                     du_full[free] = du_free
                 linear_seconds = time.perf_counter() - linear_started
+                phase_timing_rows.append({'stage': stage_name or '', 'step': step_id, 'iteration': it, 'phase': 'linear-solve', 'seconds': float(linear_seconds), 'backend': str(solve_info.backend)})
                 _emit_phase('linear-solve-done', f'Linear solve finished in {linear_seconds:.2f}s using {solve_info.backend}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.78, linear_backend=str(solve_info.backend), linear_seconds=float(linear_seconds))
                 warnings.extend(solve_info.warnings)
                 convergence_history[-1]['linear_backend'] = solve_info.backend
-                du_norm = float(np.linalg.norm(du_free)) if du_free.size else 0.0
-                u_norm = max(1.0, float(np.linalg.norm(u_guess[free])) if free.size else 1.0)
-                ls_mode = str(self._current_solver_metadata.get('line_search_mode', 'always')).lower()
-                ls_small_ratio = float(self._current_solver_metadata.get('line_search_small_step_ratio', 2.0e-4 if str(self._current_compute_device).lower().startswith('cuda') else 1.0e-5))
-                ls_accept_ratio = float(self._current_solver_metadata.get('line_search_accept_ratio', 0.85 if str(self._current_compute_device).lower().startswith('cuda') else 0.70))
-                skip_line_search = not bool(line_search)
-                skip_reason = 'disabled' if skip_line_search else ''
-                if not skip_line_search and ls_mode in {'adaptive', 'gpu-adaptive'}:
-                    if du_norm <= ls_small_ratio * u_norm:
-                        skip_line_search = True
-                        skip_reason = 'small increment'
-                    elif prev_metric < np.inf and metric <= prev_metric * ls_accept_ratio:
-                        skip_line_search = True
-                        skip_reason = 'residual improving with warm start'
-                    elif bool(self._current_solver_metadata.get('stage_state_sync', True)) and step_id > 1 and it == 1:
-                        skip_line_search = True
-                        skip_reason = 'stage-state synchronization warm start'
-                if not skip_line_search:
+                improvement = 0.0 if not np.isfinite(prev_metric) or prev_metric <= 0.0 else max(0.0, (prev_metric - metric) / max(prev_metric, 1.0e-12))
+                skip_line_search = bool(line_search and (np.linalg.norm(du_free) <= 1.0e-10 or metric < float(solver_meta.get('modified_newton_ratio_threshold', 0.35)) or improvement >= 0.35))
+                if line_search and not skip_line_search:
                     _emit_phase('line-search-start', 'Running line search', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.82)
                     ls_started = time.perf_counter()
                     u_next, alpha, ls_warnings = self._line_search(
@@ -915,39 +1093,101 @@ class NonlinearHex8Solver:
                         iface_base,
                         ndof,
                         n_nodes,
-                        max_iter=int(self._current_solver_metadata.get('line_search_max_iter', 2 if str(self._current_compute_device).lower().startswith('cuda') else 6)),
+                        max_iter=int(self._current_solver_metadata.get('line_search_max_iter', 3 if str(self._current_compute_device).lower().startswith('cuda') else 6)),
                         progress_hook=lambda ls_iter, ls_total, ls_alpha: _emit_phase('line-search-trial', f'Line search trial {ls_iter}/{ls_total} alpha={ls_alpha:.3f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=min(0.93, 0.82 + 0.1 * (ls_iter / max(1, ls_total))), line_search_trial=int(ls_iter), line_search_total=int(ls_total), line_search_alpha=float(ls_alpha)),
                     )
                     ls_seconds = time.perf_counter() - ls_started
                     warnings.extend(ls_warnings)
+                    phase_timing_rows.append({'stage': stage_name or '', 'step': step_id, 'iteration': it, 'phase': 'line-search', 'seconds': float(ls_seconds), 'alpha': float(alpha)})
                     _emit_phase('line-search-done', f'Line search finished in {ls_seconds:.2f}s with alpha={alpha:.2f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.94, line_search_alpha=float(alpha), line_search_seconds=float(ls_seconds), line_search_warning_count=len(ls_warnings))
                     convergence_history[-1]['line_search_alpha'] = float(alpha)
                     u_guess = u_next
                 else:
-                    _emit_phase('line-search-skip', f'Skipping line search: {skip_reason}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.90, step_norm=float(du_norm))
+                    if line_search:
+                        _emit_phase('line-search-done', 'Line search skipped because the Newton update already looks acceptable.', lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.90, line_search_alpha=1.0, skipped=True)
+                        convergence_history[-1]['line_search_alpha'] = 1.0
                     u_guess[free] += du_free
+                    alpha = 1.0
                 if fixed_dofs.size:
                     u_guess[fixed_dofs] = fixed_values
-                prev_metric = float(metric)
+                if line_search and alpha <= 1.0e-3 and metric > max(tolerance * 10.0, 1.0e-6):
+                    step_failure_reason = (
+                        f'Line search collapsed to alpha={alpha:.3e} at step {step_id}, iteration {it} with ratio={metric:.3e}; '
+                        'forcing cutback / stop.'
+                    )
+                    warnings.append(step_failure_reason)
+                    _emit_phase('step-stagnation', step_failure_reason, lam_base=current_lambda, lam_goal=lam_target, step=step_id, iteration=it, phase_fraction=0.95, ratio=float(metric), line_search_alpha=float(alpha), log=True)
+                    break
+                improvement_for_reuse = 0.0 if not np.isfinite(prev_metric) or prev_metric <= 0.0 else max(0.0, (prev_metric - metric) / max(prev_metric, 1.0e-12))
+                if metric < float(solver_meta.get('modified_newton_ratio_threshold', 0.35)) or improvement_for_reuse >= float(solver_meta.get('modified_newton_min_improvement', 0.15)):
+                    tangent_reuse_left = max(0, int(solver_meta.get('modified_newton_max_reuse', 0)))
+                else:
+                    tangent_reuse_left = 0
+                if not assemble_tangent and tangent_reuse_left > 0:
+                    tangent_reuse_left -= 1
+                prev_metric = metric
 
             if not converged:
-                if cutbacks < max_cutbacks and load_increment > 1.0e-3:
+                can_cutback = cutbacks < max_cutbacks and load_increment > min_load_increment + 1.0e-12
+                if can_cutback:
                     cutbacks += 1
-                    load_increment *= 0.5
-                    warnings.append(f'Nonlinear step cutback triggered at lambda={lam_target:.4f}; retrying with increment={load_increment:.4f}.')
-                    _emit_phase('cutback', f'Cutback triggered; retrying step with increment={load_increment:.4f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, phase_fraction=0.98, load_increment=float(load_increment))
+                    load_increment = max(min_load_increment, min(max_load_fraction_per_step, load_increment * 0.5))
+                    reason_text = step_failure_reason or f'Nonlinear step did not converge at lambda={lam_target:.4f}; retrying with increment={load_increment:.4f}.'
+                    warnings.append(reason_text)
+                    step_control_trace.append({
+                        'stage': stage_name or '',
+                        'step': int(step_id),
+                        'lambda': float(current_lambda),
+                        'attempted_lambda': float(lam_target),
+                        'iterations': int(max(1, len(iteration_metrics))),
+                        'next_increment': float(load_increment),
+                        'control_reason': 'cutback',
+                        'best_ratio': float(best_metric),
+                    })
+                    _emit_phase('cutback', f'Cutback triggered; retrying step with increment={load_increment:.4f}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, phase_fraction=0.98, load_increment=float(load_increment), reason=reason_text, ratio=float(best_metric), log=True)
                     step_id -= 1
                     continue
-                warnings.append(f'Nonlinear solve stopped without convergence at lambda={lam_target:.4f}; best ratio={best_metric:.3e}.')
-                _emit_phase('step-stopped', f'Step {step_id} stopped without convergence; best ratio={best_metric:.3e}', lam_base=current_lambda, lam_goal=lam_target, step=step_id, phase_fraction=0.99, ratio=float(best_metric))
+                stop_reason = step_failure_reason or f'Nonlinear step failed to converge at lambda={lam_target:.4f}; best ratio={best_metric:.3e}.'
+                warnings.append(stop_reason)
+                _emit_phase('step-stopped', stop_reason, lam_base=current_lambda, lam_goal=lam_target, step=step_id, phase_fraction=0.99, ratio=float(best_metric), log=True)
                 u_committed = best_u
                 gp_states = best_states
                 interface_states = best_iface
+                if abort_on_step_failure:
+                    solve_aborted = True
+                    abort_reason = stop_reason
+                    break
                 current_lambda = lam_target
 
+        if phase_timing_rows:
+            total_assembly = sum(float(r.get('seconds', 0.0)) for r in phase_timing_rows if r.get('phase') == 'assembly')
+            total_linear = sum(float(r.get('seconds', 0.0)) for r in phase_timing_rows if r.get('phase') == 'linear-solve')
+            total_ls = sum(float(r.get('seconds', 0.0)) for r in phase_timing_rows if r.get('phase') == 'line-search')
+            warnings.append(f'Nonlinear timing summary: assembly={total_assembly:.2f}s, linear_solve={total_linear:.2f}s, line_search={total_ls:.2f}s.')
+            _emit_phase('solver-summary', f'Nonlinear timing summary | assembly={total_assembly:.2f}s | linear={total_linear:.2f}s | line_search={total_ls:.2f}s', lam_base=current_lambda, lam_goal=max(current_lambda, 1.0), phase_fraction=0.995, log=True)
+            convergence_history.extend(phase_timing_rows)
         u_nodes = u_committed[:trans_ndof].reshape(n_nodes, 3)
         structural_rot = dof_map.structural_rotation_field(n_nodes, u_committed)
-        self._phase_emitter = None
+        if solve_aborted and abort_reason:
+            convergence_history.append({
+                'stage': stage_name or '',
+                'step': int(step_id),
+                'lambda': float(current_lambda),
+                'phase': 'aborted',
+                'message': abort_reason,
+            })
+        convergence_advice = [] if ((not solve_aborted) and current_lambda >= 1.0 - 1.0e-9) else _build_stage_failure_advice(
+            stage_name=str(stage_name or ''),
+            solver_meta=solver_meta,
+            completed_lambda=float(current_lambda),
+            best_metric=float(best_metric if np.isfinite(best_metric) else np.inf),
+            total_steps_taken=int(step_id),
+            cutbacks=int(cutbacks),
+            convergence_history=convergence_history,
+            warnings=warnings,
+        )
+        for advice_text in convergence_advice:
+            _emit_phase('solver-advice', advice_text, lam_base=current_lambda, lam_goal=max(current_lambda, 1.0), phase_fraction=0.997, log=True)
         return NonlinearSolveResult(
             u_nodes=u_nodes,
             structural_rotations=structural_rot,
@@ -960,4 +1200,9 @@ class NonlinearHex8Solver:
             warnings=warnings,
             dof_map=dof_map,
             convergence_history=convergence_history,
+            convergence_advice=convergence_advice,
+            step_control_trace=step_control_trace,
+            converged=bool((not solve_aborted) and current_lambda >= 1.0 - 1.0e-9),
+            completed_lambda=float(current_lambda),
+            total_steps_taken=int(step_id),
         )

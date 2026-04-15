@@ -380,7 +380,41 @@ class SimulationModel:
         for item in self.object_records:
             if item.key == key:
                 return item
+        for item in self.object_records:
+            if item.name == key or item.source_block == key:
+                return item
         return None
+
+    def object_record_for_key(self, key: str) -> GeometryObjectRecord | None:
+        """Backward-compatible alias used by older GUI/demo code paths."""
+        return self.object_record(key)
+
+    def geometry_state(self) -> str:
+        state = str(self.metadata.get('geometry_state') or '').strip().lower()
+        if state:
+            return state
+        data = self.mesh
+        try:
+            if isinstance(data, pv.MultiBlock):
+                has_volume = any(getattr(data[k], 'volume', 0.0) not in (0, None) for k in data.keys() if data[k] is not None)
+                return 'meshed' if has_volume else 'geometry'
+            return 'meshed' if float(getattr(data, 'volume', 0.0) or 0.0) > 0.0 else 'geometry'
+        except Exception:
+            return 'geometry'
+
+    def has_volume_mesh(self) -> bool:
+        return self.geometry_state() == 'meshed'
+
+    def set_geometry_state(self, state: str) -> None:
+        self.metadata['geometry_state'] = str(state or 'geometry').strip().lower() or 'geometry'
+
+    def meshing_object_records(self, only_material_bound: bool = True) -> list[GeometryObjectRecord]:
+        if not only_material_bound:
+            return list(self.object_records)
+        bound_regions = {item.region_name for item in self.materials if item.region_name}
+        if not bound_regions:
+            return list(self.object_records)
+        return [obj for obj in self.object_records if obj.region_name in bound_regions]
 
     def objects_for_region(self, region_name: str) -> list[GeometryObjectRecord]:
         return [obj for obj in self.object_records if obj.region_name == region_name]
@@ -407,19 +441,35 @@ class SimulationModel:
     def structures_for_stage(self, stage_name: str | None) -> list[StructuralElementDefinition]:
         if stage_name is None:
             return list(self.structures)
+        stage = self.stage_by_name(stage_name)
+        stage_meta = stage.metadata if stage is not None and isinstance(stage.metadata, dict) else {}
+        enabled_groups = stage_meta.get('active_support_groups')
+        enabled_group_set = {str(item) for item in enabled_groups} if isinstance(enabled_groups, (list, tuple, set)) else None
         out = []
         for item in self.structures:
-            if not item.active_stages or stage_name in item.active_stages:
-                out.append(item)
+            if item.active_stages and stage_name not in item.active_stages:
+                continue
+            group = item.metadata.get('support_group') if isinstance(item.metadata, dict) else None
+            if enabled_group_set is not None and group is not None and str(group) not in enabled_group_set:
+                continue
+            out.append(item)
         return out
 
     def interfaces_for_stage(self, stage_name: str | None) -> list[InterfaceDefinition]:
         if stage_name is None:
             return list(self.interfaces)
+        stage = self.stage_by_name(stage_name)
+        stage_meta = stage.metadata if stage is not None and isinstance(stage.metadata, dict) else {}
+        enabled_groups = stage_meta.get('active_interface_groups')
+        enabled_group_set = {str(item) for item in enabled_groups} if isinstance(enabled_groups, (list, tuple, set)) else None
         out = []
         for item in self.interfaces:
-            if not item.active_stages or stage_name in item.active_stages:
-                out.append(item)
+            if item.active_stages and stage_name not in item.active_stages:
+                continue
+            group = item.metadata.get('wall_contact_group') if isinstance(item.metadata, dict) else None
+            if enabled_group_set is not None and group is not None and str(group) not in enabled_group_set:
+                continue
+            out.append(item)
         return out
 
     def list_result_labels(self) -> list[str]:
