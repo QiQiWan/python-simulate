@@ -16,3 +16,12 @@ def test_stage_manager_honors_activation_map_metadata() -> None:
     contexts = StageManager(model).iter_stages()
     assert contexts[0].active_regions == {'soil', 'wall'}
     assert contexts[1].active_regions == {'wall'}
+
+
+
+def test_rename_region_rewrites_activation_map_metadata() -> None:
+    model = SimulationModel(name='x', mesh=DummyMesh())
+    model.add_material('soil excavation 1', 'linear_elastic', E=1.0, nu=0.2)
+    model.add_stage(AnalysisStage(name='initial', metadata={'activation_map': {'soil excavation 1': True}}))
+    model.rename_region('soil excavation 1', 'soil_excavation_1')
+    assert model.stages[0].metadata['activation_map'] == {'soil_excavation_1': True}

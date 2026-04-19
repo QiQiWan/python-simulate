@@ -1,0 +1,59 @@
+{
+  "ok": true,
+  "summary": {
+    "case_name": "pit-demo",
+    "n_regions": 4,
+    "n_material_bindings": 4,
+    "n_stages": 4,
+    "n_interfaces": 12,
+    "n_structures": 8,
+    "n_region_adjacencies": 5,
+    "n_boundary_adjacencies": 5,
+    "n_region_surfaces": 4,
+    "n_interface_candidates": 5,
+    "n_node_split_plans": 12,
+    "n_suggested_duplicate_points": 136,
+    "n_interface_face_groups": 8,
+    "n_interface_face_elements": 48,
+    "n_interface_elements": 48,
+    "n_points": 693,
+    "n_cells": 480,
+    "n_boundary_conditions": 5,
+    "n_generated_structures": 8,
+    "n_generated_interfaces": 12,
+    "n_stage_loads": 0,
+    "n_stage_boundary_conditions": 0,
+    "interface_face_total_area": 604.7999954223633,
+    "interface_node_split_mode": "plan",
+    "interface_duplicate_side": "slave",
+    "interface_element_mode": "explicit",
+    "interface_ready_applied": false,
+    "interface_ready_duplicated_point_count": 0,
+    "interface_ready_updated_interface_count": 0
+  },
+  "issues": [
+    {
+      "level": "warning",
+      "code": "interface_node_split_recommended",
+      "message": "12 interface(s) would benefit from node splitting before interface assembly.",
+      "hint": "Review preprocess-case/export-preprocess output and duplicate interface-side nodes in the preprocessor stage.",
+      "metadata": {
+        "interfaces": [
+          "pit_outer_xmin",
+          "pit_outer_xmax",
+          "pit_outer_ymin",
+          "pit_outer_ymax",
+          "pit_inner_upper_xmin",
+          "pit_inner_upper_xmax",
+          "pit_inner_upper_ymin",
+          "pit_inner_upper_ymax",
+          "pit_inner_lower_xmin",
+          "pit_inner_lower_xmax",
+          "pit_inner_lower_ymin",
+          "pit_inner_lower_ymax"
+        ],
+        "duplicate_side": "slave"
+      }
+    }
+  ]
+}

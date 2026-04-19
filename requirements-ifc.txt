@@ -1,1 +1,0 @@
-ifcopenshell>=0.8.4

@@ -33,6 +33,7 @@ class MeshEngineOptions:
     only_material_bound_geometry: bool = True
     keep_geometry_copy: bool = True
     max_workers: int = 0
+    allow_family_fallback: bool = True
 
 
 @dataclass(slots=True)
@@ -46,8 +47,24 @@ class MeshingTarget:
     object_density: int = 1
     target_size: float = 2.0
     strategy: str = 'uniform'
+    preferred_family: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
+
+
+
+def _default_merge_group(region_name: str, role: str, material_name: str | None) -> str:
+    rname = str(region_name or '').strip().lower()
+    rrole = str(role or '').strip().lower()
+    if rrole in {'soil', 'ground', 'excavation', 'fill'}:
+        return 'continuum_soil'
+    if rname.startswith('soil') or 'excavat' in rname or rname in {'ground', 'fill'}:
+        return 'continuum_soil'
+    if rrole in {'wall', 'support', 'beam', 'plate', 'shell', 'interface'}:
+        return rname or rrole or 'default'
+    if material_name and str(material_name).strip().lower() in {'mohr_coulomb', 'hss', 'hs_small', 'linear_elastic_soil'}:
+        return 'continuum_soil'
+    return rname or 'default'
 
 def normalize_element_family(value: str | None) -> str:
     text = str(value or 'auto').strip().lower()
@@ -113,6 +130,38 @@ class MeshEngine:
             bbox = self._safe_bounds(block)
             density = self._object_density(key, bbox, bboxes)
             target_size, strategy = self._target_size_for(region_name, role, material_name, density)
+            preferred_family = None
+            metadata = {
+                'n_source_cells': int(getattr(block, 'n_cells', 0) or 0),
+                'n_source_points': int(getattr(block, 'n_points', 0) or 0),
+                'mesh_merge_group': _default_merge_group(region_name, role, material_name),
+            }
+            if rec is not None:
+                mesh_control = dict(rec.metadata.get('mesh_control') or {})
+                if mesh_control.get('enabled', True):
+                    requested_family = normalize_element_family(mesh_control.get('element_family')) if mesh_control.get('element_family') else None
+                    if requested_family in {'tet4', 'hex8', 'auto'}:
+                        preferred_family = requested_family
+                        metadata['mesh_control_family'] = requested_family
+                    try:
+                        manual_size = float(mesh_control.get('target_size')) if mesh_control.get('target_size') not in (None, '', 0) else None
+                    except Exception:
+                        manual_size = None
+                    if manual_size is not None and manual_size > 0:
+                        target_size = max(0.01, manual_size)
+                        strategy = f'object-override:size={target_size:g}'
+                        metadata['mesh_control_size'] = target_size
+                    try:
+                        manual_ratio = float(mesh_control.get('refinement_ratio')) if mesh_control.get('refinement_ratio') not in (None, '') else None
+                    except Exception:
+                        manual_ratio = None
+                    if manual_ratio is not None:
+                        metadata['mesh_control_refinement_ratio'] = manual_ratio
+                else:
+                    metadata['mesh_control_disabled'] = True
+                merge_group = rec.metadata.get('mesh_merge_group')
+                if merge_group not in (None, ''):
+                    metadata['mesh_merge_group'] = str(merge_group)
             targets.append(
                 MeshingTarget(
                     block_key=key,
@@ -124,10 +173,8 @@ class MeshEngine:
                     object_density=density,
                     target_size=target_size,
                     strategy=strategy,
-                    metadata={
-                        'n_source_cells': int(getattr(block, 'n_cells', 0) or 0),
-                        'n_source_points': int(getattr(block, 'n_points', 0) or 0),
-                    },
+                    preferred_family=preferred_family,
+                    metadata=metadata,
                 )
             )
         return targets
@@ -145,6 +192,7 @@ class MeshEngine:
         meshed_blocks = pv.MultiBlock() if hasattr(pv, 'MultiBlock') else {}
         meshed_regions = []
         warnings: list[str] = []
+        completed_targets: list[dict[str, Any]] = []
         total = len(targets)
         geometry_snapshot = self._copy_data(source_data) if self.options.keep_geometry_copy else None
         self._emit('mesh-engine-start', 5, f'Geometry-first meshing started for {total} target(s).', object_count=total, log=True)
@@ -154,11 +202,12 @@ class MeshEngine:
         for index, target in enumerate(targets, start=1):
             block = blocks[target.block_key] if blocks is not None else source_data
             phase_prefix = f'[{index}/{total}] {target.region_name}'
+            target_family = normalize_element_family(target.preferred_family or element_family)
             self._emit(
                 'mesh-engine-target',
                 10 + int(70.0 * max(index - 1, 0) / max(total, 1)),
-                f'{phase_prefix}: meshing as {element_family} with target size {target.target_size:g} ({target.strategy}).',
-                target=self._target_payload(target),
+                f'{phase_prefix}: meshing as {target_family} with target size {target.target_size:g} ({target.strategy}).',
+                target=self._target_payload(target, requested_family=target_family),
                 log=True,
             )
             temp_model = SimulationModel(name=target.region_name, mesh=self._copy_data(block) or block)
@@ -166,14 +215,18 @@ class MeshEngine:
             temp_model.metadata['source_block'] = target.block_key
             temp_model.materials = [binding for binding in model.materials if binding.region_name == target.region_name]
             try:
-                meshed = self._mesh_single_target(temp_model, target, element_family)
+                mesh_result = self._mesh_single_target(temp_model, target, target_family)
+                if isinstance(mesh_result, tuple):
+                    meshed, actual_family, fallback_reason = mesh_result
+                else:
+                    meshed, actual_family, fallback_reason = mesh_result, target_family, None
             except Exception as exc:
                 warnings.append(f'{target.region_name}: {exc}')
                 self._emit(
                     'mesh-engine-target-failed',
                     10 + int(70.0 * index / max(total, 1)),
                     f'{phase_prefix}: {exc}',
-                    target=self._target_payload(target),
+                    target=self._target_payload(target, requested_family=target_family),
                     severity='warning',
                     log=True,
                 )
@@ -183,15 +236,20 @@ class MeshEngine:
                 warnings.append(f'{target.region_name}: meshing returned an empty grid')
                 continue
             result_grid.field_data['region_name'] = np.array([target.region_name])
+            result_grid.field_data['mesh_family'] = np.array([actual_family])
             result_grid.cell_data['region_name'] = np.array([target.region_name] * int(result_grid.n_cells))
             meshed_blocks[target.region_name] = result_grid
-            meshed_regions.append(RegionTag(name=target.region_name, cell_ids=np.arange(cell_offset, cell_offset + int(result_grid.n_cells), dtype=np.int64), metadata={'source': target.block_key, 'strategy': target.strategy, 'target_size': target.target_size}))
+            payload = self._target_payload(target, requested_family=target_family, actual_family=actual_family, fallback_reason=fallback_reason)
+            payload['n_cells'] = int(result_grid.n_cells)
+            payload['n_points'] = int(result_grid.n_points)
+            completed_targets.append(payload)
+            meshed_regions.append(RegionTag(name=target.region_name, cell_ids=np.arange(cell_offset, cell_offset + int(result_grid.n_cells), dtype=np.int64), metadata={'source': target.block_key, 'strategy': target.strategy, 'target_size': target.target_size, 'requested_family': target_family, 'actual_family': actual_family, 'fallback_reason': fallback_reason or ''}))
             cell_offset += int(result_grid.n_cells)
             self._emit(
                 'mesh-engine-target-done',
                 10 + int(70.0 * index / max(total, 1)),
-                f'{phase_prefix}: produced {int(result_grid.n_cells)} cells / {int(result_grid.n_points)} points.',
-                target=self._target_payload(target),
+                f'{phase_prefix}: produced {int(result_grid.n_cells)} cells / {int(result_grid.n_points)} points using {actual_family}.',
+                target=self._target_payload(target, requested_family=target_family, actual_family=actual_family, fallback_reason=fallback_reason),
                 log=True,
             )
 
@@ -199,9 +257,68 @@ class MeshEngine:
             detail = '\n'.join(warnings[:8]) if warnings else 'Meshing did not produce any volume cells.'
             raise RuntimeError(detail)
 
+        grouped_blocks: dict[str, list[tuple[MeshingTarget, Any, dict[str, Any], str, str | None]]] = {}
+        for target in targets:
+            region_name = target.region_name
+            if region_name not in meshed_blocks.keys():
+                continue
+            payload = next((item for item in completed_targets if item.get('region_name') == region_name), None)
+            if payload is None:
+                continue
+            actual_family = str(payload.get('actual_family') or normalize_element_family(target.preferred_family or element_family))
+            fallback_reason = payload.get('fallback_reason')
+            merge_group = str((target.metadata or {}).get('mesh_merge_group') or region_name)
+            grouped_blocks.setdefault(merge_group, []).append((target, meshed_blocks[region_name], payload, actual_family, fallback_reason))
+
+        final_blocks = pv.MultiBlock() if hasattr(pv, 'MultiBlock') else {}
+        final_regions = []
+        cell_offset = 0
+        for merge_group, items in grouped_blocks.items():
+            block_names = [item[0].region_name for item in items]
+            merge_points = len(items) > 1 and merge_group == 'continuum_soil'
+            if len(items) == 1:
+                combined = items[0][1]
+            else:
+                temp = pv.MultiBlock() if hasattr(pv, 'MultiBlock') else {}
+                for idx, (_, block, _, _, _) in enumerate(items):
+                    name = block_names[idx]
+                    try:
+                        temp[name] = block
+                    except Exception:
+                        temp[str(idx)] = block
+                combined = temp.combine(merge_points=merge_points).cast_to_unstructured_grid() if hasattr(temp, 'combine') else next(iter(temp.values()))
+            try:
+                final_blocks[merge_group] = combined
+            except Exception:
+                final_blocks[str(len(getattr(final_blocks, 'keys', lambda: [])()))] = combined
+            local_offset = 0
+            for target, block, payload, actual_family, fallback_reason in items:
+                n_cells = int(getattr(block, 'n_cells', 0) or 0)
+                final_regions.append(RegionTag(name=target.region_name, cell_ids=np.arange(cell_offset + local_offset, cell_offset + local_offset + n_cells, dtype=np.int64), metadata={
+                    'source': target.block_key,
+                    'strategy': target.strategy,
+                    'target_size': target.target_size,
+                    'requested_family': str(payload.get('requested_family') or normalize_element_family(target.preferred_family or element_family)),
+                    'actual_family': actual_family,
+                    'fallback_reason': fallback_reason or '',
+                    'mesh_merge_group': merge_group,
+                }))
+                local_offset += n_cells
+            if merge_points:
+                self._emit(
+                    'mesh-engine-merge-group',
+                    88,
+                    f"Merged {len(items)} region(s) into '{merge_group}' with shared-point welding: {', '.join(block_names)}.",
+                    merge_group=merge_group,
+                    regions=block_names,
+                    merge_points=True,
+                    log=True,
+                )
+            cell_offset += int(getattr(combined, 'n_cells', 0) or 0)
+
         out_model = model
-        out_model.mesh = meshed_blocks if len(meshed_blocks.keys()) > 1 else next((meshed_blocks[k] for k in meshed_blocks.keys()), source_data)
-        out_model.region_tags = meshed_regions
+        out_model.mesh = final_blocks if len(final_blocks.keys()) > 1 else next((final_blocks[k] for k in final_blocks.keys()), source_data)
+        out_model.region_tags = final_regions
         out_model.metadata['geometry_state'] = 'meshed'
         out_model.metadata['meshed_by'] = f'geometry_engine::{element_family}'
         out_model.metadata['mesh_engine'] = {
@@ -212,9 +329,14 @@ class MeshEngine:
             'refinement_ratio': float(self.options.refinement_ratio),
             'refinement_trigger_count': int(self.options.refinement_trigger_count),
             'only_material_bound_geometry': bool(self.options.only_material_bound_geometry),
+            'allow_family_fallback': bool(self.options.allow_family_fallback),
             'target_count': total,
             'warnings': warnings,
             'targets': [self._target_payload(target) for target in targets],
+            'completed_targets': completed_targets,
+            'actual_families': sorted({str(item.get('actual_family') or '') for item in completed_targets if item.get('actual_family')}),
+            'merge_groups': {group: [entry[0].region_name for entry in items] for group, items in grouped_blocks.items()},
+            'shared_point_weld_groups': [group for group, items in grouped_blocks.items() if group == 'continuum_soil' and len(items) > 1],
         }
         if geometry_snapshot is not None:
             out_model.metadata['geometry_snapshot'] = 'available'
@@ -224,8 +346,42 @@ class MeshEngine:
         self._emit('mesh-engine-finished', 92, f'Meshing finished with {len(meshed_regions)} region(s).', summary=out_model.metadata['mesh_engine'], log=True)
         return out_model
 
-    def _target_payload(self, target: MeshingTarget) -> dict[str, Any]:
-        return asdict(target)
+    def _target_payload(
+        self,
+        target: MeshingTarget,
+        *,
+        requested_family: str | None = None,
+        actual_family: str | None = None,
+        fallback_reason: str | None = None,
+    ) -> dict[str, Any]:
+        payload = asdict(target)
+        if requested_family is not None:
+            payload['requested_family'] = requested_family
+        if actual_family is not None:
+            payload['actual_family'] = actual_family
+        if fallback_reason:
+            payload['fallback_reason'] = fallback_reason
+        return payload
+
+
+
+    def _tetrahedralize_volume_block(self, block: Any) -> Any | None:
+        try:
+            if block is None or not hasattr(block, 'triangulate'):
+                return None
+            n_cells = int(getattr(block, 'n_cells', 0) or 0)
+            if n_cells <= 0:
+                return None
+            celltypes = {int(v) for v in np.asarray(getattr(block, 'celltypes', []), dtype=np.int32)}
+            if not celltypes or not celltypes.issubset({10, 11, 12, 13, 14, 24, 25}):
+                return None
+            tetra = block.triangulate().cast_to_unstructured_grid()
+            tetra_types = {int(v) for v in np.asarray(getattr(tetra, 'celltypes', []), dtype=np.int32)}
+            if int(getattr(tetra, 'n_cells', 0) or 0) <= 0 or not tetra_types or not tetra_types.issubset({10, 24}):
+                return None
+            return tetra
+        except Exception:
+            return None
 
     def _copy_data(self, data: Any) -> Any:
         if data is None or not hasattr(data, 'copy'):
@@ -240,39 +396,48 @@ class MeshEngine:
         except Exception:
             return None
 
-    def _mesh_single_target(self, model: SimulationModel, target: MeshingTarget, element_family: str) -> SimulationModel:
+    def _mesh_single_target(self, model: SimulationModel, target: MeshingTarget, element_family: str) -> tuple[SimulationModel, str, str | None]:
         if element_family == 'hex8':
-            from geoai_simkit.geometry.voxelize import VoxelMesher, VoxelizeOptions
-            return VoxelMesher(
-                VoxelizeOptions(
-                    cell_size=float(target.target_size),
-                    padding=float(self.options.padding),
-                    worker_count=max(1, int(self.options.max_workers or 0)),
-                ),
-                progress_callback=self._forward_nested,
-                log_callback=self.log_callback,
-            ).voxelize_model(model)
+            return self._voxelize_target(model, target), 'hex8', None
+        if element_family == 'tet4':
+            direct_tet = self._tetrahedralize_volume_block(model.mesh)
+            if direct_tet is not None:
+                model.mesh = direct_tet
+                model.metadata.setdefault('mesh_summary', {})['method'] = 'vtk_triangulate_tet4'
+                return model, 'tet4', None
         try:
             from geoai_simkit.geometry.gmsh_mesher import GmshMesher, GmshMesherOptions
-            return GmshMesher(
+            meshed = GmshMesher(
                 GmshMesherOptions(element_size=float(target.target_size)),
                 progress_callback=self._forward_nested,
                 log_callback=self.log_callback,
             ).mesh_model(model)
-        except Exception:
-            if element_family == 'tet4':
+            return meshed, 'tet4', None
+        except Exception as exc:
+            if element_family == 'tet4' and not self.options.allow_family_fallback:
                 raise
-            from geoai_simkit.geometry.voxelize import VoxelMesher, VoxelizeOptions
-            self._emit('mesh-engine-fallback', None, f'{target.region_name}: tetra meshing failed, falling back to hex8 voxelization.', target=self._target_payload(target), severity='warning', log=True)
-            return VoxelMesher(
-                VoxelizeOptions(
-                    cell_size=float(target.target_size),
-                    padding=float(self.options.padding),
-                    worker_count=max(1, int(self.options.max_workers or 0)),
-                ),
-                progress_callback=self._forward_nested,
-                log_callback=self.log_callback,
-            ).voxelize_model(model)
+            reason = str(exc).strip() or exc.__class__.__name__
+            self._emit(
+                'mesh-engine-fallback',
+                None,
+                f'{target.region_name}: tet4 meshing unavailable or failed ({reason}); falling back to hex8 voxelization.',
+                target=self._target_payload(target, requested_family=element_family, actual_family='hex8', fallback_reason=reason),
+                severity='warning',
+                log=True,
+            )
+            return self._voxelize_target(model, target), 'hex8', reason
+
+    def _voxelize_target(self, model: SimulationModel, target: MeshingTarget) -> SimulationModel:
+        from geoai_simkit.geometry.voxelize import VoxelMesher, VoxelizeOptions
+        return VoxelMesher(
+            VoxelizeOptions(
+                cell_size=float(target.target_size),
+                padding=float(self.options.padding),
+                worker_count=max(1, int(self.options.max_workers or 0)),
+            ),
+            progress_callback=self._forward_nested,
+            log_callback=self.log_callback,
+        ).voxelize_model(model)
 
     def _forward_nested(self, payload: dict[str, Any]) -> None:
         if isinstance(payload, dict):

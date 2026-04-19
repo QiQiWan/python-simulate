@@ -38,8 +38,10 @@ def test_build_demo_stages_uses_selected_solver_preset():
     model.metadata['demo_solver_preset'] = 'conservative'
     wall_mode = configure_demo_coupling(model, prefer_wall_solver=True, auto_supports=True, interface_policy='manual_like_nearest_soil')
     stages = build_demo_stages(model, wall_active=(wall_mode in {'auto_interface', 'plaxis_like_auto'}))
+    assert [stage.name for stage in stages] == ['initial', 'wall_activation', 'excavate_level_1', 'excavate_level_2']
     assert stages[0].metadata['solver_preset'] == 'conservative'
-    assert stages[0].metadata['initial_increment'] <= 0.00625
+    assert stages[0].metadata['initial_increment'] >= 0.00625
+    assert stages[1].metadata['initial_increment'] <= 0.00625
     assert stages[1].metadata['max_cutbacks'] >= 8
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from geoai_simkit.runtime import CompileConfig, RuntimeConfig, SolverPolicy
 from geoai_simkit.solver.gpu_runtime import choose_cuda_device, detect_cuda_devices
 from geoai_simkit.solver.linear_algebra import default_thread_count
 
@@ -111,6 +112,58 @@ class BackendComputePreferences:
             meta.update(dict(self.metadata_extra))
         return meta
 
+    def to_compile_config(self) -> CompileConfig:
+        partition_count = 1
+        if str(self.multi_gpu_mode or 'single').lower() in {'round-robin', 'distributed'}:
+            partition_count = max(1, len([x for x in self.allowed_gpu_devices if str(x).strip()]) or 2)
+        return CompileConfig(
+            partition_count=partition_count,
+            partition_strategy='graph',
+            numbering_strategy='contiguous-owned',
+            enable_halo=True,
+            enable_stage_masks=True,
+            target_device_family='cuda' if str(self.device or '').startswith('cuda') or str(self.device or '').startswith('auto') else 'cpu',
+            metadata={
+                'multi_gpu_mode': str(self.multi_gpu_mode or 'single').lower(),
+                'allowed_gpu_devices': [str(x) for x in self.allowed_gpu_devices if str(x).strip()],
+            },
+        )
+
+    def to_runtime_config(self) -> RuntimeConfig:
+        compile_config = self.to_compile_config()
+        return RuntimeConfig(
+            backend='distributed',
+            communicator_backend='local',
+            device_mode='single' if compile_config.partition_count == 1 else 'multi',
+            partition_count=compile_config.partition_count,
+            checkpoint_policy='stage-and-failure',
+            telemetry_level='standard',
+            fail_policy='rollback-cutback',
+            deterministic=bool(self.metadata_extra.get('deterministic', False)),
+            metadata={
+                'warp_device': str(self.device or 'auto-best'),
+                'multi_gpu_mode': str(self.multi_gpu_mode or 'single').lower(),
+                'allowed_gpu_devices': [str(x) for x in self.allowed_gpu_devices if str(x).strip()],
+                'preconditioner': str(self.preconditioner or 'auto').lower(),
+                'solver_strategy': str(self.solver_strategy or 'auto').lower(),
+            },
+        )
+
+    def to_solver_policy(self) -> SolverPolicy:
+        return SolverPolicy(
+            nonlinear_max_iterations=max(1, int(self.metadata_extra.get('max_nonlinear_iterations', 12) or 12)),
+            tolerance=float(self.metadata_extra.get('tolerance', 1.0e-5) or 1.0e-5),
+            line_search=bool(self.metadata_extra.get('line_search', True)),
+            max_cutbacks=max(0, int(self.metadata_extra.get('max_cutbacks', 5) or 5)),
+            preconditioner=str(self.preconditioner or 'auto').lower(),
+            solver_strategy=str(self.solver_strategy or 'auto').lower(),
+            metadata={
+                'ordering': str(self.ordering or 'auto').lower(),
+                'iterative_tolerance': float(self.iterative_tolerance),
+                'iterative_maxiter': int(self.iterative_maxiter),
+            },
+        )
+
     def summary(self, *, cpu_total: int | None = None, cuda_available: bool = False) -> str:
         requested_device = str(self.device or "auto-best").lower()
         if str(self.multi_gpu_mode or "single").lower() == "round-robin" and requested_device in {"auto", "auto-best", "best"}:
@@ -144,6 +197,30 @@ class BackendComputePreferences:
         return ", ".join(parts)
 
 
+
+
+# Keys controlled by compute-profile recommendations.
+_COMPUTE_PROFILE_KEYS: set[str] = set(
+    BackendComputePreferences(profile="auto").to_metadata(cuda_available=False).keys()
+)
+
+
+def apply_compute_profile_metadata(metadata: dict[str, Any] | None, *, cuda_available: bool) -> dict[str, Any]:
+    """Re-apply profile-specific compute controls on top of stage/global metadata.
+
+    This keeps stage-level ``compute_profile`` authoritative even when the base
+    solver settings were created from a different global profile. Non-compute
+    fields such as increments, cutbacks, or notes are preserved.
+    """
+    out = dict(metadata or {})
+    profile = str(out.get("compute_profile") or "auto").lower()
+    if profile not in {"auto", "cpu-safe", "gpu-throughput", "gpu-fullpath"}:
+        return out
+    recommended = recommended_compute_preferences(profile, cuda_available=cuda_available).to_metadata(cuda_available=cuda_available)
+    for key in _COMPUTE_PROFILE_KEYS:
+        if key in recommended:
+            out[key] = recommended[key]
+    return out
 def recommended_compute_preferences(profile: str, *, cuda_available: bool, cpu_total: int | None = None) -> BackendComputePreferences:
     total = max(1, int(cpu_total or default_thread_count() + 1))
     name = str(profile or "auto").lower()

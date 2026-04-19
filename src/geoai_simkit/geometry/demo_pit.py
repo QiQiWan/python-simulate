@@ -11,6 +11,7 @@ from geoai_simkit.core.model import AnalysisStage, InterfaceDefinition, Simulati
 @dataclass(frozen=True, slots=True)
 class DemoPitStageMaps:
     initial: dict[str, bool]
+    wall_activation: dict[str, bool]
     excavate_level_1: dict[str, bool]
     excavate_level_2: dict[str, bool]
 
@@ -70,13 +71,13 @@ _DEMO_SOLVER_PRESET_PAYLOADS: dict[str, dict[str, dict[str, float | int | bool]]
             'line_search_correction_ratio': 0.06,
         },
         'uncoupled': {
-            'initial_increment': 0.025,
-            'max_iterations': 36,
+            'initial_increment': 0.0125,
+            'max_iterations': 40,
             'line_search': True,
             'compute_profile': 'cpu-safe',
-            'max_load_fraction_per_step': 0.025,
-            'min_load_increment': 0.003125,
-            'max_cutbacks': 8,
+            'max_load_fraction_per_step': 0.0125,
+            'min_load_increment': 0.0015625,
+            'max_cutbacks': 10,
             'modified_newton_max_reuse': 0,
             'stagnation_patience': 3,
             'stagnation_improvement_tol': 0.015,
@@ -100,13 +101,13 @@ _DEMO_SOLVER_PRESET_PAYLOADS: dict[str, dict[str, dict[str, float | int | bool]]
             'line_search_correction_ratio': 0.10,
         },
         'uncoupled': {
-            'initial_increment': 0.05,
-            'max_iterations': 32,
+            'initial_increment': 0.025,
+            'max_iterations': 36,
             'line_search': True,
             'compute_profile': 'cpu-safe',
-            'max_load_fraction_per_step': 0.05,
-            'min_load_increment': 0.00625,
-            'max_cutbacks': 6,
+            'max_load_fraction_per_step': 0.025,
+            'min_load_increment': 0.003125,
+            'max_cutbacks': 8,
             'modified_newton_max_reuse': 1,
             'stagnation_patience': 2,
             'stagnation_improvement_tol': 0.02,
@@ -130,13 +131,13 @@ _DEMO_SOLVER_PRESET_PAYLOADS: dict[str, dict[str, dict[str, float | int | bool]]
             'line_search_correction_ratio': 0.16,
         },
         'uncoupled': {
-            'initial_increment': 0.10,
-            'max_iterations': 28,
+            'initial_increment': 0.05,
+            'max_iterations': 32,
             'line_search': True,
             'compute_profile': 'cpu-safe',
-            'max_load_fraction_per_step': 0.10,
-            'min_load_increment': 0.0125,
-            'max_cutbacks': 4,
+            'max_load_fraction_per_step': 0.05,
+            'min_load_increment': 0.00625,
+            'max_cutbacks': 6,
             'modified_newton_max_reuse': 1,
             'stagnation_patience': 2,
             'stagnation_improvement_tol': 0.03,
@@ -257,19 +258,24 @@ def enabled_support_groups(model: SimulationModel) -> tuple[str, ...]:
 
 
 def build_demo_stage_maps(model: SimulationModel, *, wall_active: bool) -> DemoPitStageMaps:
-    activation = {region.name: False for region in model.region_tags}
+    soil_only = {region.name: False for region in model.region_tags}
     for name in ('soil_mass', 'soil_excavation_1', 'soil_excavation_2'):
         if model.get_region(name) is not None:
-            activation[name] = True
+            soil_only[name] = True
     if model.get_region('wall') is not None:
-        activation['wall'] = bool(wall_active)
-    stage1 = dict(activation)
+        soil_only['wall'] = False
+
+    wall_stage = dict(soil_only)
+    if 'wall' in wall_stage:
+        wall_stage['wall'] = bool(wall_active)
+
+    stage1 = dict(wall_stage)
     if 'soil_excavation_1' in stage1:
         stage1['soil_excavation_1'] = False
     stage2 = dict(stage1)
     if 'soil_excavation_2' in stage2:
         stage2['soil_excavation_2'] = False
-    return DemoPitStageMaps(initial=activation, excavate_level_1=stage1, excavate_level_2=stage2)
+    return DemoPitStageMaps(initial=soil_only, wall_activation=wall_stage, excavate_level_1=stage1, excavate_level_2=stage2)
 
 
 def _coord_key(point: np.ndarray, *, scale: float) -> tuple[int, int, int]:
@@ -326,6 +332,7 @@ def _nearest_pid_from_candidates(
     target: np.ndarray,
     predicate: Callable[[np.ndarray], bool],
     max_distance: float,
+    exclude_pid: int | None = None,
 ) -> int | None:
     candidate_ids = np.asarray(candidate_ids, dtype=np.int64)
     if candidate_ids.size == 0:
@@ -334,6 +341,8 @@ def _nearest_pid_from_candidates(
     best_pid: int | None = None
     best_dist = float('inf')
     for pid in candidate_ids:
+        if exclude_pid is not None and int(pid) == int(exclude_pid):
+            continue
         coord = np.asarray(points[int(pid)], dtype=float)
         if not predicate(coord):
             continue
@@ -356,6 +365,7 @@ class _PairBuildResult:
     exact_matches: int
     nearest_matches: int
     unmatched: int
+    identical_skipped: int
     max_pair_distance: float
 
 
@@ -371,11 +381,12 @@ def _build_interface_pairs(
     face_hint: str,
     allow_nearest: bool = True,
     nearest_radius_factor: float = 1.75,
+    avoid_identical_pairs: bool = True,
 ) -> _PairBuildResult:
     wall_point_ids = np.asarray(wall_point_ids, dtype=np.int64)
     wall_face_ids = [int(pid) for pid in wall_point_ids if predicate(np.asarray(points[int(pid)], dtype=float))]
     if not wall_face_ids:
-        return _PairBuildResult((), (), (), 0, 0, 0, 0.0)
+        return _PairBuildResult((), (), (), 0, 0, 0, 0, 0.0)
 
     wall_map = _build_point_map(points, np.asarray(wall_face_ids, dtype=np.int64), scale=scale)
     ref_spacing = _estimate_reference_spacing(points, np.asarray(wall_face_ids, dtype=np.int64))
@@ -395,6 +406,7 @@ def _build_interface_pairs(
     exact_matches = 0
     nearest_matches = 0
     unmatched = 0
+    identical_skipped = 0
     max_pair_distance = 0.0
     used_pairs: set[tuple[int, int]] = set()
 
@@ -415,6 +427,9 @@ def _build_interface_pairs(
             if not region_pids:
                 continue
             for candidate in region_pids:
+                if avoid_identical_pairs and int(candidate) == int(wall_pid):
+                    identical_skipped += 1
+                    continue
                 candidate_coord = np.asarray(points[int(candidate)], dtype=float)
                 if not predicate(candidate_coord):
                     continue
@@ -437,6 +452,7 @@ def _build_interface_pairs(
                     target=target,
                     predicate=predicate,
                     max_distance=nearest_radius,
+                    exclude_pid=int(wall_pid) if avoid_identical_pairs else None,
                 )
                 if candidate is not None:
                     chosen_master = int(candidate)
@@ -467,12 +483,43 @@ def _build_interface_pairs(
         exact_matches,
         nearest_matches,
         unmatched,
+        identical_skipped,
         max_pair_distance,
     )
 
 
 def _parametric_scene_payload(model: SimulationModel) -> dict[str, float]:
     payload = dict(model.metadata.get('parametric_scene') or {})
+    missing = [key for key in ('length', 'width', 'depth', 'soil_depth', 'wall_thickness') if key not in payload]
+    if missing:
+        try:
+            grid = model.to_unstructured_grid()
+            bounds = tuple(float(v) for v in grid.bounds)
+            length = max(abs(bounds[0]), abs(bounds[1]))
+            width = max(abs(bounds[2]), abs(bounds[3]))
+            soil_depth = max(abs(bounds[4]), abs(bounds[5]))
+            wall_region = model.get_region('wall')
+            exc_upper = model.get_region('soil_excavation_1') or model.get_region('soil_excavation_2')
+            depth = None
+            wall_thickness = None
+            if wall_region is not None:
+                wall_grid = grid.extract_cells(wall_region.cell_ids)
+                wall_bounds = tuple(float(v) for v in wall_grid.bounds)
+                depth = max(abs(wall_bounds[4]), abs(wall_bounds[5]))
+                if exc_upper is not None:
+                    exc_grid = grid.extract_cells(exc_upper.cell_ids)
+                    exc_bounds = tuple(float(v) for v in exc_grid.bounds)
+                    wall_thickness = max(0.0, max(abs(wall_bounds[1]), abs(wall_bounds[3])) - max(abs(exc_bounds[1]), abs(exc_bounds[3])))
+            payload.setdefault('length', length)
+            payload.setdefault('width', width)
+            payload.setdefault('depth', depth if depth is not None else soil_depth * 0.5)
+            payload.setdefault('soil_depth', soil_depth)
+            payload.setdefault('wall_thickness', wall_thickness if wall_thickness is not None and wall_thickness > 0.0 else 0.8)
+            if {'soil_mass', 'soil_excavation_1', 'soil_excavation_2', 'wall'}.issubset({region.name for region in model.region_tags}):
+                model.metadata.setdefault('source', 'parametric_pit')
+                model.metadata.setdefault('parametric_scene', dict(payload))
+        except Exception:
+            pass
     for key in ('length', 'width', 'depth', 'soil_depth', 'wall_thickness'):
         try:
             payload[key] = float(payload[key])
@@ -548,11 +595,12 @@ def _inner_top_ring_ids(wall_pids: np.ndarray, points: np.ndarray, *, pit_x: flo
 
 
 def build_demo_wall_interfaces(model: SimulationModel, *, interface_policy: str | None = None) -> list[InterfaceDefinition]:
-    if model.metadata.get('source') != 'parametric_pit':
-        return []
     if model.get_region('wall') is None:
         return []
-    scene = _parametric_scene_payload(model)
+    try:
+        scene = _parametric_scene_payload(model)
+    except Exception:
+        return []
     length = float(scene['length'])
     width = float(scene['width'])
     depth = float(scene['depth'])
@@ -598,18 +646,18 @@ def build_demo_wall_interfaces(model: SimulationModel, *, interface_policy: str 
     soil_region_points = {name: np.asarray(region_points.get(name, np.empty((0,), dtype=np.int64)), dtype=np.int64) for name in all_soil_regions}
 
     face_specs = [
-        ('outer_xmin', both(on_plane_x_all(-(pit_x + thickness)), z_range(-depth, 0.0)), np.array([-1.0, 0.0, 0.0]), (), 'outer', ('soil_mass',), all_soil_regions),
-        ('outer_xmax', both(on_plane_x_all(+(pit_x + thickness)), z_range(-depth, 0.0)), np.array([+1.0, 0.0, 0.0]), (), 'outer', ('soil_mass',), all_soil_regions),
-        ('outer_ymin', both(on_plane_y_strict(-(pit_y + thickness)), z_range(-depth, 0.0)), np.array([0.0, -1.0, 0.0]), (), 'outer', ('soil_mass',), all_soil_regions),
-        ('outer_ymax', both(on_plane_y_strict(+(pit_y + thickness)), z_range(-depth, 0.0)), np.array([0.0, +1.0, 0.0]), (), 'outer', ('soil_mass',), all_soil_regions),
-        ('inner_upper_xmin', both(on_plane_x_all(-pit_x), z_range(-depth / 2.0, 0.0)), np.array([+1.0, 0.0, 0.0]), ('initial',), 'inner_upper', ('soil_excavation_1',), ('soil_excavation_1', 'soil_mass', 'soil_excavation_2')),
-        ('inner_upper_xmax', both(on_plane_x_all(+pit_x), z_range(-depth / 2.0, 0.0)), np.array([-1.0, 0.0, 0.0]), ('initial',), 'inner_upper', ('soil_excavation_1',), ('soil_excavation_1', 'soil_mass', 'soil_excavation_2')),
-        ('inner_upper_ymin', both(on_plane_y_strict(-pit_y), z_range(-depth / 2.0, 0.0)), np.array([0.0, +1.0, 0.0]), ('initial',), 'inner_upper', ('soil_excavation_1',), ('soil_excavation_1', 'soil_mass', 'soil_excavation_2')),
-        ('inner_upper_ymax', both(on_plane_y_strict(+pit_y), z_range(-depth / 2.0, 0.0)), np.array([0.0, -1.0, 0.0]), ('initial',), 'inner_upper', ('soil_excavation_1',), ('soil_excavation_1', 'soil_mass', 'soil_excavation_2')),
-        ('inner_lower_xmin', both(on_plane_x_all(-pit_x), z_range(-depth, -depth / 2.0)), np.array([+1.0, 0.0, 0.0]), ('initial', 'excavate_level_1'), 'inner_lower', ('soil_excavation_2',), ('soil_excavation_2', 'soil_mass', 'soil_excavation_1')),
-        ('inner_lower_xmax', both(on_plane_x_all(+pit_x), z_range(-depth, -depth / 2.0)), np.array([-1.0, 0.0, 0.0]), ('initial', 'excavate_level_1'), 'inner_lower', ('soil_excavation_2',), ('soil_excavation_2', 'soil_mass', 'soil_excavation_1')),
-        ('inner_lower_ymin', both(on_plane_y_strict(-pit_y), z_range(-depth, -depth / 2.0)), np.array([0.0, +1.0, 0.0]), ('initial', 'excavate_level_1'), 'inner_lower', ('soil_excavation_2',), ('soil_excavation_2', 'soil_mass', 'soil_excavation_1')),
-        ('inner_lower_ymax', both(on_plane_y_strict(+pit_y), z_range(-depth, -depth / 2.0)), np.array([0.0, -1.0, 0.0]), ('initial', 'excavate_level_1'), 'inner_lower', ('soil_excavation_2',), ('soil_excavation_2', 'soil_mass', 'soil_excavation_1')),
+        ('outer_xmin', both(on_plane_x_all(-(pit_x + thickness)), z_range(-depth, 0.0)), np.array([-1.0, 0.0, 0.0]), ('wall_activation', 'excavate_level_1', 'excavate_level_2'), 'outer', ('soil_mass',), all_soil_regions),
+        ('outer_xmax', both(on_plane_x_all(+(pit_x + thickness)), z_range(-depth, 0.0)), np.array([+1.0, 0.0, 0.0]), ('wall_activation', 'excavate_level_1', 'excavate_level_2'), 'outer', ('soil_mass',), all_soil_regions),
+        ('outer_ymin', both(on_plane_y_strict(-(pit_y + thickness)), z_range(-depth, 0.0)), np.array([0.0, -1.0, 0.0]), ('wall_activation', 'excavate_level_1', 'excavate_level_2'), 'outer', ('soil_mass',), all_soil_regions),
+        ('outer_ymax', both(on_plane_y_strict(+(pit_y + thickness)), z_range(-depth, 0.0)), np.array([0.0, +1.0, 0.0]), ('wall_activation', 'excavate_level_1', 'excavate_level_2'), 'outer', ('soil_mass',), all_soil_regions),
+        ('inner_upper_xmin', both(on_plane_x_all(-pit_x), z_range(-depth / 2.0, 0.0)), np.array([+1.0, 0.0, 0.0]), ('wall_activation',), 'inner_upper', ('soil_excavation_1',), ('soil_excavation_1', 'soil_mass', 'soil_excavation_2')),
+        ('inner_upper_xmax', both(on_plane_x_all(+pit_x), z_range(-depth / 2.0, 0.0)), np.array([-1.0, 0.0, 0.0]), ('wall_activation',), 'inner_upper', ('soil_excavation_1',), ('soil_excavation_1', 'soil_mass', 'soil_excavation_2')),
+        ('inner_upper_ymin', both(on_plane_y_strict(-pit_y), z_range(-depth / 2.0, 0.0)), np.array([0.0, +1.0, 0.0]), ('wall_activation',), 'inner_upper', ('soil_excavation_1',), ('soil_excavation_1', 'soil_mass', 'soil_excavation_2')),
+        ('inner_upper_ymax', both(on_plane_y_strict(+pit_y), z_range(-depth / 2.0, 0.0)), np.array([0.0, -1.0, 0.0]), ('wall_activation',), 'inner_upper', ('soil_excavation_1',), ('soil_excavation_1', 'soil_mass', 'soil_excavation_2')),
+        ('inner_lower_xmin', both(on_plane_x_all(-pit_x), z_range(-depth, -depth / 2.0)), np.array([+1.0, 0.0, 0.0]), ('wall_activation', 'excavate_level_1'), 'inner_lower', ('soil_excavation_2',), ('soil_excavation_2', 'soil_mass', 'soil_excavation_1')),
+        ('inner_lower_xmax', both(on_plane_x_all(+pit_x), z_range(-depth, -depth / 2.0)), np.array([-1.0, 0.0, 0.0]), ('wall_activation', 'excavate_level_1'), 'inner_lower', ('soil_excavation_2',), ('soil_excavation_2', 'soil_mass', 'soil_excavation_1')),
+        ('inner_lower_ymin', both(on_plane_y_strict(-pit_y), z_range(-depth, -depth / 2.0)), np.array([0.0, +1.0, 0.0]), ('wall_activation', 'excavate_level_1'), 'inner_lower', ('soil_excavation_2',), ('soil_excavation_2', 'soil_mass', 'soil_excavation_1')),
+        ('inner_lower_ymax', both(on_plane_y_strict(+pit_y), z_range(-depth, -depth / 2.0)), np.array([0.0, -1.0, 0.0]), ('wall_activation', 'excavate_level_1'), 'inner_lower', ('soil_excavation_2',), ('soil_excavation_2', 'soil_mass', 'soil_excavation_1')),
     ]
 
     interfaces: list[InterfaceDefinition] = []
@@ -634,6 +682,7 @@ def build_demo_wall_interfaces(model: SimulationModel, *, interface_policy: str 
             face_hint=name,
             allow_nearest=allow_nearest,
             nearest_radius_factor=nearest_radius_factor,
+            avoid_identical_pairs=True,
         )
         if not pair_result.slave_ids or not pair_result.master_ids:
             continue
@@ -656,6 +705,7 @@ def build_demo_wall_interfaces(model: SimulationModel, *, interface_policy: str 
             'nearest_match_count': int(pair_result.nearest_matches),
             'pair_count': int(len(pair_result.slave_ids)),
             'unmatched_wall_points': int(pair_result.unmatched),
+            'identical_pair_candidates_skipped': int(pair_result.identical_skipped),
             'max_pair_distance': float(pair_result.max_pair_distance),
         })
         interfaces.append(
@@ -684,6 +734,8 @@ def build_demo_wall_interfaces(model: SimulationModel, *, interface_policy: str 
                     'exact_match_count': int(pair_result.exact_matches),
                     'nearest_match_count': int(pair_result.nearest_matches),
                     'unmatched_wall_points': int(pair_result.unmatched),
+                    'identical_pair_candidates_skipped': int(pair_result.identical_skipped),
+                    'avoid_identical_pairs': True,
                     'max_pair_distance': float(pair_result.max_pair_distance),
                     'plaxis_like_node_pair': True,
                     'plaxis_manual_like_auto': True,
@@ -708,9 +760,12 @@ def build_demo_wall_interfaces(model: SimulationModel, *, interface_policy: str 
 
 
 def build_demo_support_structures(model: SimulationModel) -> list[StructuralElementDefinition]:
-    if model.metadata.get('source') != 'parametric_pit' or model.get_region('wall') is None:
+    if model.get_region('wall') is None:
         return []
-    scene = _parametric_scene_payload(model)
+    try:
+        scene = _parametric_scene_payload(model)
+    except Exception:
+        return []
     length = float(scene['length'])
     width = float(scene['width'])
     depth = float(scene['depth'])
@@ -746,7 +801,7 @@ def build_demo_support_structures(model: SimulationModel) -> list[StructuralElem
                         'E': 2.1e11,
                         'A': 3.5e-2,
                     },
-                    active_stages=('initial', 'excavate_level_1', 'excavate_level_2'),
+                    active_stages=('wall_activation', 'excavate_level_1', 'excavate_level_2'),
                     metadata={
                         'source': AUTO_SUPPORT_SOURCE,
                         'support_group': 'crown_beam',
@@ -814,6 +869,8 @@ def build_demo_support_structures(model: SimulationModel) -> list[StructuralElem
 def expected_wall_contact_groups_for_stage(stage_name: str, enabled_groups: tuple[str, ...] | None = None) -> set[str]:
     lowered = str(stage_name).lower()
     if lowered == 'initial':
+        required = set()
+    elif lowered == 'wall_activation':
         required = {'outer', 'inner_upper', 'inner_lower'}
     elif 'level_1' in lowered or lowered.endswith('_1'):
         required = {'outer', 'inner_lower'}
@@ -829,6 +886,8 @@ def expected_wall_contact_groups_for_stage(stage_name: str, enabled_groups: tupl
 def expected_support_groups_for_stage(stage_name: str, enabled_groups: tuple[str, ...] | None = None) -> set[str]:
     lowered = str(stage_name).lower()
     if lowered == 'initial':
+        required = set()
+    elif lowered == 'wall_activation':
         required = {'crown_beam'}
     elif 'level_1' in lowered or lowered.endswith('_1'):
         required = {'crown_beam', 'strut_level_1'}
@@ -956,34 +1015,87 @@ def configure_demo_wall_mode(model: SimulationModel, *, prefer_wall_solver: bool
     return configure_demo_coupling(model, prefer_wall_solver=prefer_wall_solver, auto_supports=False, interface_policy=interface_policy)
 
 
+
+
+def normalize_demo_stage_metadata(
+    stage_name: str,
+    metadata: dict[str, object] | None,
+    *,
+    activation_map: dict[str, bool] | None = None,
+    coupled_mode: bool | None = None,
+) -> dict[str, object]:
+    meta = dict(metadata or {})
+    activation_map = dict(activation_map or meta.get('activation_map') or {})
+    if activation_map:
+        meta['activation_map'] = dict(activation_map)
+    role_name = str(meta.get('stage_role') or stage_name).lower()
+    preset = normalize_solver_preset(meta.get('solver_preset')) if meta.get('solver_preset') else normalize_solver_preset(meta.get('demo_solver_preset'))
+    if coupled_mode is None:
+        coupled_mode = bool(meta.get('plaxis_like_staged')) and role_name != 'initial' and bool(activation_map.get('wall', False))
+    preset_payload = apply_demo_solver_preset(meta, preset, coupled=bool(coupled_mode))
+    # Keep non-compute keys from the current metadata but let the preset own core nonlinear controls.
+    for key, value in preset_payload.items():
+        meta[key] = value
+    meta['solver_preset'] = preset
+    meta['solver_preset_label'] = explain_solver_preset(preset)
+    if role_name == 'initial':
+        meta['compute_profile'] = 'cpu-safe'
+        meta['solver_strategy'] = 'direct'
+        meta['preconditioner'] = 'none'
+        meta['ordering'] = 'rcm'
+        meta['initial_increment'] = min(float(meta.get('initial_increment', 0.0125) or 0.0125), 0.0125)
+        meta['max_load_fraction_per_step'] = min(float(meta.get('max_load_fraction_per_step', 0.0125) or 0.0125), 0.0125)
+        meta['min_load_increment'] = min(float(meta.get('min_load_increment', 0.0015625) or 0.0015625), 0.0015625)
+        meta['max_iterations'] = max(int(meta.get('max_iterations', 36) or 36), 40)
+        meta['max_cutbacks'] = max(int(meta.get('max_cutbacks', 8) or 8), 8)
+        meta['initial_state_strategy'] = 'geostatic_seeded_linear'
+        meta['notes'] = str(meta.get('notes') or '初始阶段仅激活土体，并采用 geostatic seeded initialization 建立初始地应力；挡墙、界面和支撑均在后续阶段逐步接续。')
+    elif role_name == 'wall_activation':
+        meta['compute_profile'] = 'cpu-safe'
+        meta['solver_strategy'] = 'direct'
+        meta['preconditioner'] = 'none'
+        meta['ordering'] = 'rcm'
+        meta['initial_increment'] = min(float(meta.get('initial_increment', 0.00625) or 0.00625), 0.00625)
+        meta['max_load_fraction_per_step'] = min(float(meta.get('max_load_fraction_per_step', 0.00625) or 0.00625), 0.00625)
+        meta['min_load_increment'] = min(float(meta.get('min_load_increment', 0.00078125) or 0.00078125), 0.00078125)
+        meta['max_iterations'] = max(int(meta.get('max_iterations', 40) or 40), 44)
+        meta['max_cutbacks'] = max(int(meta.get('max_cutbacks', 8) or 8), 10)
+        meta['notes'] = str(meta.get('notes') or '第二阶段激活挡墙、外/内侧界面与冠梁，但保持全部土体仍然存在，用于建立围护结构接续状态。')
+    return meta
+
+
 def build_demo_stages(model: SimulationModel, *, wall_active: bool) -> list[AnalysisStage]:
     stage_maps = build_demo_stage_maps(model, wall_active=wall_active)
     wall_mode = str(model.metadata.get('demo_wall_mode') or ('auto_interface' if wall_active else 'display_only'))
     coupled_mode = wall_active and wall_mode in {'auto_interface', 'plaxis_like_auto'}
     solver_preset = normalize_solver_preset(model.metadata.get('demo_solver_preset'))
-    common_meta = apply_demo_solver_preset({
+    common_meta = {
         'plaxis_like_staged': True,
         'interface_auto_policy': str(model.metadata.get('demo_interface_auto_policy') or 'manual_like_nearest_soil'),
         'interface_region_overrides': dict(normalize_interface_region_overrides(model.metadata.get('demo_interface_region_overrides'))),
-    }, solver_preset, coupled=coupled_mode)
-    initial_steps = 8 if coupled_mode else 4
-    excavation_steps = 10 if coupled_mode else 6
+        'demo_stage_workflow': 'geostatic_then_wall_then_excavation',
+    }
+    initial_steps = 6
+    wall_steps = 6 if coupled_mode else 0
+    excavation_steps = 8 if coupled_mode else 6
     enabled_ifaces = normalize_enabled_interface_groups(model.metadata.get('demo_enabled_interface_groups'))
     enabled_supports = normalize_enabled_support_groups(model.metadata.get('demo_enabled_support_groups'))
 
     def _stage_meta(stage_name: str, activation_map: dict[str, bool]) -> dict[str, object]:
-        meta = {
+        base_meta = {
             **common_meta,
             'activation_map': dict(activation_map),
             'active_interface_groups': sorted(expected_wall_contact_groups_for_stage(stage_name, enabled_ifaces)),
             'active_support_groups': sorted(expected_support_groups_for_stage(stage_name, enabled_supports)) if coupled_mode else [],
+            'stage_role': stage_name,
+            'demo_solver_preset': solver_preset,
         }
-        if stage_name == 'initial':
-            meta.setdefault('notes', '初始阶段默认仅保留墙体与冠梁，分层支撑按开挖阶段逐步激活。为保证示例在缺少 SciPy sparse 时仍可求解，自动冠梁默认采用 truss2 求解兼容形式。')
-        return meta
+        is_coupled_stage = coupled_mode and stage_name != 'initial'
+        return normalize_demo_stage_metadata(stage_name, base_meta, activation_map=activation_map, coupled_mode=is_coupled_stage)
 
-    return [
-        AnalysisStage(name='initial', steps=initial_steps, metadata=_stage_meta('initial', stage_maps.initial)),
-        AnalysisStage(name='excavate_level_1', steps=excavation_steps, metadata=_stage_meta('excavate_level_1', stage_maps.excavate_level_1)),
-        AnalysisStage(name='excavate_level_2', steps=excavation_steps, metadata=_stage_meta('excavate_level_2', stage_maps.excavate_level_2)),
-    ]
+    stages = [AnalysisStage(name='initial', steps=initial_steps, metadata=_stage_meta('initial', stage_maps.initial))]
+    if coupled_mode:
+        stages.append(AnalysisStage(name='wall_activation', steps=wall_steps or 6, metadata=_stage_meta('wall_activation', stage_maps.wall_activation)))
+    stages.append(AnalysisStage(name='excavate_level_1', steps=excavation_steps, metadata=_stage_meta('excavate_level_1', stage_maps.excavate_level_1)))
+    stages.append(AnalysisStage(name='excavate_level_2', steps=excavation_steps, metadata=_stage_meta('excavate_level_2', stage_maps.excavate_level_2)))
+    return stages

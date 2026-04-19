@@ -1,0 +1,224 @@
+{
+  "name": "pit-demo",
+  "geometry": {
+    "kind": "parametric_pit",
+    "parameters": {
+      "length": 24.0,
+      "width": 12.0,
+      "depth": 12.0,
+      "soil_depth": 20.0,
+      "nx": 8,
+      "ny": 6,
+      "nz": 6,
+      "wall_thickness": 0.6
+    },
+    "metadata": {
+      "source": "parametric_pit"
+    }
+  },
+  "mesh": {
+    "element_family": "auto",
+    "global_size": 2.0,
+    "padding": 0.0,
+    "merge_points": true,
+    "keep_geometry_copy": true,
+    "only_material_bound_geometry": true,
+    "local_refinement": true,
+    "metadata": {}
+  },
+  "materials": [
+    {
+      "region_names": [
+        "soil_mass",
+        "soil_excavation_1",
+        "soil_excavation_2"
+      ],
+      "material_name": "mohr_coulomb",
+      "parameters": {
+        "E": 30000000.0,
+        "nu": 0.3,
+        "cohesion": 15000.0,
+        "friction_deg": 28.0,
+        "dilation_deg": 0.0,
+        "tensile_strength": 0.0,
+        "rho": 1800.0
+      },
+      "metadata": {}
+    },
+    {
+      "region_names": [
+        "wall"
+      ],
+      "material_name": "linear_elastic",
+      "parameters": {
+        "E": 32000000000.0,
+        "nu": 0.2,
+        "rho": 2500.0
+      },
+      "metadata": {}
+    }
+  ],
+  "stages": [],
+  "mesh_preparation": {
+    "excavation_steps": [
+      {
+        "name": "wall_activation",
+        "deactivate_regions": [],
+        "activate_regions": [
+          "wall"
+        ],
+        "steps": null,
+        "metadata": {
+          "stage_role": "support-install"
+        }
+      },
+      {
+        "name": "excavate_level_1",
+        "deactivate_regions": [
+          "soil_excavation_1"
+        ],
+        "activate_regions": [],
+        "steps": null,
+        "metadata": {
+          "stage_role": "excavation"
+        }
+      },
+      {
+        "name": "excavate_level_2",
+        "deactivate_regions": [
+          "soil_excavation_2"
+        ],
+        "activate_regions": [],
+        "steps": null,
+        "metadata": {
+          "stage_role": "excavation"
+        }
+      }
+    ],
+    "contact_pairs": [],
+    "auto_interface_detection": true,
+    "merge_coincident_points": true,
+    "metadata": {}
+  },
+  "material_library": [],
+  "boundary_conditions": [
+    {
+      "name": "fix_bottom",
+      "kind": "displacement",
+      "target": "bottom",
+      "components": [
+        0,
+        1,
+        2
+      ],
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "metadata": {
+        "preset": true,
+        "preset_key": "pit_rigid_box",
+        "preset_label": "基坑-刚性箱体（底部+四周 xyz=0）"
+      }
+    },
+    {
+      "name": "fix_xmin",
+      "kind": "displacement",
+      "target": "xmin",
+      "components": [
+        0,
+        1,
+        2
+      ],
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "metadata": {
+        "preset": true,
+        "preset_key": "pit_rigid_box",
+        "preset_label": "基坑-刚性箱体（底部+四周 xyz=0）"
+      }
+    },
+    {
+      "name": "fix_xmax",
+      "kind": "displacement",
+      "target": "xmax",
+      "components": [
+        0,
+        1,
+        2
+      ],
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "metadata": {
+        "preset": true,
+        "preset_key": "pit_rigid_box",
+        "preset_label": "基坑-刚性箱体（底部+四周 xyz=0）"
+      }
+    },
+    {
+      "name": "fix_ymin",
+      "kind": "displacement",
+      "target": "ymin",
+      "components": [
+        0,
+        1,
+        2
+      ],
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "metadata": {
+        "preset": true,
+        "preset_key": "pit_rigid_box",
+        "preset_label": "基坑-刚性箱体（底部+四周 xyz=0）"
+      }
+    },
+    {
+      "name": "fix_ymax",
+      "kind": "displacement",
+      "target": "ymax",
+      "components": [
+        0,
+        1,
+        2
+      ],
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "metadata": {
+        "preset": true,
+        "preset_key": "pit_rigid_box",
+        "preset_label": "基坑-刚性箱体（底部+四周 xyz=0）"
+      }
+    }
+  ],
+  "structures": [],
+  "interfaces": [],
+  "metadata": {
+    "source": "parametric_pit",
+    "demo_version": "0.3.1",
+    "boundary_preset": "pit_rigid_box",
+    "parametric_scene": {
+      "length": 24.0,
+      "width": 12.0,
+      "depth": 12.0,
+      "soil_depth": 20.0,
+      "nx": 8,
+      "ny": 6,
+      "nz": 6,
+      "wall_thickness": 0.6
+    },
+    "demo_interface_auto_policy": "manual_like_nearest_soil"
+  }
+}

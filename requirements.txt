@@ -1,5 +1,16 @@
+# Full local runtime dependencies for the desktop starter toolkit.
+# Packaging metadata and optional extras live in pyproject.toml; this file is a
+# convenience install for contributors who want the whole stack.
+
 numpy>=1.26
-pyvista>=0.47
-typing-extensions>=4.9
 scipy>=1.11
+typing-extensions>=4.9
+
+pyvista>=0.47
+PySide6>=6.7
+pyvistaqt>=0.11
+
+ifcopenshell>=0.8.4
+meshio>=5.3
+gmsh>=4.11
 warp-lang>=1.12

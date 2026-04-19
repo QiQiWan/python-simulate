@@ -310,9 +310,13 @@ class NonlinearHex8Solver:
                 gids = np.asarray(load.metadata.get('point_ids', []), dtype=np.int64)
                 if gids.size == 0:
                     continue
-                local_ids = np.asarray([
-                    self.submesh.local_by_global[int(g)] for g in gids if int(g) in self.submesh.local_by_global
-                ], dtype=np.int64)
+                point_id_space = str(load.metadata.get('point_id_space', 'global')).strip().lower()
+                if point_id_space == 'global':
+                    local_ids = np.asarray([
+                        self.submesh.local_by_global[int(g)] for g in gids if int(g) in self.submesh.local_by_global
+                    ], dtype=np.int64)
+                else:
+                    local_ids = np.asarray(gids, dtype=np.int64)
             if local_ids.size == 0:
                 continue
             value = np.asarray(load.values, dtype=float)[:3]
@@ -332,7 +336,7 @@ class NonlinearHex8Solver:
             kind = bc.kind.lower()
             if kind not in {'displacement', 'rotation'}:
                 continue
-            node_ids = select_bc_nodes(self.submesh.points, bc)
+            node_ids = select_bc_nodes(self.submesh.points, bc, local_by_global=self.submesh.local_by_global)
             vals = np.asarray(bc.values, dtype=float) * scale
             for nid in node_ids:
                 nid = int(nid)

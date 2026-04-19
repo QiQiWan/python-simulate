@@ -22,6 +22,18 @@ from geoai_simkit.app.mesh_check import analyze_mesh, MeshCheckReport
 from geoai_simkit.app.ifc_suggestions import apply_suggestion_subset, apply_suggestions, build_suggestions
 from geoai_simkit.app.i18n import translate_text
 from geoai_simkit.app.performance_audit import analyze_ui_and_model_performance
+from geoai_simkit.app.workflow_modes import (
+    WORKFLOW_MODE_LABELS,
+    build_geometry_structures_rows,
+    build_mesh_mode_rows,
+    build_stages_mode_rows,
+    build_stage_activation_matrix,
+    filter_workflow_rows,
+    summarize_workflow_modes,
+    update_stage_interface_group,
+    update_stage_region_activation,
+    update_stage_support_group,
+)
 from geoai_simkit.validation_rules import (
     ParameterIssue,
     validate_bc_inputs,
@@ -63,6 +75,7 @@ from geoai_simkit.geometry.demo_pit import (
     interface_group_options,
     interface_policy_options,
     interface_region_override_options,
+    normalize_demo_stage_metadata,
     normalize_solver_preset,
     solver_preset_options,
     summarize_demo_coupling,
@@ -107,6 +120,24 @@ STEP_KEYS = ['项目', '几何', '区域/材料', '边界/阶段', '求解/结�
 INVALID_STYLE = "QWidget { border: 1px solid #d9534f; background-color: rgba(217,83,79,0.10); }"
 VALID_STYLE = ""
 WARNING_STYLE = "QWidget { border: 1px solid #f0ad4e; background-color: rgba(240,173,78,0.08); }"
+
+
+class MainWindow:  # compatibility shim for import-based checks
+    """Lightweight symbol exported for test and plugin introspection.
+
+    The actual Qt window class is created inside ``launch_main_window()`` so that
+    optional GUI imports remain lazy. This shim exposes the stable helper method
+    names that external checks rely on while keeping GUI startup deferred.
+    """
+
+    def _apply_standard_icons(self, widgets_module=None) -> None:  # pragma: no cover - compatibility shim
+        return None
+
+    def _selected_gpu_devices(self) -> list[str]:  # pragma: no cover - compatibility shim
+        return []
+
+    def _populate_gpu_device_list(self) -> None:  # pragma: no cover - compatibility shim
+        return None
 
 
 
@@ -330,6 +361,8 @@ def launch_main_window() -> None:
             self._rejected_suggestion_keys: set[str] = set()
             self._lang = 'en'
             self._inspector_pinned = False
+            self._inspector_force_hidden = False
+            self._inspector_auto_expand_payload_types = {'object', 'region'}
             self._last_selection_payload: tuple[str, str] | None = None
             self._solver_progress_dialog = None
             self._solver_heartbeat_timer = None
@@ -811,6 +844,10 @@ def launch_main_window() -> None:
             self.step_list.setCurrentRow(0)
             root.addWidget(self.step_list, 0)
 
+            self.workflow_mode_tabs = self._build_workflow_mode_tabs()
+            self.workflow_mode_tabs.setMaximumHeight(250)
+            root.addWidget(self.workflow_mode_tabs, 0)
+
             splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
             self.main_splitter = splitter
             root.addWidget(splitter, 1)
@@ -865,6 +902,7 @@ def launch_main_window() -> None:
             self._meshing_heartbeat_timer.timeout.connect(self._meshing_heartbeat_tick)
 
             self.step_list.currentRowChanged.connect(self.page_stack.setCurrentIndex)
+            self.workflow_mode_tabs.currentChanged.connect(self._on_workflow_mode_changed)
             self.act_new_demo.triggered.connect(self.create_demo)
             self.act_import_ifc.triggered.connect(self.import_ifc)
             self.act_run.triggered.connect(self.run_solver_async)
@@ -904,6 +942,635 @@ def launch_main_window() -> None:
             self.diagnostics_table.itemClicked.connect(self._jump_from_diagnostic_item)
             self._connect_validation_signals()
             self._apply_language('en')
+
+        def _build_workflow_mode_tabs(self):
+            tabs = QtWidgets.QTabWidget()
+            tabs.setDocumentMode(True)
+            tabs.addTab(self._build_geometry_structures_mode_page(), WORKFLOW_MODE_LABELS['geometry_structures'])
+            tabs.addTab(self._build_mesh_mode_page(), WORKFLOW_MODE_LABELS['mesh'])
+            tabs.addTab(self._build_stages_mode_page(), WORKFLOW_MODE_LABELS['stages'])
+            return tabs
+
+        def _build_geometry_structures_mode_page(self):
+            page = QtWidgets.QWidget(); lay = QtWidgets.QVBoxLayout(page)
+            self.geometry_mode_summary = QtWidgets.QLabel('Geometry / Structures mode keeps geometry import, object roles, material binding, and structure/interface definitions separate from meshing.')
+            self.geometry_mode_summary.setWordWrap(True)
+            lay.addWidget(self.geometry_mode_summary)
+            btns = QtWidgets.QHBoxLayout()
+            self.btn_mode_go_project = QtWidgets.QPushButton('Project')
+            self.btn_mode_go_geometry = QtWidgets.QPushButton('Geometry / IFC')
+            self.btn_mode_go_materials = QtWidgets.QPushButton('Regions / Materials')
+            self.btn_mode_go_project.clicked.connect(lambda: self.step_list.setCurrentRow(0))
+            self.btn_mode_go_geometry.clicked.connect(lambda: self.step_list.setCurrentRow(1))
+            self.btn_mode_go_materials.clicked.connect(lambda: self.step_list.setCurrentRow(2))
+            for btn in (self.btn_mode_go_project, self.btn_mode_go_geometry, self.btn_mode_go_materials):
+                btns.addWidget(btn)
+            btns.addStretch(1)
+            self.geometry_mode_filter_edit = QtWidgets.QLineEdit(); self.geometry_mode_filter_edit.setPlaceholderText('Filter objects / roles / regions ...')
+            self.geometry_mode_filter_edit.textChanged.connect(self._refresh_workflow_mode_panels)
+            self.geometry_mode_issue_only = QtWidgets.QCheckBox('Only incomplete')
+            self.geometry_mode_issue_only.toggled.connect(self._refresh_workflow_mode_panels)
+            self.geometry_mode_count_label = QtWidgets.QLabel('0 row(s)')
+            self.btn_geometry_mode_export = QtWidgets.QPushButton('Export CSV')
+            self.btn_geometry_mode_export.clicked.connect(lambda: self._export_workflow_table_csv(getattr(self, 'geometry_mode_table', None), 'geometry_structures_mode.csv'))
+            btns.addWidget(self.geometry_mode_filter_edit, 1)
+            btns.addWidget(self.geometry_mode_issue_only)
+            btns.addWidget(self.geometry_mode_count_label)
+            btns.addWidget(self.btn_geometry_mode_export)
+            lay.addLayout(btns)
+            splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+            self.geometry_mode_table = QtWidgets.QTableWidget(0, 6)
+            self.geometry_mode_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+            self.geometry_mode_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+            self.geometry_mode_table.setHorizontalHeaderLabels(['Object', 'Role', 'Region', 'Material', 'State', 'Mesh control'])
+            self.geometry_mode_table.horizontalHeader().setStretchLastSection(True)
+            self.geometry_mode_table.setAlternatingRowColors(True)
+            self.geometry_mode_table.setMinimumHeight(170)
+            self.geometry_mode_table.itemSelectionChanged.connect(self._on_geometry_mode_selection_changed)
+            splitter.addWidget(self.geometry_mode_table)
+            editor = QtWidgets.QGroupBox('Geometry / Structures editor')
+            form = QtWidgets.QFormLayout(editor)
+            self.geometry_mode_role_combo = QtWidgets.QComboBox(); self.geometry_mode_role_combo.addItems(['soil', 'wall', 'slab', 'beam', 'column', 'support', 'opening', 'boundary'])
+            self.geometry_mode_region_edit = QtWidgets.QLineEdit('region_new')
+            self.geometry_mode_material_combo = QtWidgets.QComboBox(); self.geometry_mode_material_combo.setEditable(False)
+            grow1 = QtWidgets.QHBoxLayout(); self.btn_geometry_mode_apply_role = QtWidgets.QPushButton('Apply role to selected'); self.btn_geometry_mode_assign_region = QtWidgets.QPushButton('Assign region to selected'); grow1.addWidget(self.btn_geometry_mode_apply_role); grow1.addWidget(self.btn_geometry_mode_assign_region)
+            grow2 = QtWidgets.QHBoxLayout(); self.btn_geometry_mode_assign_material = QtWidgets.QPushButton('Assign material to selected regions'); self.btn_geometry_mode_select_scene = QtWidgets.QPushButton('Select in scene tree'); grow2.addWidget(self.btn_geometry_mode_assign_material); grow2.addWidget(self.btn_geometry_mode_select_scene)
+            form.addRow('Role', self.geometry_mode_role_combo)
+            form.addRow('Region', self.geometry_mode_region_edit)
+            form.addRow('Material', self.geometry_mode_material_combo)
+            form.addRow(grow1)
+            form.addRow(grow2)
+            self.btn_geometry_mode_apply_role.clicked.connect(self.apply_geometry_mode_role_to_selected_rows)
+            self.btn_geometry_mode_assign_region.clicked.connect(self.assign_geometry_mode_region_to_selected_rows)
+            self.btn_geometry_mode_assign_material.clicked.connect(self.assign_geometry_mode_material_to_selected_rows)
+            self.btn_geometry_mode_select_scene.clicked.connect(self._on_geometry_mode_selection_changed)
+            splitter.addWidget(editor)
+            splitter.setStretchFactor(0, 3)
+            splitter.setStretchFactor(1, 2)
+            lay.addWidget(splitter, 1)
+            return page
+
+        def _build_mesh_mode_page(self):
+            page = QtWidgets.QWidget(); lay = QtWidgets.QVBoxLayout(page)
+            self.mesh_mode_summary = QtWidgets.QLabel('Mesh Mode keeps meshing independent: inspect object-level requests, run geometry-first meshing, and audit requested vs actual element families.')
+            self.mesh_mode_summary.setWordWrap(True)
+            lay.addWidget(self.mesh_mode_summary)
+            btns = QtWidgets.QHBoxLayout()
+            self.btn_mode_open_mesh_step = QtWidgets.QPushButton('Open Mesh Controls')
+            self.btn_mode_run_meshing = QtWidgets.QPushButton('Run Meshing')
+            self.btn_mode_check_mesh = QtWidgets.QPushButton('Mesh Check')
+            self.btn_mode_open_mesh_step.clicked.connect(lambda: self.step_list.setCurrentRow(1))
+            self.btn_mode_run_meshing.clicked.connect(self.run_meshing_workflow)
+            self.btn_mode_check_mesh.clicked.connect(self.run_mesh_check)
+            for btn in (self.btn_mode_open_mesh_step, self.btn_mode_run_meshing, self.btn_mode_check_mesh):
+                btns.addWidget(btn)
+            btns.addStretch(1)
+            self.mesh_mode_filter_edit = QtWidgets.QLineEdit(); self.mesh_mode_filter_edit.setPlaceholderText('Filter objects / family / status ...')
+            self.mesh_mode_filter_edit.textChanged.connect(self._refresh_workflow_mode_panels)
+            self.mesh_mode_issue_only = QtWidgets.QCheckBox('Fallback only')
+            self.mesh_mode_issue_only.toggled.connect(self._refresh_workflow_mode_panels)
+            self.mesh_mode_count_label = QtWidgets.QLabel('0 row(s)')
+            self.btn_mesh_mode_export = QtWidgets.QPushButton('Export CSV')
+            self.btn_mesh_mode_export.clicked.connect(lambda: self._export_workflow_table_csv(getattr(self, 'mesh_mode_table', None), 'mesh_mode.csv'))
+            btns.addWidget(self.mesh_mode_filter_edit, 1)
+            btns.addWidget(self.mesh_mode_issue_only)
+            btns.addWidget(self.mesh_mode_count_label)
+            btns.addWidget(self.btn_mesh_mode_export)
+            lay.addLayout(btns)
+            splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+            self.mesh_mode_table = QtWidgets.QTableWidget(0, 6)
+            self.mesh_mode_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+            self.mesh_mode_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+            self.mesh_mode_table.setHorizontalHeaderLabels(['Object', 'Requested', 'Actual', 'Size', 'Refine', 'Status'])
+            self.mesh_mode_table.horizontalHeader().setStretchLastSection(True)
+            self.mesh_mode_table.setAlternatingRowColors(True)
+            self.mesh_mode_table.setMinimumHeight(170)
+            self.mesh_mode_table.itemSelectionChanged.connect(self._on_mesh_mode_selection_changed)
+            splitter.addWidget(self.mesh_mode_table)
+            editor = QtWidgets.QGroupBox('Mesh mode editor')
+            form = QtWidgets.QFormLayout(editor)
+            self.mesh_mode_family_combo = QtWidgets.QComboBox(); self.mesh_mode_family_combo.addItems(['inherit', 'auto', 'tet4', 'hex8'])
+            self.mesh_mode_size_spin = QtWidgets.QDoubleSpinBox(); self.mesh_mode_size_spin.setRange(0.0, 1.0e6); self.mesh_mode_size_spin.setDecimals(6); self.mesh_mode_size_spin.setSingleStep(0.05)
+            self.mesh_mode_refine_spin = QtWidgets.QDoubleSpinBox(); self.mesh_mode_refine_spin.setRange(0.0, 20.0); self.mesh_mode_refine_spin.setDecimals(2); self.mesh_mode_refine_spin.setSingleStep(0.10)
+            mrow = QtWidgets.QHBoxLayout(); self.btn_mesh_mode_apply = QtWidgets.QPushButton('Apply to selected'); self.btn_mesh_mode_clear = QtWidgets.QPushButton('Clear selected'); self.btn_mesh_mode_apply_all = QtWidgets.QPushButton('Apply family to all'); mrow.addWidget(self.btn_mesh_mode_apply); mrow.addWidget(self.btn_mesh_mode_clear); mrow.addWidget(self.btn_mesh_mode_apply_all)
+            form.addRow('Family', self.mesh_mode_family_combo)
+            form.addRow('Target size', self.mesh_mode_size_spin)
+            form.addRow('Refine ratio', self.mesh_mode_refine_spin)
+            form.addRow(mrow)
+            self.btn_mesh_mode_apply.clicked.connect(self.apply_mesh_mode_controls_to_selected_rows)
+            self.btn_mesh_mode_clear.clicked.connect(self.clear_mesh_mode_controls_for_selected_rows)
+            self.btn_mesh_mode_apply_all.clicked.connect(self.apply_mesh_mode_family_to_all_rows)
+            splitter.addWidget(editor)
+            splitter.setStretchFactor(0, 3)
+            splitter.setStretchFactor(1, 2)
+            lay.addWidget(splitter, 1)
+            return page
+
+        def _build_stages_mode_page(self):
+            page = QtWidgets.QWidget(); lay = QtWidgets.QVBoxLayout(page)
+            self.stages_mode_summary = QtWidgets.QLabel('Stages Mode keeps construction sequencing independent: inspect stage activation, support/interface groups, and launch solves from the staged workflow.')
+            self.stages_mode_summary.setWordWrap(True)
+            lay.addWidget(self.stages_mode_summary)
+            btns = QtWidgets.QHBoxLayout()
+            self.btn_mode_open_stages = QtWidgets.QPushButton('Open Stages')
+            self.btn_mode_open_results = QtWidgets.QPushButton('Open Results')
+            self.btn_mode_run_solver = QtWidgets.QPushButton('Run Solve')
+            self.btn_mode_open_stages.clicked.connect(lambda: self.step_list.setCurrentRow(3))
+            self.btn_mode_open_results.clicked.connect(lambda: self.step_list.setCurrentRow(4))
+            self.btn_mode_run_solver.clicked.connect(self.run_solver_async)
+            for btn in (self.btn_mode_open_stages, self.btn_mode_open_results, self.btn_mode_run_solver):
+                btns.addWidget(btn)
+            btns.addStretch(1)
+            self.stages_mode_filter_edit = QtWidgets.QLineEdit(); self.stages_mode_filter_edit.setPlaceholderText('Filter stages / regions / supports ...')
+            self.stages_mode_filter_edit.textChanged.connect(self._refresh_workflow_mode_panels)
+            self.stages_mode_count_label = QtWidgets.QLabel('0 row(s)')
+            self.btn_stages_mode_export = QtWidgets.QPushButton('Export CSV')
+            self.btn_stages_mode_export.clicked.connect(lambda: self._export_workflow_table_csv(getattr(self, 'stages_mode_table', None), 'stages_mode.csv'))
+            btns.addWidget(self.stages_mode_filter_edit, 1)
+            btns.addWidget(self.stages_mode_count_label)
+            btns.addWidget(self.btn_stages_mode_export)
+            lay.addLayout(btns)
+            splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+            self.stages_mode_table = QtWidgets.QTableWidget(0, 7)
+            self.stages_mode_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+            self.stages_mode_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+            self.stages_mode_table.setHorizontalHeaderLabels(['Stage', 'Role', 'Activate', 'Deactivate', 'Supports', 'Interfaces', 'Preset / Profile / Strategy'])
+            self.stages_mode_table.horizontalHeader().setStretchLastSection(True)
+            self.stages_mode_table.setAlternatingRowColors(True)
+            self.stages_mode_table.setMinimumHeight(170)
+            self.stages_mode_table.itemSelectionChanged.connect(self._on_stages_mode_selection_changed)
+            splitter.addWidget(self.stages_mode_table)
+            editor = QtWidgets.QGroupBox('Stages mode editor')
+            form = QtWidgets.QFormLayout(editor)
+            self.stages_mode_preset_combo = QtWidgets.QComboBox(); self.stages_mode_preset_combo.addItem('custom', 'custom')
+            for key, label in solver_preset_options().items():
+                self.stages_mode_preset_combo.addItem(f'{key} | {label}', key)
+            self.stages_mode_profile_combo = QtWidgets.QComboBox(); self.stages_mode_profile_combo.addItems(['', 'auto', 'cpu-safe', 'gpu-throughput', 'gpu-fullpath'])
+            self.stages_mode_support_checks = {}
+            supports_widget = QtWidgets.QWidget(); supports_layout = QtWidgets.QHBoxLayout(supports_widget); supports_layout.setContentsMargins(0, 0, 0, 0)
+            for key, label in support_group_options().items():
+                cb = QtWidgets.QCheckBox(key)
+                cb.setToolTip(label)
+                self.stages_mode_support_checks[key] = cb
+                supports_layout.addWidget(cb)
+            supports_layout.addStretch(1)
+            self.stages_mode_interface_checks = {}
+            interfaces_widget = QtWidgets.QWidget(); interfaces_layout = QtWidgets.QHBoxLayout(interfaces_widget); interfaces_layout.setContentsMargins(0, 0, 0, 0)
+            for key, label in interface_group_options().items():
+                cb = QtWidgets.QCheckBox(key)
+                cb.setToolTip(label)
+                self.stages_mode_interface_checks[key] = cb
+                interfaces_layout.addWidget(cb)
+            interfaces_layout.addStretch(1)
+            srow = QtWidgets.QHBoxLayout(); self.btn_stages_mode_apply = QtWidgets.QPushButton('Apply to selected'); self.btn_stages_mode_apply_all = QtWidgets.QPushButton('Apply to all stages'); self.btn_stages_mode_open_stage = QtWidgets.QPushButton('Open selected stage'); srow.addWidget(self.btn_stages_mode_apply); srow.addWidget(self.btn_stages_mode_apply_all); srow.addWidget(self.btn_stages_mode_open_stage)
+            form.addRow('Preset', self.stages_mode_preset_combo)
+            form.addRow('Compute profile', self.stages_mode_profile_combo)
+            form.addRow('Support groups', supports_widget)
+            form.addRow('Interface groups', interfaces_widget)
+            form.addRow(srow)
+            self.btn_stages_mode_apply.clicked.connect(self.apply_stages_mode_settings_to_selected_rows)
+            self.btn_stages_mode_apply_all.clicked.connect(self.apply_stages_mode_settings_to_all_rows)
+            self.btn_stages_mode_open_stage.clicked.connect(self._on_stages_mode_selection_changed)
+            splitter.addWidget(editor)
+            matrix_box = QtWidgets.QGroupBox('Stage activation matrix')
+            matrix_lay = QtWidgets.QVBoxLayout(matrix_box)
+            self.stages_matrix_summary = QtWidgets.QLabel('See how regions/supports/interfaces change stage by stage. Double-click any ON/OFF cell to toggle, or use the buttons below.')
+            self.stages_matrix_summary.setWordWrap(True)
+            matrix_lay.addWidget(self.stages_matrix_summary)
+            self.stages_matrix_table = QtWidgets.QTableWidget(0, 1)
+            self.stages_matrix_table.horizontalHeader().setStretchLastSection(True)
+            self.stages_matrix_table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+            self.stages_matrix_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+            self.stages_matrix_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectItems)
+            self.stages_matrix_table.setAlternatingRowColors(True)
+            self.stages_matrix_table.itemDoubleClicked.connect(self._on_stage_matrix_item_double_clicked)
+            self.stages_matrix_table.itemSelectionChanged.connect(self._on_stage_matrix_selection_changed)
+            matrix_lay.addWidget(self.stages_matrix_table)
+            matrix_controls = QtWidgets.QHBoxLayout()
+            self.stages_matrix_focus_label = QtWidgets.QLabel('No matrix cell selected.')
+            self.btn_stage_matrix_turn_on = QtWidgets.QPushButton('Set selected cell ON')
+            self.btn_stage_matrix_turn_off = QtWidgets.QPushButton('Set selected cell OFF')
+            self.btn_stage_matrix_export = QtWidgets.QPushButton('Export matrix CSV')
+            self.btn_stage_matrix_turn_on.clicked.connect(lambda: self._apply_stage_matrix_region_state(True))
+            self.btn_stage_matrix_turn_off.clicked.connect(lambda: self._apply_stage_matrix_region_state(False))
+            self.btn_stage_matrix_export.clicked.connect(lambda: self._export_workflow_table_csv(getattr(self, 'stages_matrix_table', None), 'stages_matrix.csv'))
+            matrix_controls.addWidget(self.stages_matrix_focus_label, 1)
+            matrix_controls.addWidget(self.btn_stage_matrix_turn_on)
+            matrix_controls.addWidget(self.btn_stage_matrix_turn_off)
+            matrix_controls.addWidget(self.btn_stage_matrix_export)
+            matrix_lay.addLayout(matrix_controls)
+            splitter.addWidget(matrix_box)
+            splitter.setStretchFactor(0, 3)
+            splitter.setStretchFactor(1, 2)
+            splitter.setStretchFactor(2, 2)
+            lay.addWidget(splitter, 1)
+            return page
+
+        def _on_workflow_mode_changed(self, index: int) -> None:
+            mapping = {0: 1, 1: 1, 2: 3}
+            target = mapping.get(int(index), 1)
+            if self.step_list.currentRow() != target:
+                self.step_list.setCurrentRow(target)
+
+        def _refresh_workflow_mode_panels(self) -> None:
+            summaries = summarize_workflow_modes(self.current_model)
+            if hasattr(self, 'geometry_mode_summary'):
+                self.geometry_mode_summary.setText(summaries.get('geometry_structures', '-'))
+            if hasattr(self, 'mesh_mode_summary'):
+                self.mesh_mode_summary.setText(summaries.get('mesh', '-'))
+            if hasattr(self, 'stages_mode_summary'):
+                self.stages_mode_summary.setText(summaries.get('stages', '-'))
+            geo_rows_all = build_geometry_structures_rows(self.current_model)
+            mesh_rows_all = build_mesh_mode_rows(self.current_model)
+            stage_rows_all = build_stages_mode_rows(self.current_model)
+            geo_rows = filter_workflow_rows(geo_rows_all, ['object_name', 'role', 'region', 'material', 'structure_status', 'mesh_control'], getattr(self, 'geometry_mode_filter_edit', None).text() if hasattr(self, 'geometry_mode_filter_edit') else '', issues_only=bool(getattr(self, 'geometry_mode_issue_only', None).isChecked()) if hasattr(self, 'geometry_mode_issue_only') else False)
+            mesh_rows = filter_workflow_rows(mesh_rows_all, ['object_name', 'requested_family', 'actual_family', 'target_size', 'refine_ratio', 'status'], getattr(self, 'mesh_mode_filter_edit', None).text() if hasattr(self, 'mesh_mode_filter_edit') else '', issues_only=bool(getattr(self, 'mesh_mode_issue_only', None).isChecked()) if hasattr(self, 'mesh_mode_issue_only') else False)
+            stage_rows = filter_workflow_rows(stage_rows_all, ['stage_name', 'activate_regions', 'deactivate_regions', 'supports', 'interfaces', 'solver_profile'], getattr(self, 'stages_mode_filter_edit', None).text() if hasattr(self, 'stages_mode_filter_edit') else '')
+            self._fill_workflow_mode_table(getattr(self, 'geometry_mode_table', None), geo_rows, ['object_name', 'role', 'region', 'material', 'structure_status', 'mesh_control'])
+            self._fill_workflow_mode_table(getattr(self, 'mesh_mode_table', None), mesh_rows, ['object_name', 'requested_family', 'actual_family', 'target_size', 'refine_ratio', 'status'])
+            self._fill_workflow_mode_table(getattr(self, 'stages_mode_table', None), stage_rows, ['stage_name', 'stage_role', 'activate_regions', 'deactivate_regions', 'supports', 'interfaces', 'solver_profile'])
+            self._set_workflow_mode_count_label(getattr(self, 'geometry_mode_count_label', None), len(geo_rows), len(geo_rows_all))
+            self._set_workflow_mode_count_label(getattr(self, 'mesh_mode_count_label', None), len(mesh_rows), len(mesh_rows_all))
+            self._set_workflow_mode_count_label(getattr(self, 'stages_mode_count_label', None), len(stage_rows), len(stage_rows_all))
+            self._refresh_stage_activation_matrix()
+            self._refresh_workflow_mode_editors()
+
+        def _fill_workflow_mode_table(self, table, rows, fields: list[str]) -> None:
+            if table is None:
+                return
+            table.setRowCount(0)
+            for row_index, row in enumerate(rows):
+                table.insertRow(row_index)
+                for col_index, field in enumerate(fields):
+                    value = getattr(row, field, '-')
+                    table.setItem(row_index, col_index, QtWidgets.QTableWidgetItem(str(value)))
+            table.resizeColumnsToContents()
+
+        def _set_workflow_mode_count_label(self, label_widget, visible_count: int, total_count: int) -> None:
+            if label_widget is None:
+                return
+            label_widget.setText(f'{visible_count} / {total_count} row(s)' if visible_count != total_count else f'{visible_count} row(s)')
+
+        def _export_workflow_table_csv(self, table, default_name: str) -> None:
+            if table is None or table.columnCount() <= 0:
+                self._set_status(self._tt('Nothing to export.'))
+                return
+            path, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Export CSV', default_name, 'CSV files (*.csv)')
+            if not path:
+                return
+            with open(path, 'w', newline='', encoding='utf-8-sig') as fh:
+                writer = csv.writer(fh)
+                writer.writerow([table.horizontalHeaderItem(c).text() if table.horizontalHeaderItem(c) is not None else f'col_{c}' for c in range(table.columnCount())])
+                for r in range(table.rowCount()):
+                    writer.writerow([table.item(r, c).text() if table.item(r, c) is not None else '' for c in range(table.columnCount())])
+            self._set_status(self._tt(f'Exported workflow table to {path}'))
+
+        def _refresh_stage_activation_matrix(self) -> None:
+            table = getattr(self, 'stages_matrix_table', None)
+            if table is None:
+                return
+            headers, rows = build_stage_activation_matrix(self.current_model)
+            table.blockSignals(True)
+            table.clearSelection()
+            table.setColumnCount(len(headers))
+            table.setHorizontalHeaderLabels(headers)
+            table.setRowCount(len(rows))
+            for r, row in enumerate(rows):
+                for c, value in enumerate(row):
+                    item = QtWidgets.QTableWidgetItem(str(value))
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
+                    header = headers[c] if c < len(headers) else ''
+                    low = str(value).strip().lower()
+                    if header in {'Stage', 'Role'}:
+                        pass
+                    elif low == 'on':
+                        if header.startswith('S:') or header.startswith('I:'):
+                            item.setBackground(QtGui.QColor('#e7f0ff'))
+                        else:
+                            item.setBackground(QtGui.QColor('#dff6dd'))
+                    elif low == 'off':
+                        if header.startswith('S:') or header.startswith('I:'):
+                            item.setBackground(QtGui.QColor('#edf1f5'))
+                        else:
+                            item.setBackground(QtGui.QColor('#fde2e1'))
+                    table.setItem(r, c, item)
+            table.resizeColumnsToContents()
+            table.blockSignals(False)
+            summary = getattr(self, 'stages_matrix_summary', None)
+            if summary is not None:
+                editable = max(len(headers) - 2, 0)
+                summary.setText(self._tt(f'Stage matrix shows {len(rows)} stage(s) across {editable} editable region/support/interface column(s).'))
+            self._on_stage_matrix_selection_changed()
+
+        def _selected_stage_matrix_cell_info(self) -> dict[str, Any] | None:
+            table = getattr(self, 'stages_matrix_table', None)
+            if table is None:
+                return None
+            items = table.selectedItems()
+            if not items:
+                return None
+            item = items[0]
+            row = item.row(); col = item.column()
+            stage_item = table.item(row, 0)
+            if stage_item is None:
+                return None
+            header_item = table.horizontalHeaderItem(col)
+            header = header_item.text() if header_item is not None else ''
+            value = item.text() if item is not None else ''
+            if header in {'Stage', 'Role'} or col < 2:
+                cell_kind = 'readonly'
+                token = ''
+            elif header.startswith('S:'):
+                cell_kind = 'support'
+                token = header[2:]
+            elif header.startswith('I:'):
+                cell_kind = 'interface'
+                token = header[2:]
+            else:
+                cell_kind = 'region'
+                token = header
+            return {
+                'row': row,
+                'col': col,
+                'stage_name': stage_item.text(),
+                'header': header,
+                'value': value,
+                'cell_kind': cell_kind,
+                'token': token,
+                'is_region': cell_kind == 'region',
+            }
+
+        def _on_stage_matrix_selection_changed(self) -> None:
+            info = self._selected_stage_matrix_cell_info()
+            label = getattr(self, 'stages_matrix_focus_label', None)
+            if label is None:
+                return
+            if info is None:
+                label.setText(self._tt('No matrix cell selected.'))
+                return
+            stage_name = str(info.get('stage_name') or '')
+            header = str(info.get('header') or '')
+            value = str(info.get('value') or '')
+            kind = str(info.get('cell_kind') or 'readonly')
+            if kind in {'region', 'support', 'interface'}:
+                label.setText(self._tt(f'Selected: {stage_name} / {header} = {value}. Double-click to toggle, or use ON/OFF buttons.'))
+            else:
+                label.setText(self._tt(f'Selected: {stage_name} / {header} = {value}. Only ON/OFF region/support/interface cells are editable from this matrix.'))
+            if self.current_model is None:
+                return
+            for row_index, stage in enumerate(self.current_model.stages):
+                if stage.name == stage_name and self.stages_mode_table.rowCount() > row_index:
+                    self.stages_mode_table.selectRow(row_index)
+                    break
+
+        def _apply_stage_matrix_region_state(self, active: bool | None = None) -> None:
+            info = self._selected_stage_matrix_cell_info()
+            if info is None:
+                self._set_status(self._tt('Please select a region cell in the stage activation matrix first.'))
+                return
+            cell_kind = str(info.get('cell_kind') or 'readonly')
+            if cell_kind not in {'region', 'support', 'interface'}:
+                self._set_status(self._tt('Only region/support/interface on/off cells can be edited from the stage activation matrix.'))
+                return
+            stage_name = str(info.get('stage_name') or '')
+            token = str(info.get('token') or '')
+            current_on = str(info.get('value') or '').strip().lower() == 'on'
+            target_state = (not current_on) if active is None else bool(active)
+            if self.current_model is None:
+                self._set_status(self._tt('Failed to update stage activation matrix cell.'))
+                return
+            if cell_kind == 'region':
+                ok = update_stage_region_activation(self.current_model, stage_name, token, target_state)
+            elif cell_kind == 'support':
+                ok = update_stage_support_group(self.current_model, stage_name, token, target_state)
+            else:
+                ok = update_stage_interface_group(self.current_model, stage_name, token, target_state)
+            if not ok:
+                self._set_status(self._tt('Failed to update stage activation matrix cell.'))
+                return
+            self._populate_stage_table()
+            self._refresh_workflow_mode_panels()
+            self._set_status(self._tt(f'Set {stage_name} / {token} to {"on" if target_state else "off"}.'))
+
+        def _on_stage_matrix_item_double_clicked(self, _item) -> None:
+            self._apply_stage_matrix_region_state(None)
+
+        def _workflow_mode_selected_names(self, table) -> list[str]:
+            if table is None or table.selectionModel() is None:
+                return []
+            rows = sorted({idx.row() for idx in table.selectionModel().selectedRows()})
+            out: list[str] = []
+            for row in rows:
+                item = table.item(row, 0)
+                if item is not None:
+                    out.append(item.text())
+            return out
+
+        def _workflow_mode_object_keys_from_names(self, names: list[str]) -> list[str]:
+            if self.current_model is None:
+                return []
+            wanted = {str(name) for name in names}
+            return [rec.key for rec in self.current_model.object_records if str(rec.name or rec.key) in wanted]
+
+        def _refresh_workflow_mode_editors(self) -> None:
+            material_names = []
+            if self.current_model is not None:
+                material_names = [item.name for item in self.current_model.material_library]
+            combo = getattr(self, 'geometry_mode_material_combo', None)
+            if combo is not None:
+                current = combo.currentText()
+                combo.blockSignals(True)
+                combo.clear()
+                combo.addItem('')
+                for name in material_names:
+                    combo.addItem(name)
+                idx = combo.findText(current)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+                combo.blockSignals(False)
+
+        def _on_geometry_mode_selection_changed(self) -> None:
+            names = self._workflow_mode_selected_names(getattr(self, 'geometry_mode_table', None))
+            keys = self._workflow_mode_object_keys_from_names(names)
+            if not keys:
+                return
+            for i, key in enumerate(keys):
+                self._select_scene_payload('object', key, additive=i > 0)
+
+        def _on_mesh_mode_selection_changed(self) -> None:
+            names = self._workflow_mode_selected_names(getattr(self, 'mesh_mode_table', None))
+            keys = self._workflow_mode_object_keys_from_names(names)
+            if not keys or self.current_model is None:
+                return
+            rec = self.current_model.object_record(keys[0])
+            if rec is None:
+                return
+            ctl = dict((rec.metadata or {}).get('mesh_control') or {})
+            family = str(ctl.get('element_family') or 'inherit').strip() or 'inherit'
+            idx = self.mesh_mode_family_combo.findText(family)
+            if idx >= 0:
+                self.mesh_mode_family_combo.setCurrentIndex(idx)
+            self.mesh_mode_size_spin.setValue(float(ctl.get('target_size') or 0.0))
+            self.mesh_mode_refine_spin.setValue(float(ctl.get('refinement_ratio') or 0.0))
+            for i, key in enumerate(keys):
+                self._select_scene_payload('object', key, additive=i > 0)
+
+        def _on_stages_mode_selection_changed(self) -> None:
+            names = self._workflow_mode_selected_names(getattr(self, 'stages_mode_table', None))
+            if not names or self.current_model is None:
+                return
+            stage = next((item for item in self.current_model.stages if item.name == names[0]), None)
+            if stage is None:
+                return
+            for row_index, item in enumerate(self.current_model.stages):
+                if item.name == stage.name and self.stage_table.rowCount() > row_index:
+                    self.stage_table.selectRow(row_index)
+                    break
+            preset = str(stage.metadata.get('solver_preset') or 'custom')
+            idx = self.stages_mode_preset_combo.findData(preset)
+            if idx < 0:
+                idx = self.stages_mode_preset_combo.findData('custom')
+            if idx >= 0:
+                self.stages_mode_preset_combo.setCurrentIndex(idx)
+            profile = str(stage.metadata.get('compute_profile') or '').strip()
+            idx2 = self.stages_mode_profile_combo.findText(profile)
+            if idx2 >= 0:
+                self.stages_mode_profile_combo.setCurrentIndex(idx2)
+            active_supports = {str(x) for x in (stage.metadata.get('active_support_groups') or [])}
+            active_interfaces = {str(x) for x in (stage.metadata.get('active_interface_groups') or [])}
+            for key, cb in self.stages_mode_support_checks.items():
+                cb.setChecked(key in active_supports)
+            for key, cb in self.stages_mode_interface_checks.items():
+                cb.setChecked(key in active_interfaces)
+            if self.step_list.currentRow() != 3:
+                self.step_list.setCurrentRow(3)
+
+        def apply_geometry_mode_role_to_selected_rows(self) -> None:
+            if self.current_model is None:
+                return
+            keys = self._workflow_mode_object_keys_from_names(self._workflow_mode_selected_names(getattr(self, 'geometry_mode_table', None)))
+            if not keys:
+                self._set_status(self._tt('Please select one or more objects in Geometry / Structures mode.'))
+                return
+            role = str(self.geometry_mode_role_combo.currentText() or 'soil').strip() or 'soil'
+            self.current_model.set_object_role(keys, role)
+            self._sync_all_views()
+            self._set_status(self._tt(f'Applied role {role} to {len(keys)} object(s).'))
+
+        def assign_geometry_mode_region_to_selected_rows(self) -> None:
+            if self.current_model is None:
+                return
+            keys = self._workflow_mode_object_keys_from_names(self._workflow_mode_selected_names(getattr(self, 'geometry_mode_table', None)))
+            if not keys:
+                self._set_status(self._tt('Please select one or more objects in Geometry / Structures mode.'))
+                return
+            region_name = str(self.geometry_mode_region_edit.text() or '').strip() or 'region_new'
+            self.current_model.assign_objects_to_region(keys, region_name, create_region=True)
+            self._sync_all_views()
+            self._set_status(self._tt(f'Assigned {len(keys)} object(s) to region {region_name}.'))
+
+        def assign_geometry_mode_material_to_selected_rows(self) -> None:
+            if self.current_model is None:
+                return
+            keys = self._workflow_mode_object_keys_from_names(self._workflow_mode_selected_names(getattr(self, 'geometry_mode_table', None)))
+            material_name = str(self.geometry_mode_material_combo.currentText() or '').strip()
+            if not keys or not material_name:
+                self._set_status(self._tt('Select objects and a material definition first.'))
+                return
+            region_names = sorted({str(rec.region_name) for rec in self.current_model.object_records if rec.key in keys and rec.region_name})
+            if not region_names:
+                self._set_status(self._tt('Selected objects do not have regions yet.'))
+                return
+            self.current_model.assign_material_definition(region_names, material_name)
+            self._sync_all_views()
+            self._set_status(self._tt(f'Assigned material {material_name} to {len(region_names)} region(s).'))
+
+        def apply_mesh_mode_controls_to_selected_rows(self) -> None:
+            if self.current_model is None:
+                return
+            keys = self._workflow_mode_object_keys_from_names(self._workflow_mode_selected_names(getattr(self, 'mesh_mode_table', None)))
+            if not keys:
+                self._set_status(self._tt('Please select one or more objects in Mesh Mode.'))
+                return
+            family = str(self.mesh_mode_family_combo.currentText() or 'inherit').strip().lower()
+            if family == 'inherit':
+                family = None
+            size = float(self.mesh_mode_size_spin.value() or 0.0)
+            ratio = float(self.mesh_mode_refine_spin.value() or 0.0)
+            self.current_model.set_object_mesh_control(keys, element_family=family, target_size=size if size > 0.0 else None, refinement_ratio=ratio if ratio > 0.0 else None, enabled=True)
+            self._sync_all_views()
+            self._set_status(self._tt(f'Applied mesh controls to {len(keys)} object(s).'))
+
+        def clear_mesh_mode_controls_for_selected_rows(self) -> None:
+            if self.current_model is None:
+                return
+            keys = self._workflow_mode_object_keys_from_names(self._workflow_mode_selected_names(getattr(self, 'mesh_mode_table', None)))
+            if not keys:
+                self._set_status(self._tt('Please select one or more objects in Mesh Mode.'))
+                return
+            self.current_model.clear_object_mesh_control(keys)
+            self._sync_all_views()
+            self._set_status(self._tt(f'Cleared mesh controls for {len(keys)} object(s).'))
+
+        def apply_mesh_mode_family_to_all_rows(self) -> None:
+            if self.current_model is None:
+                return
+            keys = [rec.key for rec in self.current_model.object_records]
+            if not keys:
+                return
+            family = str(self.mesh_mode_family_combo.currentText() or 'inherit').strip().lower()
+            if family == 'inherit':
+                family = None
+            self.current_model.set_object_mesh_control(keys, element_family=family, target_size=None, refinement_ratio=None, enabled=True)
+            self._sync_all_views()
+            self._set_status(self._tt(f'Applied mesh family {family or "inherit"} to all objects.'))
+
+        def _apply_stage_mode_settings(self, target_names: list[str]) -> None:
+            if self.current_model is None or not target_names:
+                return
+            preset_key = str(self.stages_mode_preset_combo.currentData() or 'custom')
+            profile = str(self.stages_mode_profile_combo.currentText() or '').strip()
+            support_groups = [key for key, cb in self.stages_mode_support_checks.items() if cb.isChecked()]
+            interface_groups = [key for key, cb in self.stages_mode_interface_checks.items() if cb.isChecked()]
+            updated = []
+            selected = set(target_names)
+            for stage in self.current_model.stages:
+                metadata = dict(stage.metadata)
+                if stage.name in selected:
+                    metadata['active_support_groups'] = list(support_groups)
+                    metadata['active_interface_groups'] = list(interface_groups)
+                    if profile:
+                        metadata['compute_profile'] = profile
+                    else:
+                        metadata.pop('compute_profile', None)
+                    if preset_key and preset_key != 'custom':
+                        activation_map = dict(metadata.get('activation_map') or self._previous_stage_activation_map(stage.name))
+                        coupled = bool(metadata.get('plaxis_like_staged')) and bool(activation_map.get('wall', False))
+                        metadata.update(demo_solver_preset_payload(preset_key, coupled=coupled))
+                        metadata['solver_preset'] = preset_key
+                        metadata['solver_preset_label'] = explain_solver_preset(preset_key)
+                    elif preset_key == 'custom':
+                        metadata.pop('solver_preset', None)
+                        metadata.pop('solver_preset_label', None)
+                updated.append(AnalysisStage(name=stage.name, activate_regions=stage.activate_regions, deactivate_regions=stage.deactivate_regions, boundary_conditions=stage.boundary_conditions, loads=stage.loads, steps=stage.steps, metadata=metadata))
+            self.current_model.stages = updated
+            self._populate_stage_table()
+            self._refresh_workflow_mode_panels()
+
+        def apply_stages_mode_settings_to_selected_rows(self) -> None:
+            names = self._workflow_mode_selected_names(getattr(self, 'stages_mode_table', None))
+            if not names:
+                self._set_status(self._tt('Please select one or more stages in Stages Mode.'))
+                return
+            self._apply_stage_mode_settings(names)
+            self._set_status(self._tt(f'Applied stage mode settings to {len(names)} stage(s).'))
+
+        def apply_stages_mode_settings_to_all_rows(self) -> None:
+            if self.current_model is None:
+                return
+            names = [stage.name for stage in self.current_model.stages]
+            self._apply_stage_mode_settings(names)
+            self._set_status(self._tt('Applied stage mode settings to all stages.'))
 
         def _build_inspector_dock(self):
             dock = QtWidgets.QDockWidget('Inspector', self)
@@ -945,9 +1612,17 @@ def launch_main_window() -> None:
             self.inspector_assign_existing_btn = QtWidgets.QPushButton('Objects -> Existing region')
             self.inspector_merge_regions_btn = QtWidgets.QPushButton('Merge selected regions')
             self.inspector_apply_role_btn = QtWidgets.QPushButton('Apply object role')
+            self.inspector_mesh_family_combo = QtWidgets.QComboBox(); self.inspector_mesh_family_combo.addItems(['inherit', 'auto', 'tet4', 'hex8'])
+            self.inspector_mesh_size_spin = QtWidgets.QDoubleSpinBox(); self.inspector_mesh_size_spin.setDecimals(3); self.inspector_mesh_size_spin.setRange(0.0, 1.0e6); self.inspector_mesh_size_spin.setValue(0.0); self.inspector_mesh_size_spin.setSpecialValueText('inherit')
+            self.inspector_mesh_ratio_spin = QtWidgets.QDoubleSpinBox(); self.inspector_mesh_ratio_spin.setDecimals(2); self.inspector_mesh_ratio_spin.setRange(0.0, 1.0); self.inspector_mesh_ratio_spin.setValue(0.0); self.inspector_mesh_ratio_spin.setSpecialValueText('inherit')
+            self.inspector_apply_mesh_btn = QtWidgets.QPushButton('Apply mesh control')
+            self.inspector_clear_mesh_btn = QtWidgets.QPushButton('Clear mesh control')
             al.addRow('New region name', self.inspector_region_edit)
             al.addRow('Target region', self.inspector_region_combo)
             al.addRow('Role', self.inspector_role_combo)
+            al.addRow('Mesh family', self.inspector_mesh_family_combo)
+            al.addRow('Mesh size override', self.inspector_mesh_size_spin)
+            al.addRow('Refine ratio override', self.inspector_mesh_ratio_spin)
             self.inspector_pick_filter_combo = QtWidgets.QComboBox(); self.inspector_pick_filter_combo.addItems(['all', 'structures', 'soil', 'supports', 'visible_only'])
             self.inspector_pick_note = QtWidgets.QLabel('Pick filter limits 3D clicking/box selection without changing model data.')
             self.inspector_pick_note.setWordWrap(True)
@@ -957,6 +1632,8 @@ def launch_main_window() -> None:
             al.addRow(self.inspector_assign_existing_btn)
             al.addRow(self.inspector_merge_regions_btn)
             al.addRow(self.inspector_apply_role_btn)
+            mesh_btn_row = QtWidgets.QHBoxLayout(); mesh_btn_row.addWidget(self.inspector_apply_mesh_btn); mesh_btn_row.addWidget(self.inspector_clear_mesh_btn)
+            al.addRow(mesh_btn_row)
             self.inspector_nudge_step = QtWidgets.QDoubleSpinBox(); self.inspector_nudge_step.setDecimals(3); self.inspector_nudge_step.setRange(0.001, 1000.0); self.inspector_nudge_step.setValue(0.2)
             self.inspector_nudge_dx = QtWidgets.QDoubleSpinBox(); self.inspector_nudge_dx.setDecimals(3); self.inspector_nudge_dx.setRange(-1000.0, 1000.0); self.inspector_nudge_dx.setValue(0.0)
             self.inspector_nudge_dy = QtWidgets.QDoubleSpinBox(); self.inspector_nudge_dy.setDecimals(3); self.inspector_nudge_dy.setRange(-1000.0, 1000.0); self.inspector_nudge_dy.setValue(0.0)
@@ -999,6 +1676,8 @@ def launch_main_window() -> None:
             self.inspector_assign_existing_btn.clicked.connect(self.assign_selected_objects_to_existing_region)
             self.inspector_merge_regions_btn.clicked.connect(self.merge_selected_regions)
             self.inspector_apply_role_btn.clicked.connect(self.apply_selected_object_role)
+            self.inspector_apply_mesh_btn.clicked.connect(self.apply_mesh_control_to_selected_objects)
+            self.inspector_clear_mesh_btn.clicked.connect(self.clear_mesh_control_for_selected_objects)
             self.inspector_apply_nudge_btn.clicked.connect(self.apply_nudge_to_selected_objects)
             self.inspector_nudge_xp.clicked.connect(lambda: self.quick_nudge_selected_objects('x', +1.0))
             self.inspector_nudge_xm.clicked.connect(lambda: self.quick_nudge_selected_objects('x', -1.0))
@@ -1878,39 +2557,36 @@ def launch_main_window() -> None:
             return fixes
 
         def _on_toggle_inspector_requested(self, checked: bool) -> None:
+            self._inspector_force_hidden = not checked
             if checked:
                 self._inspector_dismissed = False
-                self.inspector_dock.setVisible(True)
+                self._update_inspector_collapse()
             else:
-                self._inspector_dismissed = True
                 self.inspector_dock.setVisible(False)
 
         def _on_inspector_pin_toggled(self, checked: bool) -> None:
             self._inspector_pinned = checked
             if checked:
+                self._inspector_force_hidden = False
                 self._inspector_dismissed = False
             self._update_inspector_collapse()
 
         def _inspector_has_explicit_selection(self) -> bool:
             if self.current_model is None:
                 return False
-            has_object_or_region = bool(self._selected_scene_payloads() or self._selected_region_names())
-            stage_rows = False
-            try:
-                stage_rows = bool(self.stage_table.selectionModel() and self.stage_table.selectionModel().selectedRows() and self.stage_table.hasFocus())
-            except Exception:
-                stage_rows = False
-            return bool(has_object_or_region or stage_rows)
+            return bool(self._selected_scene_payloads() or self._selected_region_names() or self._selected_scene_region_names())
 
         def _update_inspector_collapse(self) -> None:
             has_selection = self._inspector_has_explicit_selection()
             auto_collapse = bool(self.inspector_collapse.isChecked()) if hasattr(self, 'inspector_collapse') else False
-            expanded = self._inspector_pinned or ((has_selection or not auto_collapse) and (not self._inspector_dismissed or self._inspector_pinned))
+            auto_expand_payload = self._last_selection_payload[0] if self._last_selection_payload is not None else ''
+            allow_auto_expand = auto_expand_payload in getattr(self, '_inspector_auto_expand_payload_types', {'object', 'region'})
+            expanded = False if self._inspector_force_hidden else (self._inspector_pinned or ((has_selection and allow_auto_expand and not self._inspector_dismissed) or (not auto_collapse and not self._inspector_dismissed)))
             self.inspector_stack.setCurrentIndex(1 if expanded else 0)
             if not expanded and hasattr(self, 'inspector_collapsed_label'):
-                self.inspector_collapsed_label.setText(self._tt('Inspector (auto hidden)'))
-            visible = True if self._inspector_pinned else (expanded if auto_collapse else not self._inspector_dismissed)
-            self.inspector_dock.setVisible(bool(visible))
+                title = self.inspector_title.text().strip() if hasattr(self, 'inspector_title') else ''
+                self.inspector_collapsed_label.setText(title or self._tt('Inspector'))
+            self.inspector_dock.setVisible(not self._inspector_force_hidden)
             if hasattr(self, 'act_toggle_inspector'):
                 self.act_toggle_inspector.setChecked(self.inspector_dock.isVisible())
 
@@ -2114,6 +2790,9 @@ def launch_main_window() -> None:
             parts = [f"{method}: {int(summary.get('cells', 0) or 0)} cells", f"{int(summary.get('points', 0) or 0)} points", f"{int(summary.get('regions', 0) or 0)} regions"]
             if 'object_count' in summary:
                 parts.append(f"objects {int(summary.get('objects_succeeded', summary.get('object_count', 0)) or 0)}/{int(summary.get('object_count', 0) or 0)}")
+            actual_families = summary.get('actual_families') or []
+            if actual_families:
+                parts.append('families ' + '/'.join(str(x) for x in actual_families if x))
             if 'elapsed_seconds' in summary:
                 parts.append(f"elapsed {float(summary.get('elapsed_seconds', 0.0)):.2f}s")
             return ', '.join(parts)
@@ -2132,9 +2811,9 @@ def launch_main_window() -> None:
             elif 'surface extraction returned no usable faces' in lower or 'effectively zero' in lower:
                 remedy = self._tt('The selected object is empty or too thin for volume meshing. Check visibility, thickness, and source geometry.')
             elif 'gmsh executable was not found' in lower:
-                remedy = self._tt('Install gmsh and ensure it is available on PATH, or switch to voxel_hex8.')
+                remedy = self._tt('Install the consolidated requirements.txt (includes meshio/gmsh), or switch to voxel_hex8. The mesh engine can also auto-fallback when tet4 is unavailable.')
             elif 'meshio is not installed' in lower:
-                remedy = self._tt('Install meshio / meshing dependencies before using gmsh_tet.')
+                remedy = self._tt('Install the consolidated requirements.txt before using gmsh_tet.')
             elif 'failed while recovering the volume' in lower or 'non-manifold' in lower:
                 remedy = self._tt('Repair self-intersections/open shells, then retry gmsh_tet or switch to voxel_hex8.')
             return detail, remedy
@@ -2759,7 +3438,7 @@ def launch_main_window() -> None:
             model.metadata['source'] = 'parametric_pit'
             model.metadata['geometry_state'] = 'meshed'
             model.metadata['parametric_scene'] = {k: float(v.value()) if hasattr(v, 'decimals') else int(v.value()) for k, v in self._param_inputs.items()}
-            model.metadata['demo_version'] = '0.1.37'
+            model.metadata['demo_version'] = '0.1.46'
             model.metadata['boundary_preset'] = DEFAULT_GLOBAL_BOUNDARY_PRESET_KEY
             model.ensure_regions()
             self._create_demo_object_records(model)
@@ -3014,6 +3693,7 @@ def launch_main_window() -> None:
             region_root.setExpanded(True)
             self._refresh_region_target_widgets()
             self.scene_tree.blockSignals(False)
+            self._refresh_workflow_mode_panels()
         def _populate_project_info(self) -> None:
             if self.current_model is None:
                 self.project_name_label.setText('未载入'); self.project_stats_label.setText('-'); self.project_source_label.setText('-'); self.project_schema_label.setText('-')
@@ -3154,6 +3834,7 @@ def launch_main_window() -> None:
                 for col, value in enumerate(vals):
                     self.material_library_table.setItem(row, col, QtWidgets.QTableWidgetItem(value))
             self.material_library_table.resizeColumnsToContents()
+            self._refresh_workflow_mode_panels()
 
         def _populate_stage_table(self) -> None:
             selected_name = None
@@ -3179,6 +3860,7 @@ def launch_main_window() -> None:
             self._populate_stage_combo()
             if self.stage_table.rowCount() > 0:
                 self.stage_table.selectRow(selected_row if selected_row is not None else 0)
+            self._refresh_workflow_mode_panels()
 
         def _populate_stage_combo(self) -> None:
             current = self.result_stage_combo.currentText()
@@ -3519,6 +4201,7 @@ def launch_main_window() -> None:
             self._populate_material_library()
             self._populate_stage_table()
             self._populate_result_controls()
+            self._refresh_workflow_mode_panels()
             self._update_validation()
             self._refresh_form_validation()
             self._show_model()
@@ -3944,7 +4627,8 @@ def launch_main_window() -> None:
                 payload = ('region', '|'.join(sorted(regions)))
             elif stage is not None:
                 payload = ('stage', stage.name)
-            if payload != self._last_selection_payload:
+            if payload != self._last_selection_payload and payload is not None and payload[0] in getattr(self, '_inspector_auto_expand_payload_types', {'object', 'region'}):
+                self._inspector_force_hidden = False
                 self._inspector_dismissed = False
             self._last_selection_payload = payload
             if object_keys:
@@ -3962,7 +4646,28 @@ def launch_main_window() -> None:
                 self.inspector_visible_check.blockSignals(True); self.inspector_visible_check.setChecked(bool(first.visible) if first else True); self.inspector_visible_check.blockSignals(False)
                 self.inspector_pickable_check.blockSignals(True); self.inspector_pickable_check.setChecked(bool(first.pickable) if first else True); self.inspector_pickable_check.blockSignals(False)
                 self.inspector_locked_check.blockSignals(True); self.inspector_locked_check.setChecked(bool(first.locked) if first else False); self.inspector_locked_check.blockSignals(False)
-                props.extend([('visible', str(bool(first.visible)) if first else '-'), ('pickable', str(bool(first.pickable)) if first else '-'), ('locked', str(bool(first.locked)) if first else '-')])
+                mesh_ctl = dict(first.metadata.get('mesh_control') or {}) if first else {}
+                mesh_desc = '-'
+                if mesh_ctl:
+                    fam = str(mesh_ctl.get('element_family') or 'inherit')
+                    size = mesh_ctl.get('target_size')
+                    ratio = mesh_ctl.get('refinement_ratio')
+                    parts = [fam]
+                    if size not in (None, ''):
+                        parts.append(f'size={float(size):g}')
+                    if ratio not in (None, ''):
+                        parts.append(f'ratio={float(ratio):g}')
+                    mesh_desc = ', '.join(parts)
+                props.extend([('visible', str(bool(first.visible)) if first else '-'), ('pickable', str(bool(first.pickable)) if first else '-'), ('locked', str(bool(first.locked)) if first else '-'), ('mesh control', mesh_desc)])
+                if first:
+                    self.inspector_mesh_family_combo.blockSignals(True); self.inspector_mesh_family_combo.setCurrentText(str(mesh_ctl.get('element_family') or 'inherit')); self.inspector_mesh_family_combo.blockSignals(False)
+                    self.inspector_mesh_size_spin.blockSignals(True); self.inspector_mesh_size_spin.setValue(float(mesh_ctl.get('target_size') or 0.0)); self.inspector_mesh_size_spin.blockSignals(False)
+                    self.inspector_mesh_ratio_spin.blockSignals(True); self.inspector_mesh_ratio_spin.setValue(float(mesh_ctl.get('refinement_ratio') or 0.0)); self.inspector_mesh_ratio_spin.blockSignals(False)
+                else:
+                    self.inspector_mesh_family_combo.blockSignals(True); self.inspector_mesh_family_combo.setCurrentText('inherit'); self.inspector_mesh_family_combo.blockSignals(False)
+                    self.inspector_mesh_size_spin.blockSignals(True); self.inspector_mesh_size_spin.setValue(0.0); self.inspector_mesh_size_spin.blockSignals(False)
+                    self.inspector_mesh_ratio_spin.blockSignals(True); self.inspector_mesh_ratio_spin.setValue(0.0); self.inspector_mesh_ratio_spin.blockSignals(False)
+
                 self._set_key_value_table(self.inspector_props, props[:20])
                 self._update_inspector_collapse()
                 return
@@ -4078,6 +4783,39 @@ def launch_main_window() -> None:
             self.current_model.merge_regions(region_names, target)
             self._sync_all_views()
             self._set_status(f'已合并 {len(region_names)} 个 Region -> {target}')
+
+        def apply_mesh_control_to_selected_objects(self) -> None:
+            if self.current_model is None:
+                return
+            object_keys = self._selected_object_keys()
+            if not object_keys:
+                self._set_status(self._tt('请先选择一个几何对象。'))
+                return
+            family = str(self.inspector_mesh_family_combo.currentText() or 'inherit').strip().lower()
+            if family == 'inherit':
+                family = None
+            size = float(self.inspector_mesh_size_spin.value() or 0.0)
+            ratio = float(self.inspector_mesh_ratio_spin.value() or 0.0)
+            self.current_model.set_object_mesh_control(
+                object_keys,
+                element_family=family,
+                target_size=size if size > 0.0 else None,
+                refinement_ratio=ratio if ratio > 0.0 else None,
+                enabled=True,
+            )
+            self._set_status(self._tt(f'已为 {len(object_keys)} 个对象应用网格控制。'))
+            self._update_global_inspector()
+
+        def clear_mesh_control_for_selected_objects(self) -> None:
+            if self.current_model is None:
+                return
+            object_keys = self._selected_object_keys()
+            if not object_keys:
+                self._set_status(self._tt('请先选择一个几何对象。'))
+                return
+            self.current_model.clear_object_mesh_control(object_keys)
+            self._set_status(self._tt(f'已清除 {len(object_keys)} 个对象的网格控制。'))
+            self._update_global_inspector()
 
         def apply_selected_object_role(self, role: str | None = None) -> None:
             if self.current_model is None:
@@ -4393,6 +5131,9 @@ def launch_main_window() -> None:
             if preset_key and preset_key != 'custom':
                 metadata['solver_preset'] = str(preset_key)
                 metadata['solver_preset_label'] = explain_solver_preset(str(preset_key))
+                if metadata.get('demo_stage_workflow') or metadata.get('plaxis_like_staged'):
+                    coupled = bool(metadata.get('plaxis_like_staged')) and name != 'initial' and bool(activation_map.get('wall', False))
+                    metadata = normalize_demo_stage_metadata(name, metadata, activation_map=activation_map, coupled_mode=coupled)
             else:
                 metadata.pop('solver_preset', None)
                 metadata.pop('solver_preset_label', None)
@@ -4432,6 +5173,8 @@ def launch_main_window() -> None:
             metadata.update(demo_solver_preset_payload(preset_key, coupled=coupled))
             metadata['solver_preset'] = preset_key
             metadata['solver_preset_label'] = explain_solver_preset(preset_key)
+            if metadata.get('demo_stage_workflow') or metadata.get('plaxis_like_staged'):
+                metadata = normalize_demo_stage_metadata(stage.name, metadata, activation_map=activation_map, coupled_mode=coupled)
             updated = AnalysisStage(name=stage.name, activate_regions=stage.activate_regions, deactivate_regions=stage.deactivate_regions, boundary_conditions=stage.boundary_conditions, loads=stage.loads, steps=stage.steps, metadata=metadata)
             self.current_model.upsert_stage(updated)
             self._on_stage_selection_changed(); self._populate_stage_table()
@@ -4452,6 +5195,8 @@ def launch_main_window() -> None:
                 metadata.update(demo_solver_preset_payload(preset_key, coupled=coupled))
                 metadata['solver_preset'] = preset_key
                 metadata['solver_preset_label'] = explain_solver_preset(preset_key)
+                if metadata.get('demo_stage_workflow') or metadata.get('plaxis_like_staged'):
+                    metadata = normalize_demo_stage_metadata(stage.name, metadata, activation_map=activation_map, coupled_mode=coupled)
                 updated_stages.append(AnalysisStage(name=stage.name, activate_regions=stage.activate_regions, deactivate_regions=stage.deactivate_regions, boundary_conditions=stage.boundary_conditions, loads=stage.loads, steps=stage.steps, metadata=metadata))
             self.current_model.stages = updated_stages
             self._populate_stage_table()
@@ -4871,4 +5616,5 @@ def launch_main_window() -> None:
         app.setWindowIcon(QtGui.QIcon(str(resolve_app_icon())))
     except Exception:
         pass
+    globals()['MainWindow'] = MainWindow
     window = MainWindow(); window.show(); app.exec()

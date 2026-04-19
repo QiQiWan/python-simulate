@@ -37,14 +37,14 @@ def _make_model() -> SimulationModel:
 def _add_wall_ifaces(model: SimulationModel) -> None:
     model.interfaces = [
         InterfaceDefinition('outer_a', 'node_pair', (1,), (2,), active_stages=(), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'outer'}),
-        InterfaceDefinition('inner_upper_a', 'node_pair', (3,), (4,), active_stages=('initial',), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_upper'}),
-        InterfaceDefinition('inner_lower_a', 'node_pair', (5,), (6,), active_stages=('initial', 'excavate_level_1'), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_lower'}),
+        InterfaceDefinition('inner_upper_a', 'node_pair', (3,), (4,), active_stages=('wall_activation',), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_upper'}),
+        InterfaceDefinition('inner_lower_a', 'node_pair', (5,), (6,), active_stages=('wall_activation', 'excavate_level_1'), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_lower'}),
     ]
 
 
 def _add_supports(model: SimulationModel) -> None:
     model.structures = [
-        StructuralElementDefinition('crown_1', 'frame3d', (0, 1), active_stages=('initial', 'excavate_level_1', 'excavate_level_2'), metadata={'source': 'parametric_pit_auto_support', 'support_group': 'crown_beam'}),
+        StructuralElementDefinition('crown_1', 'frame3d', (0, 1), active_stages=('wall_activation', 'excavate_level_1', 'excavate_level_2'), metadata={'source': 'parametric_pit_auto_support', 'support_group': 'crown_beam'}),
         StructuralElementDefinition('strut_1', 'truss2', (2, 3), active_stages=('excavate_level_1', 'excavate_level_2'), metadata={'source': 'parametric_pit_auto_support', 'support_group': 'strut_level_1'}),
         StructuralElementDefinition('strut_2', 'truss2', (4, 5), active_stages=('excavate_level_2',), metadata={'source': 'parametric_pit_auto_support', 'support_group': 'strut_level_2'}),
     ]
@@ -57,7 +57,8 @@ def test_object_record_for_key_alias_works() -> None:
 
 
 def test_expected_support_groups_follow_excavation_sequence() -> None:
-    assert expected_support_groups_for_stage('initial') == {'crown_beam'}
+    assert expected_support_groups_for_stage('initial') == set()
+    assert expected_support_groups_for_stage('wall_activation') == {'crown_beam'}
     assert expected_support_groups_for_stage('excavate_level_1') == {'crown_beam', 'strut_level_1'}
     assert expected_support_groups_for_stage('excavate_level_2') == {'crown_beam', 'strut_level_1', 'strut_level_2'}
 
@@ -66,10 +67,12 @@ def test_presolve_allows_plaxis_like_auto_when_support_groups_exist() -> None:
     model = _make_model()
     _add_wall_ifaces(model)
     _add_supports(model)
-    activation0 = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': True}
+    activation0 = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': False}
+    activation_wall = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': True}
     activation1 = {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': True, 'wall': True}
     activation2 = {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': False, 'wall': True}
     model.add_stage(AnalysisStage(name='initial', metadata={'activation_map': activation0, 'initial_increment': 0.05}, steps=1))
+    model.add_stage(AnalysisStage(name='wall_activation', metadata={'activation_map': activation_wall, 'initial_increment': 0.025}, steps=1))
     model.add_stage(AnalysisStage(name='excavate_level_1', metadata={'activation_map': activation1, 'initial_increment': 0.05}, steps=1))
     model.add_stage(AnalysisStage(name='excavate_level_2', metadata={'activation_map': activation2, 'initial_increment': 0.05}, steps=1))
 
@@ -81,7 +84,7 @@ def test_presolve_blocks_plaxis_like_auto_when_support_group_missing() -> None:
     model = _make_model()
     _add_wall_ifaces(model)
     model.structures = [
-        StructuralElementDefinition('crown_1', 'frame3d', (0, 1), active_stages=('initial', 'excavate_level_1', 'excavate_level_2'), metadata={'source': 'parametric_pit_auto_support', 'support_group': 'crown_beam'}),
+        StructuralElementDefinition('crown_1', 'frame3d', (0, 1), active_stages=('wall_activation', 'excavate_level_1', 'excavate_level_2'), metadata={'source': 'parametric_pit_auto_support', 'support_group': 'crown_beam'}),
         StructuralElementDefinition('strut_1', 'truss2', (2, 3), active_stages=('excavate_level_1', 'excavate_level_2'), metadata={'source': 'parametric_pit_auto_support', 'support_group': 'strut_level_1'}),
     ]
     activation2 = {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': False, 'wall': True}
@@ -122,13 +125,15 @@ def test_build_demo_stages_uses_more_conservative_defaults_for_coupled_wall_mode
     model = _make_model()
     model.metadata['demo_wall_mode'] = 'plaxis_like_auto'
     stages = build_demo_stages(model, wall_active=True)
-    assert stages[0].steps == 8
-    assert stages[1].steps == 10
+    assert [stage.name for stage in stages] == ['initial', 'wall_activation', 'excavate_level_1', 'excavate_level_2']
+    assert stages[0].steps == 6
+    assert stages[1].steps == 6
+    assert stages[2].steps == 8
     assert float(stages[0].metadata['initial_increment']) == 0.0125
-    assert int(stages[0].metadata['max_iterations']) == 40
-    assert float(stages[0].metadata['max_load_fraction_per_step']) == 0.0125
-    assert float(stages[0].metadata['min_load_increment']) == 0.0015625
-    assert int(stages[0].metadata['modified_newton_max_reuse']) == 0
+    assert stages[0].metadata['initial_state_strategy'] == 'geostatic_seeded_linear'
+    assert int(stages[1].metadata['max_iterations']) >= 44
+    assert float(stages[1].metadata['initial_increment']) <= 0.00625
+    assert int(stages[1].metadata['modified_newton_max_reuse']) == 0
 
 
 def test_build_demo_stages_preserves_region_override_metadata() -> None:

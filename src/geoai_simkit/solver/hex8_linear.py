@@ -17,6 +17,7 @@ except ModuleNotFoundError:  # pragma: no cover
     pv = _PVStub()
 
 from geoai_simkit.core.model import BoundaryCondition, LoadDefinition
+from geoai_simkit.solver.linsys.sparse_block import SparseBlockMatrix
 from geoai_simkit.solver.linear_algebra import LinearSolverContext, _optional_import, solve_linear_system
 from geoai_simkit.validation_rules import normalize_boundary_target, normalize_load_kind
 from geoai_simkit.solver.warp_hex8 import build_block_sparse_pattern, resolve_warp_hex8_config, try_warp_hex8_linear_assembly
@@ -215,7 +216,50 @@ def subset_hex8_submesh(base: Hex8Submesh, mask: np.ndarray) -> Hex8Submesh:
 
 
 
-def select_bc_nodes(points: np.ndarray, bc: BoundaryCondition, tol: float = 1e-8) -> np.ndarray:
+
+
+def build_submesh_for_stage(model, stage_name: str | None = None) -> Hex8Submesh:
+    """Build a Hex8 submesh filtered by the active regions of a stage.
+
+    This is a small compatibility helper used by GUI/tests and older demo code.
+    When ``stage_name`` is ``None`` it returns the full Hex8 submesh of the model.
+    """
+    from geoai_simkit.solver.staging import StageManager
+
+    model.ensure_regions()
+    grid = model.to_unstructured_grid()
+    base = extract_hex8_submesh(grid)
+    if not stage_name:
+        return base
+    stage_contexts = StageManager(model).iter_stages()
+    ctx = next((item for item in stage_contexts if item.stage.name == stage_name), None)
+    if ctx is None:
+        return base
+    cell_region_map: dict[int, str] = {}
+    for region in model.region_tags:
+        for cid in np.asarray(region.cell_ids, dtype=np.int64):
+            cell_region_map[int(cid)] = region.name
+    mask = np.array([cell_region_map.get(int(full_cid), None) in ctx.active_regions for full_cid in base.full_cell_ids], dtype=bool)
+    return subset_hex8_submesh(base, mask)
+
+
+
+
+def _resolve_metadata_point_ids(
+    point_ids: np.ndarray,
+    *,
+    point_id_space: str = 'local',
+    local_by_global: dict[int, int] | None = None,
+) -> np.ndarray:
+    ids = np.asarray(point_ids, dtype=np.int64)
+    if ids.size == 0:
+        return ids
+    if str(point_id_space).strip().lower() == 'global' and local_by_global is not None:
+        return np.asarray([int(local_by_global[int(g)]) for g in ids if int(g) in local_by_global], dtype=np.int64)
+    return ids
+
+
+def select_bc_nodes(points: np.ndarray, bc: BoundaryCondition, tol: float = 1e-8, *, local_by_global: dict[int, int] | None = None) -> np.ndarray:
     target = normalize_boundary_target(bc.target)
     if target == "all":
         return np.arange(points.shape[0], dtype=np.int64)
@@ -227,11 +271,13 @@ def select_bc_nodes(points: np.ndarray, bc: BoundaryCondition, tol: float = 1e-8
     if target in axes:
         ax, val = axes[target]
         return np.where(np.isclose(points[:, ax], val, atol=tol))[0]
-    return np.asarray(bc.metadata.get("point_ids", []), dtype=np.int64)
+    point_ids = np.asarray(bc.metadata.get("point_ids", []), dtype=np.int64)
+    point_id_space = str(bc.metadata.get('point_id_space', 'local'))
+    return _resolve_metadata_point_ids(point_ids, point_id_space=point_id_space, local_by_global=local_by_global)
 
 
 
-def apply_stage_nodal_loads(F: np.ndarray, points: np.ndarray, loads: tuple[LoadDefinition, ...]) -> None:
+def apply_stage_nodal_loads(F: np.ndarray, points: np.ndarray, loads: tuple[LoadDefinition, ...], *, local_by_global: dict[int, int] | None = None) -> None:
     for load in loads:
         if normalize_load_kind(load.kind) != "point_force":
             continue
@@ -239,12 +285,272 @@ def apply_stage_nodal_loads(F: np.ndarray, points: np.ndarray, loads: tuple[Load
         if target == "all":
             node_ids = np.arange(points.shape[0], dtype=np.int64)
         else:
-            node_ids = np.asarray(load.metadata.get("point_ids", []), dtype=np.int64)
+            point_ids = np.asarray(load.metadata.get("point_ids", []), dtype=np.int64)
+            point_id_space = str(load.metadata.get('point_id_space', 'local'))
+            node_ids = _resolve_metadata_point_ids(point_ids, point_id_space=point_id_space, local_by_global=local_by_global)
         if node_ids.size == 0:
             continue
         value = np.asarray(load.values, dtype=float)[:3]
         for comp in range(min(3, value.size)):
             np.add.at(F, 3 * node_ids + comp, float(value[comp]))
+
+
+def _vector_summary(values: np.ndarray | None) -> dict[str, float | int]:
+    array = np.asarray(values if values is not None else np.empty((0,), dtype=float), dtype=float).reshape(-1)
+    if array.size == 0:
+        return {
+            'size': 0,
+            'norm': 0.0,
+            'max_abs': 0.0,
+        }
+    return {
+        'size': int(array.size),
+        'norm': float(np.linalg.norm(array)),
+        'max_abs': float(np.max(np.abs(array))),
+    }
+
+
+def build_partition_local_matrix_summaries(
+    matrix,
+    *,
+    submesh_global_point_ids: np.ndarray,
+    local_by_global: dict[int, int],
+    solver_metadata: dict[str, object] | None = None,
+    block_size: int = 3,
+    matrix_metadata: dict[str, object] | None = None,
+    rhs: np.ndarray | None = None,
+    solution: np.ndarray | None = None,
+    residual: np.ndarray | None = None,
+    reaction: np.ndarray | None = None,
+    fixed_dofs: np.ndarray | None = None,
+    free_dofs: np.ndarray | None = None,
+) -> list[dict[str, object]]:
+    metadata = dict(solver_metadata or {})
+    partition_node_maps = list(metadata.get('partition_node_maps', []) or [])
+    if not partition_node_maps:
+        return []
+
+    stage_linear_system_plan = dict(metadata.get('stage_linear_system_plan', {}) or {})
+    plan_rows = list(stage_linear_system_plan.get('partition_local_systems', []) or [])
+    plan_by_partition = {
+        int(item.get('partition_id', index)): dict(item)
+        for index, item in enumerate(plan_rows)
+    }
+    matrix_meta = dict(matrix_metadata or {})
+    matrix_obj = matrix
+    rhs_array = None if rhs is None else np.asarray(rhs, dtype=float).reshape(-1)
+    solution_array = None if solution is None else np.asarray(solution, dtype=float).reshape(-1)
+    residual_array = None if residual is None else np.asarray(residual, dtype=float).reshape(-1)
+    reaction_array = None if reaction is None else np.asarray(reaction, dtype=float).reshape(-1)
+    fixed_dofs_array = (
+        np.asarray(fixed_dofs, dtype=np.int64).reshape(-1)
+        if fixed_dofs is not None
+        else np.empty((0,), dtype=np.int64)
+    )
+    free_dofs_array = (
+        np.asarray(free_dofs, dtype=np.int64).reshape(-1)
+        if free_dofs is not None
+        else np.empty((0,), dtype=np.int64)
+    )
+    if hasattr(matrix_obj, 'to_csr'):
+        matrix_obj = matrix_obj.to_csr()
+    elif hasattr(matrix_obj, 'tocsr'):
+        matrix_obj = matrix_obj.tocsr()
+    else:
+        matrix_obj = np.asarray(matrix_obj, dtype=float)
+
+    active_global_nodes = {
+        int(item)
+        for item in np.asarray(submesh_global_point_ids, dtype=np.int64).reshape(-1).tolist()
+    }
+    rows: list[dict[str, object]] = []
+    resolved_block_size = max(1, int(block_size))
+    for index, item in enumerate(partition_node_maps):
+        partition_row = dict(item)
+        partition_id = int(partition_row.get('partition_id', index) or index)
+        plan_row = dict(plan_by_partition.get(partition_id, {}) or {})
+        local_to_global_node = [
+            int(node_id)
+            for node_id in partition_row.get('local_to_global_node', []) or []
+        ]
+        active_partition_global_nodes = [
+            node_id
+            for node_id in local_to_global_node
+            if node_id in active_global_nodes and node_id in local_by_global
+        ]
+        active_partition_local_nodes = np.asarray(
+            [int(local_by_global[node_id]) for node_id in active_partition_global_nodes],
+            dtype=np.int64,
+        )
+        if active_partition_local_nodes.size:
+            local_dof_ids = np.empty(
+                (active_partition_local_nodes.size * resolved_block_size,),
+                dtype=np.int64,
+            )
+            for node_offset, local_node_id in enumerate(active_partition_local_nodes.tolist()):
+                base = int(local_node_id) * resolved_block_size
+                start = int(node_offset * resolved_block_size)
+                local_dof_ids[start:start + resolved_block_size] = np.arange(
+                    base,
+                    base + resolved_block_size,
+                    dtype=np.int64,
+                )
+            if hasattr(matrix_obj, 'tocsr'):
+                local_matrix = matrix_obj[local_dof_ids][:, local_dof_ids]
+            else:
+                local_matrix = np.asarray(matrix_obj, dtype=float)[
+                    np.ix_(local_dof_ids, local_dof_ids)
+                ]
+            local_summary = SparseBlockMatrix.from_matrix(
+                local_matrix,
+                block_size=resolved_block_size,
+                metadata={
+                    **matrix_meta,
+                    'partition_id': int(partition_id),
+                    'summary_source': 'runtime-assembled-global-slice',
+                    'matrix_summary_kind': 'actual-local-partition',
+                    'has_actual_local_matrix': True,
+                },
+            ).summary()
+        else:
+            local_dof_ids = np.empty((0,), dtype=np.int64)
+            local_summary = {
+                'shape': [0, 0],
+                'block_size': int(resolved_block_size),
+                'storage': str(matrix_meta.get('storage', 'summary-only')),
+                'nnz_entries': 0,
+                'nnz_blocks': 0,
+                'density': 0.0,
+                'storage_bytes': 0,
+                'partition_id': int(partition_id),
+                'summary_source': 'runtime-assembled-global-slice',
+                'matrix_summary_kind': 'actual-local-partition',
+                'has_actual_local_matrix': True,
+            }
+        local_rhs = (
+            rhs_array[local_dof_ids]
+            if rhs_array is not None and local_dof_ids.size
+            else np.empty((0,), dtype=float)
+        )
+        local_solution = (
+            solution_array[local_dof_ids]
+            if solution_array is not None and local_dof_ids.size
+            else np.empty((0,), dtype=float)
+        )
+        local_residual = (
+            residual_array[local_dof_ids]
+            if residual_array is not None and local_dof_ids.size
+            else np.empty((0,), dtype=float)
+        )
+        local_reaction = (
+            reaction_array[local_dof_ids]
+            if reaction_array is not None and local_dof_ids.size
+            else np.empty((0,), dtype=float)
+        )
+        rhs_summary = _vector_summary(local_rhs if rhs_array is not None else None)
+        solution_summary = _vector_summary(local_solution if solution_array is not None else None)
+        residual_summary = _vector_summary(local_residual if residual_array is not None else None)
+        reaction_summary = _vector_summary(local_reaction if reaction_array is not None else None)
+        fixed_local_dof_count = (
+            int(np.count_nonzero(np.isin(local_dof_ids, fixed_dofs_array)))
+            if fixed_dofs_array.size and local_dof_ids.size
+            else 0
+        )
+        free_local_dof_count = (
+            int(np.count_nonzero(np.isin(local_dof_ids, free_dofs_array)))
+            if free_dofs_array.size and local_dof_ids.size
+            else max(0, int(local_dof_ids.size) - int(fixed_local_dof_count))
+        )
+        rows.append(
+            {
+                'partition_id': int(partition_id),
+                'active': bool(
+                    plan_row.get('active', active_partition_local_nodes.size > 0)
+                ),
+                'activity_ratio': float(
+                    plan_row.get(
+                        'activity_ratio',
+                        1.0 if active_partition_local_nodes.size else 0.0,
+                    )
+                    or 0.0
+                ),
+                'active_cell_count': int(plan_row.get('active_cell_count', 0) or 0),
+                'active_gp_state_count': int(plan_row.get('active_gp_state_count', 0) or 0),
+                'active_owned_node_count': int(
+                    plan_row.get('active_owned_node_count', 0) or 0
+                ),
+                'active_owned_dof_count': int(
+                    plan_row.get('active_owned_dof_count', 0) or 0
+                ),
+                'owned_cell_count': int(plan_row.get('owned_cell_count', 0) or 0),
+                'owned_node_count': int(
+                    partition_row.get(
+                        'owned_node_count',
+                        plan_row.get('owned_node_count', 0),
+                    )
+                    or 0
+                ),
+                'ghost_node_count': int(
+                    partition_row.get(
+                        'ghost_node_count',
+                        plan_row.get('ghost_node_count', 0),
+                    )
+                    or 0
+                ),
+                'owned_dof_count': int(
+                    plan_row.get(
+                        'owned_dof_count',
+                        int(partition_row.get('owned_node_count', 0) or 0)
+                        * resolved_block_size,
+                    )
+                    or 0
+                ),
+                'ghost_dof_count': int(
+                    plan_row.get(
+                        'ghost_dof_count',
+                        int(partition_row.get('ghost_node_count', 0) or 0)
+                        * resolved_block_size,
+                    )
+                    or 0
+                ),
+                'local_dof_count': int(local_dof_ids.size),
+                'active_local_node_count': int(active_partition_local_nodes.size),
+                'active_local_dof_count': int(local_dof_ids.size),
+                'matrix_shape': list(local_summary.get('shape', [0, 0]) or [0, 0]),
+                'matrix_nnz_entries': int(local_summary.get('nnz_entries', 0) or 0),
+                'matrix_nnz_blocks': int(local_summary.get('nnz_blocks', 0) or 0),
+                'matrix_storage_bytes': int(local_summary.get('storage_bytes', 0) or 0),
+                'matrix_density': float(local_summary.get('density', 0.0) or 0.0),
+                'rhs_size': int(rhs_summary.get('size', 0) or 0),
+                'rhs_norm': float(rhs_summary.get('norm', 0.0) or 0.0),
+                'rhs_max_abs': float(rhs_summary.get('max_abs', 0.0) or 0.0),
+                'solution_size': int(solution_summary.get('size', 0) or 0),
+                'solution_norm': float(solution_summary.get('norm', 0.0) or 0.0),
+                'solution_max_abs': float(solution_summary.get('max_abs', 0.0) or 0.0),
+                'residual_size': int(residual_summary.get('size', 0) or 0),
+                'residual_norm': float(residual_summary.get('norm', 0.0) or 0.0),
+                'residual_max_abs': float(residual_summary.get('max_abs', 0.0) or 0.0),
+                'reaction_size': int(reaction_summary.get('size', 0) or 0),
+                'reaction_norm': float(reaction_summary.get('norm', 0.0) or 0.0),
+                'reaction_max_abs': float(reaction_summary.get('max_abs', 0.0) or 0.0),
+                'fixed_local_dof_count': int(fixed_local_dof_count),
+                'free_local_dof_count': int(free_local_dof_count),
+                'has_actual_local_rhs': bool(rhs_array is not None),
+                'has_actual_local_solution': bool(solution_array is not None),
+                'has_actual_local_residual': bool(residual_array is not None),
+                'has_actual_local_reaction': bool(reaction_array is not None),
+                'summary_source': str(
+                    local_summary.get('summary_source', 'runtime-assembled-global-slice')
+                ),
+                'matrix_summary_kind': str(
+                    local_summary.get('matrix_summary_kind', 'actual-local-partition')
+                ),
+                'has_actual_local_matrix': bool(
+                    local_summary.get('has_actual_local_matrix', True)
+                ),
+            }
+        )
+    return rows
 
 
 
@@ -259,7 +565,11 @@ def solve_linear_hex8(
     thread_count: int = 0,
     compute_device: str = 'cpu',
     solver_metadata: dict[str, object] | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, object]]:
+    extra_stiffness: object | None = None,
+    extra_rhs: np.ndarray | None = None,
+    auxiliary_system_summaries: dict[str, object] | None = None,
+    progress_callback=None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, object], np.ndarray, np.ndarray]:
     n_nodes = submesh.points.shape[0]
     ndof = n_nodes * 3
     if n_nodes == 0:
@@ -283,6 +593,7 @@ def solve_linear_hex8(
         'device': str(compute_device),
         'warnings': [],
         'used_warp': False,
+        'element_family': 'hex8',
     }
 
     warp_cfg = resolve_warp_hex8_config(solver_metadata)
@@ -350,14 +661,41 @@ def solve_linear_hex8(
         data = np.concatenate(data_parts) if data_parts else np.empty((0,), dtype=float)
         K = sp.coo_matrix((data, (rows, cols)), shape=(ndof, ndof)).tocsr()
 
-    apply_stage_nodal_loads(F, submesh.points, loads)
+    apply_stage_nodal_loads(F, submesh.points, loads, local_by_global=submesh.local_by_global)
+    if extra_stiffness is not None:
+        if sparse_ok and sp is not None:
+            extra_matrix = (
+                extra_stiffness.tocsr()
+                if hasattr(extra_stiffness, 'tocsr')
+                else sp.csr_matrix(np.asarray(extra_stiffness, dtype=float))
+            )
+            K = extra_matrix if K is None else (K + extra_matrix)
+        else:
+            extra_matrix = np.asarray(extra_stiffness, dtype=float)
+            if extra_matrix.shape != (ndof, ndof):
+                raise ValueError(
+                    f'extra_stiffness shape {extra_matrix.shape} does not match Hex8 system {(ndof, ndof)}'
+                )
+            K = extra_matrix.copy() if K is None else (np.asarray(K, dtype=float) + extra_matrix)
+    if extra_rhs is not None:
+        extra_rhs_array = np.asarray(extra_rhs, dtype=float).reshape(-1)
+        if extra_rhs_array.size != ndof:
+            raise ValueError(
+                f'extra_rhs size {extra_rhs_array.size} does not match Hex8 system size {ndof}'
+            )
+        F += extra_rhs_array
+    if auxiliary_system_summaries:
+        assembly_info['auxiliary_linear_systems'] = {
+            str(name): dict(summary)
+            for name, summary in dict(auxiliary_system_summaries).items()
+        }
 
     fixed_dofs: list[int] = []
     fixed_values: list[float] = []
     for bc in bcs:
         if bc.kind.lower() != "displacement":
             continue
-        node_ids = select_bc_nodes(submesh.points, bc)
+        node_ids = select_bc_nodes(submesh.points, bc, local_by_global=submesh.local_by_global)
         vals = np.asarray(bc.values, dtype=float)
         for nid in node_ids:
             for comp in bc.components:
@@ -374,6 +712,29 @@ def solve_linear_hex8(
 
     all_dofs = np.arange(ndof, dtype=np.int64)
     free = np.setdiff1d(all_dofs, fixed_dofs_arr)
+    matrix_summary = SparseBlockMatrix.from_matrix(
+        K,
+        block_size=3,
+        metadata={
+            'storage': (
+                'block-sparse'
+                if hasattr(K, 'to_csr') and hasattr(K, 'block_size')
+                else ('csr' if sparse_ok else 'dense')
+            ),
+            'backend': assembly_info.get('backend'),
+            'device': assembly_info.get('device'),
+        },
+    ).summary()
+    assembly_info['linear_system_summary'] = {
+        **matrix_summary,
+        'rhs_size': int(np.asarray(F, dtype=float).size),
+        'rhs_norm': float(np.linalg.norm(np.asarray(F, dtype=float).reshape(-1))),
+        'rhs_max_abs': float(np.max(np.abs(np.asarray(F, dtype=float).reshape(-1)))) if np.asarray(F, dtype=float).size else 0.0,
+        'fixed_dof_count': int(fixed_dofs_arr.size),
+        'free_dof_count': int(free.size),
+        'block_size': 3,
+        'sparse_enabled': bool(sparse_ok),
+    }
     u = np.zeros(ndof, dtype=float)
     if free.size:
         linear_context = LinearSolverContext()
@@ -445,10 +806,61 @@ def solve_linear_hex8(
         assembly_info['linear_ordering'] = solve_info.ordering
         assembly_info['linear_preconditioner'] = solve_info.preconditioner
         assembly_info['linear_device'] = solve_info.device
+        assembly_info['linear_system_summary'].update(
+            {
+                'solver_backend': solve_info.backend,
+                'ordering': solve_info.ordering,
+                'preconditioner': solve_info.preconditioner,
+                'solver_device': solve_info.device,
+            }
+        )
         if solve_info.warnings:
-            assembly_info.setdefault('warnings', []).extend(list(solve_info.warnings))
+                assembly_info.setdefault('warnings', []).extend(list(solve_info.warnings))
     if fixed_dofs_arr.size:
         u[fixed_dofs_arr] = fixed_values_arr
+
+    if hasattr(K, 'dot'):
+        Ku = np.asarray(K.dot(u), dtype=float).reshape(-1)
+    else:
+        Ku = np.asarray(K @ u, dtype=float).reshape(-1)
+    equilibrium_residual = Ku - np.asarray(F, dtype=float).reshape(-1)
+    reaction = np.zeros_like(equilibrium_residual)
+    if fixed_dofs_arr.size:
+        reaction[fixed_dofs_arr] = equilibrium_residual[fixed_dofs_arr]
+        equilibrium_residual[fixed_dofs_arr] = 0.0
+
+    assembly_info['linear_system_summary'].update(
+        {
+            'solution_size': int(u.size),
+            'solution_norm': float(np.linalg.norm(np.asarray(u, dtype=float).reshape(-1))),
+            'solution_max_abs': float(np.max(np.abs(np.asarray(u, dtype=float).reshape(-1)))) if np.asarray(u, dtype=float).size else 0.0,
+            'residual_size': int(equilibrium_residual.size),
+            'residual_norm': float(np.linalg.norm(equilibrium_residual)),
+            'residual_max_abs': float(np.max(np.abs(equilibrium_residual))) if equilibrium_residual.size else 0.0,
+            'reaction_size': int(reaction.size),
+            'reaction_dof_count': int(fixed_dofs_arr.size),
+            'reaction_norm': float(np.linalg.norm(reaction)),
+            'reaction_max_abs': float(np.max(np.abs(reaction))) if reaction.size else 0.0,
+        }
+    )
+    assembly_info['actual_partition_linear_systems'] = build_partition_local_matrix_summaries(
+        K,
+        submesh_global_point_ids=np.asarray(submesh.global_point_ids, dtype=np.int64),
+        local_by_global=dict(submesh.local_by_global),
+        solver_metadata=solver_metadata,
+        block_size=3,
+        matrix_metadata={
+            'storage': str(matrix_summary.get('storage', 'csr')),
+            'backend': assembly_info.get('backend'),
+            'device': assembly_info.get('device'),
+        },
+        rhs=F,
+        solution=u,
+        residual=equilibrium_residual,
+        reaction=reaction,
+        fixed_dofs=fixed_dofs_arr,
+        free_dofs=free,
+    )
 
     u_nodes = u.reshape(n_nodes, 3)
     for eidx, elem in enumerate(submesh.elements):
@@ -463,7 +875,14 @@ def solve_linear_hex8(
 
     u_nodes *= displacement_scale
     vm = von_mises(cell_stresses)
-    return u_nodes, cell_stresses, vm, assembly_info
+    return (
+        u_nodes,
+        cell_stresses,
+        vm,
+        assembly_info,
+        equilibrium_residual.reshape(n_nodes, 3),
+        reaction.reshape(n_nodes, 3),
+    )
 
 
 

@@ -1,34 +1,27 @@
-.PHONY: install install-ui install-ifc install-warp install-dev demo gui check test
+PYTHON ?= python
+
+.PHONY: install install-dev test lint check-env demo build dist-check
 
 install:
-	python -m pip install -r requirements.txt
-
-install-ui:
-	python -m pip install -r requirements-ui.txt
-
-install-ifc:
-	python -m pip install -r requirements-ifc.txt
-
-install-warp:
-	python -m pip install -r requirements-warp.txt
+	$(PYTHON) -m pip install -r requirements.txt
 
 install-dev:
-	python -m pip install -r requirements-dev.txt
+	$(PYTHON) -m pip install -r requirements-dev.txt
 
-demo:
-	python run_demo.py
-
-gui:
-	python run_gui.py
-
-check:
-	python run_checks.py
+lint:
+	ruff check src tests
 
 test:
-	PYTHONPATH=src pytest -q
+	pytest -q
 
-install-solver:
-	python -m pip install -r requirements-solver.txt
+check-env:
+	$(PYTHON) run_checks.py
 
-install-meshing:
-	python -m pip install -r requirements-meshing.txt
+demo:
+	$(PYTHON) run_demo.py --out-dir exports_root
+
+build:
+	$(PYTHON) -m build
+
+dist-check:
+	$(PYTHON) -m twine check dist/*

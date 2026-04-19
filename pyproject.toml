@@ -1,40 +1,61 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "geoai-simkit"
-version = "0.1.29"
-description = "Graphics-first AI simulation kernel with mandatory NVIDIA Warp GPU path, IFC import, and VTK export"
-readme = "README.md"
+dynamic = ["version", "readme"]
+description = "Geotechnical simulation starter toolkit with staged workflows, FEM solvers, and desktop visualization"
 requires-python = ">=3.10"
-authors = [{name = "OpenAI"}]
+keywords = ["geotechnical", "fem", "simulation", "vtk", "pyvista", "geomechanics"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Visualization",
+  "Operating System :: OS Independent",
+]
 dependencies = [
   "numpy>=1.26",
-  "pyvista>=0.47",
   "typing-extensions>=4.9",
   "scipy>=1.11",
-  "warp-lang>=1.12"
 ]
 
 [project.optional-dependencies]
-solver = [
-  "scipy>=1.11",
-  "warp-lang>=1.12"
-]
-ui = [
+gui = [
+  "pyvista>=0.47",
   "PySide6>=6.7",
-  "pyvistaqt>=0.11"
+  "pyvistaqt>=0.11",
 ]
 ifc = [
-  "ifcopenshell>=0.8.4"
+  "ifcopenshell>=0.8.4",
+]
+meshing = [
+  "meshio>=5.3",
+  "gmsh>=4.11",
+]
+gpu = [
+  "warp-lang>=1.12",
+]
+all = [
+  "pyvista>=0.47",
+  "PySide6>=6.7",
+  "pyvistaqt>=0.11",
+  "ifcopenshell>=0.8.4",
+  "meshio>=5.3",
+  "gmsh>=4.11",
+  "warp-lang>=1.12",
 ]
 dev = [
   "pytest>=8.0",
-  "ruff>=0.5"
-]
-warp = [
-  "warp-lang>=1.12"
+  "ruff>=0.5",
+  "build>=1.2",
+  "twine>=5.1",
 ]
 
 [project.scripts]
@@ -42,9 +63,27 @@ geoai-simkit = "geoai_simkit.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+namespaces = false
 
 [tool.setuptools.package-data]
 geoai_simkit = ["assets/*.ico", "assets/*.png"]
+
+[tool.setuptools.dynamic]
+version = {attr = "geoai_simkit._version.__version__"}
+readme = {file = ["README.md"], content-type = "text/markdown"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

@@ -26,7 +26,7 @@ class ExportManager:
             data.save(out)
             return out
         if ext in {".obj", ".ply", ".stl", ".vtp"}:
-            surf = data.extract_surface()
+            surf = data.extract_surface(algorithm='dataset_surface')
             surf.save(out, binary=binary)
             return out
         data.save(out, binary=binary)

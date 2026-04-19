@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import math
+import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -22,17 +25,49 @@ class GmshMesherOptions:
     element_size: float = 2.0
     algorithm3d: int = 1
     optimize: bool = True
+    gmsh_executable: str | None = None
+    use_python_api: bool = True
 
 
 class GmshMesher:
     @staticmethod
-    def available() -> bool:
+    def find_gmsh_executable(explicit: str | None = None) -> str | None:
+        candidates: list[str] = []
+        if explicit:
+            candidates.append(explicit)
+        env_value = os.environ.get('GMSH_EXE') or os.environ.get('GMSH_PATH')
+        if env_value:
+            candidates.append(env_value)
+        for name in ('gmsh', 'gmsh.exe'):
+            found = shutil.which(name)
+            if found:
+                candidates.append(found)
+        for candidate in candidates:
+            if not candidate:
+                continue
+            try:
+                proc = subprocess.run([candidate, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+                if proc.returncode == 0:
+                    return candidate
+            except Exception:
+                continue
+        return None
+
+    @staticmethod
+    def _python_api_available() -> bool:
         try:
-            import meshio  # noqa: F401
-            out = subprocess.run(['gmsh', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
-            return out.returncode == 0
+            import gmsh  # noqa: F401
+            return True
         except Exception:
             return False
+
+    @classmethod
+    def available(cls) -> bool:
+        try:
+            import meshio  # noqa: F401
+        except Exception:
+            return False
+        return cls._python_api_available() or cls.find_gmsh_executable() is not None
 
     def __init__(
         self,
@@ -52,6 +87,9 @@ class GmshMesher:
             import meshio
         except Exception as exc:
             raise RuntimeError('meshio is required for gmsh meshing') from exc
+        if not self.available():
+            raise RuntimeError('Neither the gmsh Python package nor a gmsh executable on PATH is available.')
+
         data = model.mesh
         items = [(str(k), data[k]) for k in data.keys()] if isinstance(data, pv.MultiBlock) else [(model.name, data)]
         items = [(key, block) for key, block in items if block is not None and int(getattr(block, 'n_cells', 0) or 0) > 0]
@@ -62,7 +100,8 @@ class GmshMesher:
         warnings: list[str] = []
         started_at = time.perf_counter()
 
-        self._emit(phase='gmsh-start', value=12, message=f'Launching local gmsh mesher for {total} object(s).', object_count=total, log=True)
+        backend = 'gmsh-python' if (self.options.use_python_api and self._python_api_available()) else (self.find_gmsh_executable(self.options.gmsh_executable) or 'gmsh')
+        self._emit(phase='gmsh-start', value=12, message=f'Launching local gmsh mesher for {total} object(s) using {backend}.', object_count=total, log=True)
         for index, (key, block) in enumerate(items, start=1):
             region_name = self._region_name(key, block)
             try:
@@ -115,9 +154,11 @@ class GmshMesher:
                 stats=stats,
                 log=True,
             )
+
         if not out.keys():
             detail = '\n'.join(warnings[:6]) if warnings else 'No object produced a valid volume mesh.'
             raise RuntimeError('gmsh 未能生成体网格。请确认几何为闭合实体，或改用体素化。\n' + detail)
+
         elapsed = time.perf_counter() - started_at
         model.mesh = out if len(out.keys()) > 1 else next(out[k] for k in out.keys())
         model.region_tags = region_tags
@@ -130,6 +171,7 @@ class GmshMesher:
             'regions': len(region_tags),
             'cells': int(sum(int(getattr(out[k], 'n_cells', 0) or 0) for k in out.keys())),
             'points': int(sum(int(getattr(out[k], 'n_points', 0) or 0) for k in out.keys())),
+            'backend': backend,
         }
         if warnings:
             model.metadata.setdefault('mesh_warnings', []).extend(warnings)
@@ -155,7 +197,7 @@ class GmshMesher:
         return key.split('/')[-1] or 'region'
 
     def _mesh_block(self, block: Any, meshio_mod):
-        surf = block.extract_surface().triangulate()
+        surf = block.extract_surface(algorithm='dataset_surface').triangulate()
         if surf.n_cells == 0:
             return None, {'elapsed_seconds': 0.0}
         started_at = time.perf_counter()
@@ -164,19 +206,89 @@ class GmshMesher:
             stl = td / 'in.stl'
             msh = td / 'out.msh'
             surf.save(stl)
-            cmd = ['gmsh', str(stl), '-3', '-format', 'msh4', '-o', str(msh), '-clmax', str(self.options.element_size), '-clmin', str(self.options.element_size), '-algo', str(self.options.algorithm3d)]
-            if self.options.optimize:
-                cmd.append('-optimize')
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if proc.returncode != 0 or not msh.exists():
-                raise RuntimeError((proc.stderr or proc.stdout or 'gmsh failed').strip())
+            stats = self._mesh_with_python_api(stl, msh) if (self.options.use_python_api and self._python_api_available()) else self._mesh_with_executable(stl, msh)
             mesh = meshio_mod.read(msh)
             grid = self._meshio_to_pyvista(mesh)
-            return grid, {
-                'elapsed_seconds': time.perf_counter() - started_at,
-                'stdout_tail': '\n'.join((proc.stdout or '').splitlines()[-8:]),
-                'stderr_tail': '\n'.join((proc.stderr or '').splitlines()[-8:]),
-            }
+            stats.setdefault('elapsed_seconds', time.perf_counter() - started_at)
+            return grid, stats
+
+    def _mesh_with_executable(self, stl: Path, msh: Path) -> dict[str, Any]:
+        exe = self.find_gmsh_executable(self.options.gmsh_executable)
+        if exe is None:
+            raise FileNotFoundError('gmsh executable was not found on PATH.')
+        started_at = time.perf_counter()
+        cmd = [
+            exe,
+            str(stl),
+            '-3',
+            '-format',
+            'msh4',
+            '-o',
+            str(msh),
+            '-clmax',
+            str(self.options.element_size),
+            '-clmin',
+            str(self.options.element_size),
+            '-algo',
+            str(self.options.algorithm3d),
+        ]
+        if self.options.optimize:
+            cmd.append('-optimize')
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if proc.returncode != 0 or not msh.exists():
+            raise RuntimeError((proc.stderr or proc.stdout or 'gmsh failed').strip())
+        return {
+            'elapsed_seconds': time.perf_counter() - started_at,
+            'stdout_tail': '\n'.join((proc.stdout or '').splitlines()[-8:]),
+            'stderr_tail': '\n'.join((proc.stderr or '').splitlines()[-8:]),
+            'backend': 'gmsh-executable',
+        }
+
+    def _mesh_with_python_api(self, stl: Path, msh: Path) -> dict[str, Any]:
+        import gmsh
+
+        started_at = time.perf_counter()
+        stdout_tail = ''
+        gmsh.initialize()
+        try:
+            gmsh.model.add('geoai_volume')
+            gmsh.option.setNumber('General.Terminal', 0)
+            gmsh.option.setNumber('Mesh.CharacteristicLengthMin', float(self.options.element_size))
+            gmsh.option.setNumber('Mesh.CharacteristicLengthMax', float(self.options.element_size))
+            gmsh.option.setNumber('Mesh.Algorithm3D', int(self.options.algorithm3d))
+            gmsh.merge(str(stl))
+            gmsh.model.mesh.classifySurfaces(math.radians(40.0), True, True, math.pi)
+            gmsh.model.mesh.createGeometry()
+            surfaces = gmsh.model.getEntities(2)
+            if not surfaces:
+                raise RuntimeError('gmsh python API could not recover any surfaces from the shell.')
+            loop = gmsh.model.geo.addSurfaceLoop([tag for _, tag in surfaces])
+            gmsh.model.geo.addVolume([loop])
+            gmsh.model.geo.synchronize()
+            gmsh.model.mesh.generate(3)
+            if self.options.optimize:
+                try:
+                    gmsh.model.mesh.optimize('Netgen')
+                except Exception:
+                    pass
+            gmsh.write(str(msh))
+            try:
+                stdout_tail = '\n'.join(gmsh.logger.get()[-8:])
+            except Exception:
+                stdout_tail = ''
+        finally:
+            try:
+                gmsh.finalize()
+            except Exception:
+                pass
+        if not msh.exists():
+            raise RuntimeError('gmsh python API did not produce an output mesh file.')
+        return {
+            'elapsed_seconds': time.perf_counter() - started_at,
+            'stdout_tail': stdout_tail,
+            'stderr_tail': '',
+            'backend': 'gmsh-python',
+        }
 
     def _meshio_to_pyvista(self, mesh):
         mapping = {'tetra': 10, 'hexahedron': 12, 'wedge': 13, 'pyramid': 14}
@@ -199,9 +311,11 @@ class GmshMesher:
         text = str(exc).strip() or exc.__class__.__name__
         lower = text.lower()
         if 'meshio is required' in lower:
-            return 'meshio is not installed, so gmsh output cannot be converted. Install requirements-solver/meshing dependencies.'
-        if 'not found' in lower or 'no such file' in lower:
-            return 'gmsh executable was not found on PATH.'
+            return 'meshio is not installed, so gmsh output cannot be converted. Install requirements.txt dependencies.'
+        if 'libglu.so.1' in lower:
+            return 'gmsh Python package is installed, but the host is missing libGLU.so.1 / Mesa OpenGL runtime libraries.'
+        if 'not found' in lower or 'no such file' in lower or 'winerror 2' in lower:
+            return 'gmsh executable was not found on PATH, and the gmsh Python package is unavailable.'
         if 'self intersect' in lower or 'non manifold' in lower:
             return 'The surface appears self-intersecting or non-manifold; gmsh cannot build a valid 3D volume from it.'
         if 'unable to recover' in lower or 'surface mesh' in lower:

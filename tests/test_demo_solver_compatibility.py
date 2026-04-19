@@ -9,8 +9,19 @@ from geoai_simkit.solver.structural_elements import build_structural_dof_map
 
 def _build_model():
     scene = ParametricPitScene()
-    model = scene.build()
+    model = SimulationModel(name='pit-demo-compat', mesh=scene.build())
+    model.ensure_regions()
     model.metadata['source'] = 'parametric_pit'
+    model.metadata['parametric_scene'] = {
+        'length': scene.length,
+        'width': scene.width,
+        'depth': scene.depth,
+        'soil_depth': scene.soil_depth,
+        'nx': scene.nx,
+        'ny': scene.ny,
+        'nz': scene.nz,
+        'wall_thickness': scene.wall_thickness,
+    }
     model.metadata['demo_enabled_support_groups'] = ['crown_beam', 'strut_level_1', 'strut_level_2']
     model.metadata['demo_enabled_interface_groups'] = ['outer', 'inner_upper', 'inner_lower']
     configure_demo_coupling(model, prefer_wall_solver=True, auto_supports=True, interface_policy='manual_like_nearest_soil')

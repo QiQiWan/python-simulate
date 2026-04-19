@@ -115,6 +115,38 @@ def choose_cuda_device(requested: str | None, *, round_robin_index: int = 0, all
 
 
 
+def bind_rank_device(
+    rank: int,
+    requested: str | None,
+    *,
+    allowed_devices: Iterable[str] | None = None,
+    multi_gpu_mode: str | None = None,
+) -> str:
+    mode = str(multi_gpu_mode or 'single').strip().lower()
+    request = str(requested or 'auto-best').strip().lower()
+    if mode in {'round-robin', 'distributed'} and request in {'auto', 'auto-best', 'best'}:
+        request = 'auto-round-robin'
+    return choose_cuda_device(request, round_robin_index=int(rank), allowed_devices=allowed_devices)
+
+
+def device_capacity_snapshot(*, allowed_devices: Iterable[str] | None = None) -> list[dict[str, Any]]:
+    devices = detect_cuda_devices()
+    allowed = {str(item).strip().lower() for item in (allowed_devices or []) if str(item).strip()}
+    if allowed:
+        devices = [device for device in devices if device.alias.lower() in allowed]
+    if not devices:
+        return [{'alias': 'cpu', 'name': 'cpu', 'memory_bytes': 0}]
+    return [
+        {
+            'alias': device.alias,
+            'name': device.name,
+            'ordinal': int(device.ordinal),
+            'memory_bytes': int(device.memory_bytes),
+        }
+        for device in devices
+    ]
+
+
 def describe_cuda_hardware() -> str:
     devices = detect_cuda_devices()
     if not devices:

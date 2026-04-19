@@ -6,7 +6,7 @@ import pyvista as pv
 
 def to_unstructured_grid(data: pv.DataSet | pv.MultiBlock) -> pv.UnstructuredGrid:
     if isinstance(data, pv.MultiBlock):
-        return data.combine().cast_to_unstructured_grid()
+        return data.combine(merge_points=True).cast_to_unstructured_grid()
     if isinstance(data, pv.UnstructuredGrid):
         return data.copy(deep=True)
     return data.cast_to_unstructured_grid()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Iterable, Mapping, Sequence
 
 
@@ -63,6 +64,31 @@ def normalize_boundary_target(target: str) -> str:
     key = str(target or '').strip().lower()
     return mapping.get(key, key)
 
+
+
+
+def normalize_region_name(name: str | None) -> str:
+    key = str(name or '').strip().lower()
+    if not key:
+        return ''
+    key = key.replace('-', '_')
+    key = re.sub(r'\s+', '_', key)
+    key = re.sub(r'_+', '_', key).strip('_')
+
+    simple_aliases = {
+        'retaining_wall': 'wall',
+        'retainingwall': 'wall',
+        'diaphragm_wall': 'wall',
+        'diaphragmwall': 'wall',
+        'soilmass': 'soil_mass',
+    }
+    if key in simple_aliases:
+        return simple_aliases[key]
+
+    match = re.fullmatch(r'soil_excavation_?(\d+)', key)
+    if match:
+        return f"soil_excavation_{int(match.group(1))}"
+    return key
 
 def normalize_load_kind(kind: str) -> str:
     key = str(kind or '').strip().lower()

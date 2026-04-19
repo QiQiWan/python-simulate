@@ -1,0 +1,46 @@
+{
+  "ok": true,
+  "summary": {
+    "case_name": "pit-demo",
+    "n_regions": 4,
+    "n_material_bindings": 4,
+    "n_stages": 4,
+    "n_interfaces": 3,
+    "n_structures": 8,
+    "n_region_adjacencies": 2,
+    "n_boundary_adjacencies": 2,
+    "n_region_surfaces": 4,
+    "n_interface_candidates": 2,
+    "n_node_split_plans": 0,
+    "n_suggested_duplicate_points": 0,
+    "n_interface_face_groups": 3,
+    "n_interface_face_elements": 180,
+    "n_interface_elements": 180,
+    "n_points": 893,
+    "n_cells": 480,
+    "n_boundary_conditions": 5,
+    "n_generated_structures": 8,
+    "n_generated_interfaces": 3,
+    "n_stage_loads": 0,
+    "n_stage_boundary_conditions": 0,
+    "interface_face_total_area": 1830.2400189971922,
+    "interface_node_split_mode": "auto",
+    "interface_duplicate_side": "slave",
+    "interface_element_mode": "explicit",
+    "interface_ready_applied": true,
+    "interface_ready_duplicated_point_count": 200,
+    "interface_ready_updated_interface_count": 3
+  },
+  "issues": [
+    {
+      "level": "info",
+      "code": "intentional_duplicate_points",
+      "message": "The interface-ready preprocessor intentionally duplicated 200 point(s) to separate interface topology.",
+      "hint": "This is expected when interface_node_split_mode=auto.",
+      "metadata": {
+        "merged_point_count": 200,
+        "interface_ready_duplicated_point_count": 200
+      }
+    }
+  ]
+}

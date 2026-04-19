@@ -20,6 +20,7 @@ except ModuleNotFoundError:  # optional for non-visual kernel tests
     pv = _PVStub()
 
 from geoai_simkit.geometry.regioning import build_region_tags_from_mesh
+from geoai_simkit.validation_rules import normalize_region_name
 
 from .types import RegionTag, ResultField
 
@@ -40,6 +41,28 @@ class MaterialDefinition:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+
+
+def _remap_stage_activation_names(stage: AnalysisStage, replacements: dict[str, str]) -> None:
+    if not replacements:
+        return
+    normalized = {normalize_region_name(src): dst for src, dst in replacements.items() if src and dst}
+    if not normalized:
+        return
+    stage.activate_regions = tuple(next((dst for src, dst in normalized.items() if normalize_region_name(r) == src), r) for r in stage.activate_regions)
+    stage.deactivate_regions = tuple(next((dst for src, dst in normalized.items() if normalize_region_name(r) == src), r) for r in stage.deactivate_regions)
+    meta = stage.metadata if isinstance(stage.metadata, dict) else None
+    if not isinstance(meta, dict):
+        return
+    amap = meta.get('activation_map')
+    if isinstance(amap, dict) and amap:
+        rewritten: dict[str, bool] = {}
+        for key, value in amap.items():
+            mapped = next((dst for src, dst in normalized.items() if normalize_region_name(key) == src), str(key))
+            rewritten[str(mapped)] = bool(value)
+        meta['activation_map'] = rewritten
+
+
 @dataclass(slots=True)
 class GeometryObjectRecord:
     key: str
@@ -54,6 +77,19 @@ class GeometryObjectRecord:
     visible: bool = True
     pickable: bool = True
     locked: bool = False
+
+
+@dataclass(slots=True)
+class BlockRecord:
+    key: str
+    name: str
+    region_name: str | None = None
+    object_keys: tuple[str, ...] = ()
+    visible: bool = True
+    locked: bool = False
+    material_name: str | None = None
+    active_stages: tuple[str, ...] = ()
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -97,6 +133,18 @@ class InterfaceDefinition:
 
 
 @dataclass(slots=True)
+class InterfaceElementDefinition:
+    name: str
+    interface_name: str
+    element_kind: str
+    slave_point_ids: tuple[int, ...]
+    master_point_ids: tuple[int, ...]
+    active_stages: tuple[str, ...] = ()
+    parameters: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class AnalysisStage:
     name: str
     activate_regions: tuple[str, ...] = ()
@@ -119,6 +167,7 @@ class SimulationModel:
     stages: list[AnalysisStage] = field(default_factory=list)
     structures: list[StructuralElementDefinition] = field(default_factory=list)
     interfaces: list[InterfaceDefinition] = field(default_factory=list)
+    interface_elements: list[InterfaceElementDefinition] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     results: list[ResultField] = field(default_factory=list)
 
@@ -208,20 +257,20 @@ class SimulationModel:
         self.region_tags.append(RegionTag(name=name, cell_ids=arr, metadata=metadata))
 
     def rename_region(self, old_name: str, new_name: str) -> None:
-        if not new_name or old_name == new_name:
+        if not new_name or str(old_name) == str(new_name):
             return
+        old_norm = normalize_region_name(old_name)
         for region in self.region_tags:
-            if region.name == old_name:
+            if normalize_region_name(region.name) == old_norm:
                 region.name = new_name
         for mat in self.materials:
-            if mat.region_name == old_name:
+            if normalize_region_name(mat.region_name) == old_norm:
                 mat.region_name = new_name
         for obj in self.object_records:
-            if obj.region_name == old_name:
+            if normalize_region_name(obj.region_name) == old_norm:
                 obj.region_name = new_name
         for stage in self.stages:
-            stage.activate_regions = tuple(new_name if r == old_name else r for r in stage.activate_regions)
-            stage.deactivate_regions = tuple(new_name if r == old_name else r for r in stage.deactivate_regions)
+            _remap_stage_activation_names(stage, {old_name: new_name})
 
     def add_boundary_condition(self, bc: BoundaryCondition) -> None:
         self.boundary_conditions.append(bc)
@@ -244,6 +293,12 @@ class SimulationModel:
 
     def add_interface(self, interface: InterfaceDefinition) -> None:
         self.interfaces.append(interface)
+
+    def add_interface_element(self, element: InterfaceElementDefinition) -> None:
+        self.interface_elements.append(element)
+
+    def clear_interface_elements(self) -> None:
+        self.interface_elements.clear()
 
     def add_object_record(self, record: GeometryObjectRecord) -> None:
         self.object_records.append(record)
@@ -345,6 +400,42 @@ class SimulationModel:
             if item.key in keys:
                 item.metadata['role'] = role
 
+
+    def set_object_mesh_control(
+        self,
+        object_keys: Iterable[str],
+        *,
+        element_family: str | None = None,
+        target_size: float | None = None,
+        refinement_ratio: float | None = None,
+        enabled: bool = True,
+    ) -> None:
+        keys = set(object_keys)
+        for item in self.object_records:
+            if item.key not in keys:
+                continue
+            control = dict(item.metadata.get('mesh_control') or {})
+            control['enabled'] = bool(enabled)
+            if element_family is not None:
+                control['element_family'] = str(element_family)
+            if target_size is not None:
+                control['target_size'] = float(target_size)
+            if refinement_ratio is not None:
+                control['refinement_ratio'] = float(refinement_ratio)
+            item.metadata['mesh_control'] = control
+
+    def clear_object_mesh_control(self, object_keys: Iterable[str]) -> None:
+        keys = set(object_keys)
+        for item in self.object_records:
+            if item.key in keys:
+                item.metadata.pop('mesh_control', None)
+
+    def object_mesh_control(self, object_key: str) -> dict[str, Any]:
+        rec = self.object_record(object_key)
+        if rec is None:
+            return {}
+        return dict(rec.metadata.get('mesh_control') or {})
+
     def merge_regions(self, region_names: Iterable[str], target_name: str) -> None:
         names = [name for name in dict.fromkeys(region_names) if name]
         if not names:
@@ -373,8 +464,7 @@ class SimulationModel:
             dedup[mat.region_name] = mat
         self.materials = list(dedup.values())
         for stage in self.stages:
-            stage.activate_regions = tuple(target_name if r in names else r for r in stage.activate_regions)
-            stage.deactivate_regions = tuple(target_name if r in names else r for r in stage.deactivate_regions)
+            _remap_stage_activation_names(stage, {name: target_name for name in names})
 
     def object_record(self, key: str) -> GeometryObjectRecord | None:
         for item in self.object_records:
@@ -421,16 +511,73 @@ class SimulationModel:
 
     def get_region(self, name: str) -> RegionTag | None:
         self.ensure_regions()
+        target = normalize_region_name(name)
         for region in self.region_tags:
-            if region.name == name:
+            if normalize_region_name(region.name) == target:
                 return region
         return None
 
     def material_for_region(self, region_name: str) -> MaterialBinding | None:
+        target = normalize_region_name(region_name)
         for item in self.materials:
-            if item.region_name == region_name:
+            if normalize_region_name(item.region_name) == target:
                 return item
         return None
+
+    def list_region_names(self) -> list[str]:
+        self.ensure_regions()
+        return [str(region.name) for region in self.region_tags]
+
+    def derive_block_records(self) -> list[BlockRecord]:
+        self.ensure_regions()
+        stage_names = [stage.name for stage in self.stages]
+        activation_matrix: dict[str, list[str]] = {}
+        for region_name in self.list_region_names():
+            activation_matrix[normalize_region_name(region_name)] = []
+        for stage in self.stages:
+            amap = stage.metadata.get('activation_map') if isinstance(stage.metadata, dict) else None
+            for region_name in self.list_region_names():
+                norm = normalize_region_name(region_name)
+                active = None
+                if isinstance(amap, dict) and region_name in amap:
+                    active = bool(amap[region_name])
+                elif isinstance(amap, dict):
+                    for key, value in amap.items():
+                        if normalize_region_name(str(key)) == norm:
+                            active = bool(value)
+                            break
+                if active is None:
+                    if any(normalize_region_name(name) == norm for name in stage.activate_regions):
+                        active = True
+                    elif any(normalize_region_name(name) == norm for name in stage.deactivate_regions):
+                        active = False
+                if active is not False:
+                    activation_matrix.setdefault(norm, []).append(stage.name)
+        blocks: list[BlockRecord] = []
+        seen: set[str] = set()
+        for region in self.region_tags:
+            region_name = str(region.name)
+            norm = normalize_region_name(region_name)
+            if norm in seen:
+                continue
+            seen.add(norm)
+            objects = [obj for obj in self.object_records if normalize_region_name(obj.region_name or '') == norm]
+            object_keys = tuple(obj.key for obj in objects)
+            visible = all(obj.visible for obj in objects) if objects else True
+            locked = all(obj.locked for obj in objects) if objects else False
+            material = self.material_for_region(region_name)
+            blocks.append(BlockRecord(
+                key=f'block:{region_name}',
+                name=region_name,
+                region_name=region_name,
+                object_keys=object_keys,
+                visible=visible,
+                locked=locked,
+                material_name=material.material_name if material is not None else None,
+                active_stages=tuple(activation_matrix.get(norm, stage_names)),
+                metadata={'cell_count': int(len(region.cell_ids)), 'object_count': len(objects), 'region_metadata': dict(region.metadata)},
+            ))
+        return blocks
 
     def stage_by_name(self, name: str) -> AnalysisStage | None:
         for item in self.stages:
@@ -471,6 +618,12 @@ class SimulationModel:
                 continue
             out.append(item)
         return out
+
+
+    def interface_elements_for_stage(self, stage_name: str | None) -> list[InterfaceElementDefinition]:
+        if stage_name is None:
+            return list(self.interface_elements)
+        return [item for item in self.interface_elements if not item.active_stages or stage_name in item.active_stages]
 
     def list_result_labels(self) -> list[str]:
         labels: list[str] = []
@@ -515,7 +668,7 @@ class SimulationModel:
     def to_unstructured_grid(self) -> pv.UnstructuredGrid:
         data = self.mesh
         if isinstance(data, pv.MultiBlock):
-            return data.combine().cast_to_unstructured_grid()
+            return data.combine(merge_points=True).cast_to_unstructured_grid()
         return data.cast_to_unstructured_grid() if hasattr(data, 'cast_to_unstructured_grid') else data
 
     def apply_result_to_mesh(self, result: ResultField) -> None:

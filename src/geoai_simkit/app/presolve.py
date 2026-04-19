@@ -69,10 +69,19 @@ def _parametric_pit_missing_split_regions(model: SimulationModel) -> list[str]:
 def analyze_presolve_state(model: SimulationModel) -> PreSolveReport:
     messages: list[str] = []
     warnings: list[str] = []
+    advisory_error_tokens = (
+        '以下区域未在当前模型中找到',
+        '阶段名称暗示为开挖/卸载，但当前没有实际失活区域变化',
+        '当前 Stage 与上一 Stage 的激活状态完全相同',
+        '步数必须是正整数',
+    )
     for item in validate_model(model):
         text = f'[{item.step}] {item.message}'
         if item.level == 'error':
-            messages.append(text)
+            if any(token in item.message for token in advisory_error_tokens):
+                warnings.append(text)
+            else:
+                messages.append(text)
         elif item.level == 'warning':
             warnings.append(text)
     try:
@@ -94,6 +103,13 @@ def analyze_presolve_state(model: SimulationModel) -> PreSolveReport:
     if missing_split:
         messages.append(f'[几何] 当前参数化基坑缺少分阶段开挖区域: {", ".join(missing_split)}。请重新生成示例，或将土体拆分为 soil_mass / soil_excavation_1 / soil_excavation_2。')
 
+    mesh_engine_meta = model.metadata.get('mesh_engine') if isinstance(model.metadata, dict) else None
+    if model.metadata.get('source') == 'parametric_pit' and isinstance(mesh_engine_meta, dict):
+        merge_groups = mesh_engine_meta.get('shared_point_weld_groups') or []
+        existing_regions = {region.name for region in model.region_tags}
+        if {'soil_mass', 'soil_excavation_1', 'soil_excavation_2'}.issubset(existing_regions) and 'continuum_soil' not in {str(item) for item in merge_groups}:
+            messages.append('[几何/网格] 当前参数化基坑的 soil_mass / soil_excavation_1 / soil_excavation_2 没有焊接为连续土体。这样 initial 阶段会形成彼此脱开的土块并导致非线性求解停滞。请重新运行 geometry-first 网格引擎，确保土体分区使用共享点焊接。')
+
     cell_counts = _cell_counts_by_region(model)
     nonlinear_regions = {m.region_name for m in model.materials if str(m.material_name).lower() in {'mohr_coulomb', 'hss', 'hs_small'}}
     prev_active: set[str] | None = None
@@ -110,9 +126,15 @@ def analyze_presolve_state(model: SimulationModel) -> PreSolveReport:
         active_cells = sum(cell_counts.get(name, 0) for name in active_regions)
         if active_cells <= 0:
             messages.append(f'[边界/阶段] Stage {stage.name} 没有任何活动单元。')
+        stage_refs = set()
+        if isinstance(meta.get('activation_map'), dict):
+            stage_refs |= {str(name).strip() for name in meta.get('activation_map', {}).keys() if str(name).strip()}
+        stage_refs |= {str(name).strip() for name in stage.activate_regions if str(name).strip()}
+        stage_refs |= {str(name).strip() for name in stage.deactivate_regions if str(name).strip()}
+        valid_stage_refs = not stage_refs or all(name in cell_counts for name in stage_refs)
         changed = prev_active is None or active_regions != prev_active or bool(stage.loads) or bool(stage.boundary_conditions)
         if not changed:
-            target = messages if _is_excavation_stage(stage.name) else warnings
+            target = messages if (_is_excavation_stage(stage.name) and valid_stage_refs) else warnings
             target.append(f'[边界/阶段] Stage {stage.name} 与上一阶段相比没有激活/失活、荷载或边界条件变化，此阶段不会产生新的计算效果。')
         deactivated = (prev_active or active_regions) - active_regions if prev_active is not None else set()
         deactivated_cells = sum(cell_counts.get(name, 0) for name in deactivated)
@@ -121,14 +143,16 @@ def analyze_presolve_state(model: SimulationModel) -> PreSolveReport:
         initial_increment = float(meta.get('initial_increment', 0.25) or 0.25)
         max_iterations = int(meta.get('max_iterations', 24) or 24)
         has_nonlinear = bool(active_regions & nonlinear_regions)
-        if has_nonlinear and initial_increment > 0.15:
-            warnings.append(f'[边界/阶段] Stage {stage.name} 使用非线性土体，初始增量 {initial_increment:.3f} 偏大，建议降到 0.05~0.10。')
+        advisory_nonlinear = has_nonlinear or bool(nonlinear_regions)
+        if advisory_nonlinear and initial_increment > 0.15:
+            warnings.append(f'[边界/阶段] Stage {stage.name} 使用非线性土体时，初始增量 {initial_increment:.3f} 偏大，建议降到 0.05~0.10。')
         if removal_ratio > 0.20 and initial_increment > 0.10:
             warnings.append(f'[边界/阶段] Stage {stage.name} 单步失活比例约 {removal_ratio:.0%}，当前初始增量 {initial_increment:.3f} 偏大，建议降到 <= 0.10。')
         if removal_ratio > 0.35 and max_iterations < 30:
             warnings.append(f'[边界/阶段] Stage {stage.name} 失活变化较大，最大迭代次数 {max_iterations} 偏低，建议提高到 30~40。')
         if _is_excavation_stage(stage.name) and removal_ratio <= 0.0 and not stage.loads and not stage.boundary_conditions:
-            messages.append(f'[边界/阶段] Stage {stage.name} 名称暗示为开挖/卸载，但没有检测到实际失活或附加边界变化。')
+            target = messages if valid_stage_refs else warnings
+            target.append(f'[边界/阶段] Stage {stage.name} 名称暗示为开挖/卸载，但没有检测到实际失活或附加边界变化。')
         active_structs = model.structures_for_stage(stage.name)
         rotational_structs = [item for item in active_structs if str(item.kind).lower() in {'beam2', 'frame3d', 'shellquad4'}]
         has_scipy_sparse = True

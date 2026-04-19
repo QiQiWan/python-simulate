@@ -1,0 +1,2098 @@
+{
+  "case_name": "pit-demo",
+  "geometry_kind": "parametric_pit",
+  "summary": {
+    "n_points": 693,
+    "n_cells": 480,
+    "n_regions": 4,
+    "n_material_bindings": 4,
+    "n_boundary_conditions": 5,
+    "n_structures": 8,
+    "n_generated_structures": 8,
+    "n_interfaces": 12,
+    "n_generated_interfaces": 12,
+    "n_interface_elements": 48,
+    "n_stage_loads": 0,
+    "n_stage_boundary_conditions": 0,
+    "n_region_surfaces": 4,
+    "n_interface_candidates": 5,
+    "n_node_split_plans": 12,
+    "n_suggested_duplicate_points": 136,
+    "n_interface_face_groups": 8,
+    "n_interface_face_elements": 48,
+    "interface_face_total_area": 604.7999954223633,
+    "interface_node_split_mode": "plan",
+    "interface_duplicate_side": "slave",
+    "interface_element_mode": "explicit",
+    "interface_ready_applied": false,
+    "interface_ready_duplicated_point_count": 0,
+    "interface_ready_updated_interface_count": 0
+  },
+  "interface_elements": [
+    {
+      "name": "pit_inner_lower_ymax::face::0",
+      "interface_name": "pit_inner_lower_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        268,
+        269,
+        690,
+        689
+      ],
+      "master_point_ids": [
+        689,
+        690,
+        269,
+        268
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          6.0,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_lower_ymax::face::1",
+      "interface_name": "pit_inner_lower_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        269,
+        270,
+        691,
+        690
+      ],
+      "master_point_ids": [
+        690,
+        691,
+        270,
+        269
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          6.0,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_lower_ymax::face::2",
+      "interface_name": "pit_inner_lower_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        689,
+        690,
+        615,
+        614
+      ],
+      "master_point_ids": [
+        268,
+        269,
+        690,
+        689
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          6.0,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_lower_ymax::face::3",
+      "interface_name": "pit_inner_lower_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        690,
+        691,
+        616,
+        615
+      ],
+      "master_point_ids": [
+        269,
+        270,
+        691,
+        690
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          6.0,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_lower_ymin::face::4",
+      "interface_name": "pit_inner_lower_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        224,
+        225,
+        670,
+        669
+      ],
+      "master_point_ids": [
+        669,
+        670,
+        225,
+        224
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          -6.0,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_lower_ymin::face::5",
+      "interface_name": "pit_inner_lower_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        225,
+        226,
+        671,
+        670
+      ],
+      "master_point_ids": [
+        670,
+        671,
+        226,
+        225
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          -6.0,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_lower_ymin::face::6",
+      "interface_name": "pit_inner_lower_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        669,
+        670,
+        595,
+        594
+      ],
+      "master_point_ids": [
+        224,
+        225,
+        670,
+        669
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          -6.0,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_lower_ymin::face::7",
+      "interface_name": "pit_inner_lower_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        670,
+        671,
+        596,
+        595
+      ],
+      "master_point_ids": [
+        225,
+        226,
+        671,
+        670
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          -6.0,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_upper_ymax::face::8",
+      "interface_name": "pit_inner_upper_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        614,
+        615,
+        640,
+        639
+      ],
+      "master_point_ids": [
+        639,
+        640,
+        615,
+        614
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          6.0,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_upper_ymax::face::9",
+      "interface_name": "pit_inner_upper_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        615,
+        616,
+        641,
+        640
+      ],
+      "master_point_ids": [
+        640,
+        641,
+        616,
+        615
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          6.0,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_upper_ymax::face::10",
+      "interface_name": "pit_inner_upper_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        639,
+        640,
+        665,
+        664
+      ],
+      "master_point_ids": [
+        614,
+        615,
+        640,
+        639
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          6.0,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_upper_ymax::face::11",
+      "interface_name": "pit_inner_upper_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        640,
+        641,
+        666,
+        665
+      ],
+      "master_point_ids": [
+        615,
+        616,
+        641,
+        640
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          6.0,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_upper_ymin::face::12",
+      "interface_name": "pit_inner_upper_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        594,
+        595,
+        620,
+        619
+      ],
+      "master_point_ids": [
+        619,
+        620,
+        595,
+        594
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          -6.0,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_upper_ymin::face::13",
+      "interface_name": "pit_inner_upper_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        595,
+        596,
+        621,
+        620
+      ],
+      "master_point_ids": [
+        620,
+        621,
+        596,
+        595
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          -6.0,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_upper_ymin::face::14",
+      "interface_name": "pit_inner_upper_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        619,
+        620,
+        645,
+        644
+      ],
+      "master_point_ids": [
+        594,
+        595,
+        620,
+        619
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          -6.0,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_inner_upper_ymin::face::15",
+      "interface_name": "pit_inner_upper_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        620,
+        621,
+        646,
+        645
+      ],
+      "master_point_ids": [
+        595,
+        596,
+        621,
+        620
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation"
+        ],
+        "pair_count": 9,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          -6.0,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmax::face::16",
+      "interface_name": "pit_outer_xmax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        217,
+        228,
+        322,
+        316
+      ],
+      "master_point_ids": [
+        228,
+        217,
+        316,
+        322
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          12.600000381469727,
+          -6.299999952316284,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmax::face::17",
+      "interface_name": "pit_outer_xmax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        272,
+        283,
+        357,
+        346
+      ],
+      "master_point_ids": [
+        283,
+        272,
+        346,
+        357
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          12.600000381469727,
+          6.299999952316284,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmax::face::18",
+      "interface_name": "pit_outer_xmax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        316,
+        322,
+        396,
+        390
+      ],
+      "master_point_ids": [
+        322,
+        316,
+        390,
+        396
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          12.600000381469727,
+          -6.299999952316284,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmax::face::19",
+      "interface_name": "pit_outer_xmax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        346,
+        357,
+        431,
+        420
+      ],
+      "master_point_ids": [
+        357,
+        346,
+        420,
+        431
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          12.600000381469727,
+          6.299999952316284,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmax::face::20",
+      "interface_name": "pit_outer_xmax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        390,
+        396,
+        470,
+        464
+      ],
+      "master_point_ids": [
+        396,
+        390,
+        464,
+        470
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          12.600000381469727,
+          -6.299999952316284,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmax::face::21",
+      "interface_name": "pit_outer_xmax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        420,
+        431,
+        505,
+        494
+      ],
+      "master_point_ids": [
+        431,
+        420,
+        494,
+        505
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          12.600000381469727,
+          6.299999952316284,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmax::face::22",
+      "interface_name": "pit_outer_xmax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        464,
+        470,
+        544,
+        538
+      ],
+      "master_point_ids": [
+        470,
+        464,
+        538,
+        544
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          12.600000381469727,
+          -6.299999952316284,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmax::face::23",
+      "interface_name": "pit_outer_xmax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        494,
+        505,
+        579,
+        568
+      ],
+      "master_point_ids": [
+        505,
+        494,
+        568,
+        579
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          12.600000381469727,
+          6.299999952316284,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmin::face::24",
+      "interface_name": "pit_outer_xmin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        211,
+        222,
+        321,
+        310
+      ],
+      "master_point_ids": [
+        222,
+        211,
+        310,
+        321
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -12.600000381469727,
+          -6.299999952316284,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmin::face::25",
+      "interface_name": "pit_outer_xmin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        266,
+        277,
+        351,
+        345
+      ],
+      "master_point_ids": [
+        277,
+        266,
+        345,
+        351
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -12.600000381469727,
+          6.299999952316284,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmin::face::26",
+      "interface_name": "pit_outer_xmin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        310,
+        321,
+        395,
+        384
+      ],
+      "master_point_ids": [
+        321,
+        310,
+        384,
+        395
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -12.600000381469727,
+          -6.299999952316284,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmin::face::27",
+      "interface_name": "pit_outer_xmin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        345,
+        351,
+        425,
+        419
+      ],
+      "master_point_ids": [
+        351,
+        345,
+        419,
+        425
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -12.600000381469727,
+          6.299999952316284,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmin::face::28",
+      "interface_name": "pit_outer_xmin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        384,
+        395,
+        469,
+        458
+      ],
+      "master_point_ids": [
+        395,
+        384,
+        458,
+        469
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -12.600000381469727,
+          -6.299999952316284,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmin::face::29",
+      "interface_name": "pit_outer_xmin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        419,
+        425,
+        499,
+        493
+      ],
+      "master_point_ids": [
+        425,
+        419,
+        493,
+        499
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -12.600000381469727,
+          6.299999952316284,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmin::face::30",
+      "interface_name": "pit_outer_xmin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        458,
+        469,
+        543,
+        532
+      ],
+      "master_point_ids": [
+        469,
+        458,
+        532,
+        543
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -12.600000381469727,
+          -6.299999952316284,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_xmin::face::31",
+      "interface_name": "pit_outer_xmin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        493,
+        499,
+        573,
+        567
+      ],
+      "master_point_ids": [
+        499,
+        493,
+        567,
+        573
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 1.799999713897705,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 20,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -12.600000381469727,
+          6.299999952316284,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymax::face::32",
+      "interface_name": "pit_outer_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        279,
+        280,
+        354,
+        353
+      ],
+      "master_point_ids": [
+        353,
+        354,
+        280,
+        279
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          6.599999904632568,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymax::face::33",
+      "interface_name": "pit_outer_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        280,
+        281,
+        355,
+        354
+      ],
+      "master_point_ids": [
+        354,
+        355,
+        281,
+        280
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          6.599999904632568,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymax::face::34",
+      "interface_name": "pit_outer_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        353,
+        354,
+        428,
+        427
+      ],
+      "master_point_ids": [
+        279,
+        280,
+        354,
+        353
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          6.599999904632568,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymax::face::35",
+      "interface_name": "pit_outer_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        354,
+        355,
+        429,
+        428
+      ],
+      "master_point_ids": [
+        280,
+        281,
+        355,
+        354
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          6.599999904632568,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymax::face::36",
+      "interface_name": "pit_outer_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        427,
+        428,
+        502,
+        501
+      ],
+      "master_point_ids": [
+        353,
+        354,
+        428,
+        427
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          6.599999904632568,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymax::face::37",
+      "interface_name": "pit_outer_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        428,
+        429,
+        503,
+        502
+      ],
+      "master_point_ids": [
+        354,
+        355,
+        429,
+        428
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          6.599999904632568,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymax::face::38",
+      "interface_name": "pit_outer_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        501,
+        502,
+        576,
+        575
+      ],
+      "master_point_ids": [
+        427,
+        428,
+        502,
+        501
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          6.599999904632568,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymax::face::39",
+      "interface_name": "pit_outer_ymax",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        502,
+        503,
+        577,
+        576
+      ],
+      "master_point_ids": [
+        428,
+        429,
+        503,
+        502
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          6.599999904632568,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymin::face::40",
+      "interface_name": "pit_outer_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        213,
+        214,
+        313,
+        312
+      ],
+      "master_point_ids": [
+        312,
+        313,
+        214,
+        213
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          -6.599999904632568,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymin::face::41",
+      "interface_name": "pit_outer_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        214,
+        215,
+        314,
+        313
+      ],
+      "master_point_ids": [
+        313,
+        314,
+        215,
+        214
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          -6.599999904632568,
+          -10.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymin::face::42",
+      "interface_name": "pit_outer_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        312,
+        313,
+        387,
+        386
+      ],
+      "master_point_ids": [
+        213,
+        214,
+        313,
+        312
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          -6.599999904632568,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymin::face::43",
+      "interface_name": "pit_outer_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        313,
+        314,
+        388,
+        387
+      ],
+      "master_point_ids": [
+        214,
+        215,
+        314,
+        313
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          -6.599999904632568,
+          -7.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymin::face::44",
+      "interface_name": "pit_outer_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        386,
+        387,
+        461,
+        460
+      ],
+      "master_point_ids": [
+        312,
+        313,
+        387,
+        386
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          -6.599999904632568,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymin::face::45",
+      "interface_name": "pit_outer_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        387,
+        388,
+        462,
+        461
+      ],
+      "master_point_ids": [
+        313,
+        314,
+        388,
+        387
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          -6.599999904632568,
+          -4.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymin::face::46",
+      "interface_name": "pit_outer_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        460,
+        461,
+        535,
+        534
+      ],
+      "master_point_ids": [
+        386,
+        387,
+        461,
+        460
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          -3.0,
+          -6.599999904632568,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    },
+    {
+      "name": "pit_outer_ymin::face::47",
+      "interface_name": "pit_outer_ymin",
+      "element_kind": "quad4",
+      "slave_point_ids": [
+        461,
+        462,
+        536,
+        535
+      ],
+      "master_point_ids": [
+        387,
+        388,
+        462,
+        461
+      ],
+      "point_count": 4,
+      "active_stages": [
+        "wall_activation",
+        "excavate_level_1",
+        "excavate_level_2"
+      ],
+      "parameters": {
+        "area": 18.0,
+        "duplicate_side": "slave"
+      },
+      "metadata": {
+        "active_stages": [
+          "wall_activation",
+          "excavate_level_1",
+          "excavate_level_2"
+        ],
+        "pair_count": 15,
+        "interface_kind": "node_pair",
+        "slave_region": "wall",
+        "master_region": "",
+        "centroid": [
+          3.0,
+          -6.599999904632568,
+          -1.5
+        ],
+        "source": "pipeline.interface_face_elements"
+      }
+    }
+  ],
+  "interface_ready": {}
+}

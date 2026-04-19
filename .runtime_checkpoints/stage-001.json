@@ -1,0 +1,2365 @@
+{
+  "kind": "stage",
+  "stage_index": 1,
+  "runtime_schema_version": 3,
+  "case_name": "pit-demo",
+  "partition_count": 2,
+  "increment_index": null,
+  "runtime_config": {
+    "backend": "distributed",
+    "communicator_backend": "local",
+    "device_mode": "multi",
+    "partition_count": 2,
+    "checkpoint_policy": "stage-and-failure",
+    "telemetry_level": "standard",
+    "fail_policy": "rollback-cutback",
+    "deterministic": false
+  },
+  "execution_state": {
+    "current_stage_index": 1,
+    "current_increment": 3,
+    "committed_stage_index": 0,
+    "committed_increment": 3,
+    "wallclock_seconds": 0.0,
+    "last_checkpoint_id": "stage-000"
+  },
+  "failure_policy": {
+    "rollback_to_stage_start": true,
+    "max_stage_retries": 0,
+    "max_increment_cutbacks": 5,
+    "write_failure_checkpoint": true
+  },
+  "solver_policy": {
+    "nonlinear_max_iterations": 12,
+    "tolerance": 1e-05,
+    "line_search": true,
+    "max_cutbacks": 5,
+    "preconditioner": "auto",
+    "solver_strategy": "auto"
+  },
+  "telemetry_summary": {
+    "level": "standard",
+    "event_count": 5,
+    "counts": {
+      "runtime-initialize": 1,
+      "runtime-start": 1,
+      "stage-summary": 2,
+      "checkpoint-save": 1
+    },
+    "timings": {
+      "stage-summary": 0.00011841603554785252,
+      "checkpoint-save": 0.005720291985198855
+    },
+    "wallclock_seconds": 11.775244333024602
+  },
+  "result_store_summary": {
+    "stage_count": 2,
+    "field_count": 7,
+    "stage_asset_count": 2,
+    "stage_linear_system_diagnostics_count": 2
+  },
+  "partition_layout_metadata": [
+    {
+      "partition_id": 0,
+      "owned_cell_count": 240,
+      "owned_node_count": 457,
+      "ghost_node_count": 0,
+      "neighbor_partition_ids": [
+        1
+      ],
+      "neighbor_count": 1,
+      "owned_dof_count": 1371,
+      "ghost_dof_count": 0,
+      "local_dof_count": 1371,
+      "linear_system_estimate": {
+        "partition_id": 0,
+        "matrix_shape": [
+          1371,
+          1371
+        ],
+        "storage": "csr-estimate",
+        "block_size": 3,
+        "owned_cell_count": 240,
+        "owned_node_count": 457,
+        "ghost_node_count": 0,
+        "local_node_count": 457,
+        "owned_dof_count": 1371,
+        "ghost_dof_count": 0,
+        "local_dof_count": 1371,
+        "matrix_nnz_blocks": 90213,
+        "matrix_nnz_entries": 811917,
+        "matrix_density": 0.43195322936667163,
+        "matrix_storage_bytes": 7949720
+      }
+    },
+    {
+      "partition_id": 1,
+      "owned_cell_count": 240,
+      "owned_node_count": 236,
+      "ghost_node_count": 199,
+      "neighbor_partition_ids": [
+        0
+      ],
+      "neighbor_count": 1,
+      "owned_dof_count": 708,
+      "ghost_dof_count": 597,
+      "local_dof_count": 1305,
+      "linear_system_estimate": {
+        "partition_id": 1,
+        "matrix_shape": [
+          1305,
+          1305
+        ],
+        "storage": "csr-estimate",
+        "block_size": 3,
+        "owned_cell_count": 240,
+        "owned_node_count": 236,
+        "ghost_node_count": 199,
+        "local_node_count": 435,
+        "owned_dof_count": 708,
+        "ghost_dof_count": 597,
+        "local_dof_count": 1305,
+        "matrix_nnz_blocks": 136613,
+        "matrix_nnz_entries": 1229517,
+        "matrix_density": 0.7219606288809618,
+        "matrix_storage_bytes": 12032392
+      }
+    }
+  ],
+  "numbering_metadata": [
+    {
+      "partition_id": 0,
+      "owned_dof_range": [
+        0,
+        1371
+      ],
+      "owned_dof_count": 1371,
+      "ghost_dof_count": 0
+    },
+    {
+      "partition_id": 1,
+      "owned_dof_range": [
+        1371,
+        2079
+      ],
+      "owned_dof_count": 708,
+      "ghost_dof_count": 597
+    }
+  ],
+  "stage_activation_state": [
+    {
+      "stage_index": 0,
+      "stage_name": "initial",
+      "active_region_names": [
+        "soil_excavation_1",
+        "soil_excavation_2",
+        "soil_mass",
+        "wall"
+      ],
+      "active_cell_count": 480
+    },
+    {
+      "stage_index": 1,
+      "stage_name": "wall_activation",
+      "active_region_names": [
+        "soil_excavation_1",
+        "soil_excavation_2",
+        "soil_mass",
+        "wall"
+      ],
+      "active_cell_count": 480
+    },
+    {
+      "stage_index": 2,
+      "stage_name": "excavate_level_1",
+      "active_region_names": [
+        "soil_excavation_2",
+        "soil_mass",
+        "wall"
+      ],
+      "active_cell_count": 448
+    },
+    {
+      "stage_index": 3,
+      "stage_name": "excavate_level_2",
+      "active_region_names": [
+        "soil_mass",
+        "wall"
+      ],
+      "active_cell_count": 416
+    }
+  ],
+  "partition_state_summary": [
+    {
+      "partition_id": 0,
+      "u_shape": [
+        457,
+        3
+      ],
+      "du_shape": [
+        457,
+        3
+      ],
+      "metadata": {
+        "neighbor_count": 1,
+        "ghost_node_count": 0
+      }
+    },
+    {
+      "partition_id": 1,
+      "u_shape": [
+        435,
+        3
+      ],
+      "du_shape": [
+        435,
+        3
+      ],
+      "metadata": {
+        "neighbor_count": 1,
+        "ghost_node_count": 199
+      }
+    }
+  ],
+  "last_reduction_summary": {},
+  "bootstrap_summary": {
+    "rank_contexts": [
+      {
+        "rank": 0,
+        "world_size": 2,
+        "local_rank": 0,
+        "partition_id": 0,
+        "hostname": "moqiweideMacBook-Pro.local"
+      },
+      {
+        "rank": 1,
+        "world_size": 2,
+        "local_rank": 1,
+        "partition_id": 1,
+        "hostname": "moqiweideMacBook-Pro.local"
+      }
+    ],
+    "device_contexts": [
+      {
+        "device_kind": "cpu",
+        "device_name": "cpu",
+        "device_alias": "cpu",
+        "memory_limit_bytes": null
+      },
+      {
+        "device_kind": "cpu",
+        "device_name": "cpu",
+        "device_alias": "cpu",
+        "memory_limit_bytes": null
+      }
+    ],
+    "bootstrap_partition_states": [
+      {
+        "partition_id": 0,
+        "owned_cell_count": 240,
+        "ndof": 1371
+      },
+      {
+        "partition_id": 1,
+        "owned_cell_count": 240,
+        "ndof": 1305
+      }
+    ]
+  },
+  "result_store": {
+    "metadata": {
+      "runtime_backend": "distributed",
+      "case_name": "pit-demo",
+      "partition_count": 2,
+      "compile_metadata": {
+        "compile_seconds": 4.2030234999838285,
+        "node_count": 693,
+        "cell_count": 480,
+        "stage_count": 4,
+        "partition_count": 2,
+        "partition_balance_ratio": 1.0,
+        "node_balance_ratio": 1.9364406779661016,
+        "dof_balance_ratio": 1.9364406779661016,
+        "ghost_node_ratio": 0.28715728715728717,
+        "halo_node_ratio": 0.28715728715728717,
+        "cells_per_partition": [
+          240,
+          240
+        ],
+        "gp_states_per_partition": [
+          429,
+          429
+        ],
+        "owned_nodes_per_partition": [
+          457,
+          236
+        ],
+        "ghost_nodes_per_partition": [
+          0,
+          199
+        ],
+        "owned_dofs_per_partition": [
+          1371,
+          708
+        ],
+        "halo_nodes_per_partition": [
+          0,
+          199
+        ],
+        "comm_bytes_per_partition": [
+          4776,
+          4776
+        ],
+        "estimated_comm_bytes_per_increment": 9552,
+        "max_neighbor_count": 1,
+        "halo_volume_ratio": 0.0017092206297490281,
+        "partition_verify_ok": true,
+        "partition_verify_issues": [],
+        "halo_reciprocity_ok": true,
+        "owned_cell_total": 480,
+        "unique_owned_cell_total": 480,
+        "owned_node_total": 693,
+        "unique_owned_node_total": 693,
+        "connected_node_total": 693,
+        "partition_summaries": [
+          {
+            "partition_id": 0,
+            "owned_cell_count": 240,
+            "owned_node_count": 457,
+            "ghost_node_count": 0,
+            "neighbor_count": 1,
+            "neighbors": [
+              1
+            ],
+            "owned_dof_count": 1371,
+            "gp_state_count": 429,
+            "halo_node_count": 0,
+            "halo_dof_count": 0
+          },
+          {
+            "partition_id": 1,
+            "owned_cell_count": 240,
+            "owned_node_count": 236,
+            "ghost_node_count": 199,
+            "neighbor_count": 1,
+            "neighbors": [
+              0
+            ],
+            "owned_dof_count": 708,
+            "gp_state_count": 429,
+            "halo_node_count": 199,
+            "halo_dof_count": 597
+          }
+        ],
+        "stage_partition_diagnostics": [
+          {
+            "stage_index": 0,
+            "stage_name": "initial",
+            "active_region_names": [
+              "soil_excavation_1",
+              "soil_excavation_2",
+              "soil_mass",
+              "wall"
+            ],
+            "active_cell_count": 480,
+            "active_cell_ratio": 1.0,
+            "active_owned_node_total": 693,
+            "active_local_node_total": 892,
+            "active_node_ratio": 1.2871572871572872,
+            "active_structure_count": 0,
+            "active_interface_count": 0,
+            "active_partition_count": 2,
+            "idle_partition_ids": [],
+            "active_cells_per_partition": [
+              240,
+              240
+            ],
+            "active_gp_states_per_partition": [
+              429,
+              429
+            ],
+            "active_owned_nodes_per_partition": [
+              457,
+              236
+            ],
+            "active_local_nodes_per_partition": [
+              457,
+              435
+            ],
+            "active_owned_dofs_per_partition": [
+              1371,
+              708
+            ],
+            "active_local_dofs_per_partition": [
+              1371,
+              1305
+            ],
+            "active_partition_balance_ratio": 1.0,
+            "active_node_balance_ratio": 1.9364406779661016,
+            "stage_locality_ratio": 1.0
+          },
+          {
+            "stage_index": 1,
+            "stage_name": "wall_activation",
+            "active_region_names": [
+              "soil_excavation_1",
+              "soil_excavation_2",
+              "soil_mass",
+              "wall"
+            ],
+            "active_cell_count": 480,
+            "active_cell_ratio": 1.0,
+            "active_owned_node_total": 693,
+            "active_local_node_total": 892,
+            "active_node_ratio": 1.2871572871572872,
+            "active_structure_count": 4,
+            "active_interface_count": 12,
+            "active_partition_count": 2,
+            "idle_partition_ids": [],
+            "active_cells_per_partition": [
+              240,
+              240
+            ],
+            "active_gp_states_per_partition": [
+              429,
+              429
+            ],
+            "active_owned_nodes_per_partition": [
+              457,
+              236
+            ],
+            "active_local_nodes_per_partition": [
+              457,
+              435
+            ],
+            "active_owned_dofs_per_partition": [
+              1371,
+              708
+            ],
+            "active_local_dofs_per_partition": [
+              1371,
+              1305
+            ],
+            "active_partition_balance_ratio": 1.0,
+            "active_node_balance_ratio": 1.9364406779661016,
+            "stage_locality_ratio": 1.0
+          },
+          {
+            "stage_index": 2,
+            "stage_name": "excavate_level_1",
+            "active_region_names": [
+              "soil_excavation_2",
+              "soil_mass",
+              "wall"
+            ],
+            "active_cell_count": 448,
+            "active_cell_ratio": 0.9333333333333333,
+            "active_owned_node_total": 693,
+            "active_local_node_total": 892,
+            "active_node_ratio": 1.2871572871572872,
+            "active_structure_count": 6,
+            "active_interface_count": 8,
+            "active_partition_count": 2,
+            "idle_partition_ids": [],
+            "active_cells_per_partition": [
+              240,
+              208
+            ],
+            "active_gp_states_per_partition": [
+              429,
+              376
+            ],
+            "active_owned_nodes_per_partition": [
+              457,
+              236
+            ],
+            "active_local_nodes_per_partition": [
+              457,
+              435
+            ],
+            "active_owned_dofs_per_partition": [
+              1371,
+              708
+            ],
+            "active_local_dofs_per_partition": [
+              1371,
+              1305
+            ],
+            "active_partition_balance_ratio": 1.1538461538461537,
+            "active_node_balance_ratio": 1.9364406779661016,
+            "stage_locality_ratio": 1.0
+          },
+          {
+            "stage_index": 3,
+            "stage_name": "excavate_level_2",
+            "active_region_names": [
+              "soil_mass",
+              "wall"
+            ],
+            "active_cell_count": 416,
+            "active_cell_ratio": 0.8666666666666667,
+            "active_owned_node_total": 693,
+            "active_local_node_total": 892,
+            "active_node_ratio": 1.2871572871572872,
+            "active_structure_count": 8,
+            "active_interface_count": 4,
+            "active_partition_count": 2,
+            "idle_partition_ids": [],
+            "active_cells_per_partition": [
+              240,
+              176
+            ],
+            "active_gp_states_per_partition": [
+              429,
+              316
+            ],
+            "active_owned_nodes_per_partition": [
+              457,
+              236
+            ],
+            "active_local_nodes_per_partition": [
+              457,
+              435
+            ],
+            "active_owned_dofs_per_partition": [
+              1371,
+              708
+            ],
+            "active_local_dofs_per_partition": [
+              1371,
+              1305
+            ],
+            "active_partition_balance_ratio": 1.3636363636363635,
+            "active_node_balance_ratio": 1.9364406779661016,
+            "stage_locality_ratio": 1.0
+          }
+        ],
+        "stage_linear_system_plans": [
+          {
+            "stage_index": 0,
+            "stage_name": "initial",
+            "active_partition_count": 2,
+            "active_partition_ids": [
+              0,
+              1
+            ],
+            "idle_partition_ids": [],
+            "active_cell_count": 480,
+            "active_owned_node_total": 693,
+            "active_local_node_total": 892,
+            "estimated_active_local_dof_total": 2676,
+            "estimated_matrix_storage_bytes": 19982112,
+            "partition_local_systems": [
+              {
+                "partition_id": 0,
+                "active": true,
+                "activity_ratio": 1.0,
+                "active_cell_count": 240,
+                "active_gp_state_count": 429,
+                "active_owned_node_count": 457,
+                "active_owned_dof_count": 1371,
+                "estimated_active_local_dof_count": 1371,
+                "matrix_shape": [
+                  1371,
+                  1371
+                ],
+                "matrix_nnz_entries_estimate": 811917,
+                "matrix_nnz_blocks_estimate": 90213,
+                "matrix_storage_bytes_estimate": 7949720
+              },
+              {
+                "partition_id": 1,
+                "active": true,
+                "activity_ratio": 1.0,
+                "active_cell_count": 240,
+                "active_gp_state_count": 429,
+                "active_owned_node_count": 236,
+                "active_owned_dof_count": 708,
+                "estimated_active_local_dof_count": 1305,
+                "matrix_shape": [
+                  1305,
+                  1305
+                ],
+                "matrix_nnz_entries_estimate": 1229517,
+                "matrix_nnz_blocks_estimate": 136613,
+                "matrix_storage_bytes_estimate": 12032392
+              }
+            ]
+          },
+          {
+            "stage_index": 1,
+            "stage_name": "wall_activation",
+            "active_partition_count": 2,
+            "active_partition_ids": [
+              0,
+              1
+            ],
+            "idle_partition_ids": [],
+            "active_cell_count": 480,
+            "active_owned_node_total": 693,
+            "active_local_node_total": 892,
+            "estimated_active_local_dof_total": 2676,
+            "estimated_matrix_storage_bytes": 19982112,
+            "partition_local_systems": [
+              {
+                "partition_id": 0,
+                "active": true,
+                "activity_ratio": 1.0,
+                "active_cell_count": 240,
+                "active_gp_state_count": 429,
+                "active_owned_node_count": 457,
+                "active_owned_dof_count": 1371,
+                "estimated_active_local_dof_count": 1371,
+                "matrix_shape": [
+                  1371,
+                  1371
+                ],
+                "matrix_nnz_entries_estimate": 811917,
+                "matrix_nnz_blocks_estimate": 90213,
+                "matrix_storage_bytes_estimate": 7949720
+              },
+              {
+                "partition_id": 1,
+                "active": true,
+                "activity_ratio": 1.0,
+                "active_cell_count": 240,
+                "active_gp_state_count": 429,
+                "active_owned_node_count": 236,
+                "active_owned_dof_count": 708,
+                "estimated_active_local_dof_count": 1305,
+                "matrix_shape": [
+                  1305,
+                  1305
+                ],
+                "matrix_nnz_entries_estimate": 1229517,
+                "matrix_nnz_blocks_estimate": 136613,
+                "matrix_storage_bytes_estimate": 12032392
+              }
+            ]
+          },
+          {
+            "stage_index": 2,
+            "stage_name": "excavate_level_1",
+            "active_partition_count": 2,
+            "active_partition_ids": [
+              0,
+              1
+            ],
+            "idle_partition_ids": [],
+            "active_cell_count": 448,
+            "active_owned_node_total": 693,
+            "active_local_node_total": 892,
+            "estimated_active_local_dof_total": 2676,
+            "estimated_matrix_storage_bytes": 19982112,
+            "partition_local_systems": [
+              {
+                "partition_id": 0,
+                "active": true,
+                "activity_ratio": 1.0,
+                "active_cell_count": 240,
+                "active_gp_state_count": 429,
+                "active_owned_node_count": 457,
+                "active_owned_dof_count": 1371,
+                "estimated_active_local_dof_count": 1371,
+                "matrix_shape": [
+                  1371,
+                  1371
+                ],
+                "matrix_nnz_entries_estimate": 811917,
+                "matrix_nnz_blocks_estimate": 90213,
+                "matrix_storage_bytes_estimate": 7949720
+              },
+              {
+                "partition_id": 1,
+                "active": true,
+                "activity_ratio": 1.0,
+                "active_cell_count": 208,
+                "active_gp_state_count": 376,
+                "active_owned_node_count": 236,
+                "active_owned_dof_count": 708,
+                "estimated_active_local_dof_count": 1305,
+                "matrix_shape": [
+                  1305,
+                  1305
+                ],
+                "matrix_nnz_entries_estimate": 1229517,
+                "matrix_nnz_blocks_estimate": 136613,
+                "matrix_storage_bytes_estimate": 12032392
+              }
+            ]
+          },
+          {
+            "stage_index": 3,
+            "stage_name": "excavate_level_2",
+            "active_partition_count": 2,
+            "active_partition_ids": [
+              0,
+              1
+            ],
+            "idle_partition_ids": [],
+            "active_cell_count": 416,
+            "active_owned_node_total": 693,
+            "active_local_node_total": 892,
+            "estimated_active_local_dof_total": 2676,
+            "estimated_matrix_storage_bytes": 19982112,
+            "partition_local_systems": [
+              {
+                "partition_id": 0,
+                "active": true,
+                "activity_ratio": 1.0,
+                "active_cell_count": 240,
+                "active_gp_state_count": 429,
+                "active_owned_node_count": 457,
+                "active_owned_dof_count": 1371,
+                "estimated_active_local_dof_count": 1371,
+                "matrix_shape": [
+                  1371,
+                  1371
+                ],
+                "matrix_nnz_entries_estimate": 811917,
+                "matrix_nnz_blocks_estimate": 90213,
+                "matrix_storage_bytes_estimate": 7949720
+              },
+              {
+                "partition_id": 1,
+                "active": true,
+                "activity_ratio": 1.0,
+                "active_cell_count": 176,
+                "active_gp_state_count": 316,
+                "active_owned_node_count": 236,
+                "active_owned_dof_count": 708,
+                "estimated_active_local_dof_count": 1305,
+                "matrix_shape": [
+                  1305,
+                  1305
+                ],
+                "matrix_nnz_entries_estimate": 1229517,
+                "matrix_nnz_blocks_estimate": 136613,
+                "matrix_storage_bytes_estimate": 12032392
+              }
+            ]
+          }
+        ],
+        "partition_advisory": {
+          "current_partition_count": 2,
+          "recommended_partition_count": 2,
+          "recommended_partition_upper_bound": 2,
+          "overpartitioned": false,
+          "underpartitioned": false,
+          "average_active_partition_count": 2.0,
+          "weighted_active_partition_count": 2.0,
+          "average_stage_locality_ratio": 1.0,
+          "average_idle_partition_count": 0.0,
+          "max_idle_partition_count": 0,
+          "idle_stage_names": [],
+          "reasons": [
+            "Current partition count is within the useful activity envelope observed across stages."
+          ]
+        },
+        "linear_system_partition_estimates": [
+          {
+            "partition_id": 0,
+            "matrix_shape": [
+              1371,
+              1371
+            ],
+            "storage": "csr-estimate",
+            "block_size": 3,
+            "owned_cell_count": 240,
+            "owned_node_count": 457,
+            "ghost_node_count": 0,
+            "local_node_count": 457,
+            "owned_dof_count": 1371,
+            "ghost_dof_count": 0,
+            "local_dof_count": 1371,
+            "matrix_nnz_blocks": 90213,
+            "matrix_nnz_entries": 811917,
+            "matrix_density": 0.43195322936667163,
+            "matrix_storage_bytes": 7949720
+          },
+          {
+            "partition_id": 1,
+            "matrix_shape": [
+              1305,
+              1305
+            ],
+            "storage": "csr-estimate",
+            "block_size": 3,
+            "owned_cell_count": 240,
+            "owned_node_count": 236,
+            "ghost_node_count": 199,
+            "local_node_count": 435,
+            "owned_dof_count": 708,
+            "ghost_dof_count": 597,
+            "local_dof_count": 1305,
+            "matrix_nnz_blocks": 136613,
+            "matrix_nnz_entries": 1229517,
+            "matrix_density": 0.7219606288809618,
+            "matrix_storage_bytes": 12032392
+          }
+        ],
+        "estimated_peak_memory_bytes": 2794256,
+        "element_histogram": {
+          "11": 480
+        },
+        "material_coverage_ratio": 1.0
+      },
+      "linear_system_partition_estimates": [
+        {
+          "partition_id": 0,
+          "matrix_shape": [
+            1371,
+            1371
+          ],
+          "storage": "csr-estimate",
+          "block_size": 3,
+          "owned_cell_count": 240,
+          "owned_node_count": 457,
+          "ghost_node_count": 0,
+          "local_node_count": 457,
+          "owned_dof_count": 1371,
+          "ghost_dof_count": 0,
+          "local_dof_count": 1371,
+          "matrix_nnz_blocks": 90213,
+          "matrix_nnz_entries": 811917,
+          "matrix_density": 0.43195322936667163,
+          "matrix_storage_bytes": 7949720
+        },
+        {
+          "partition_id": 1,
+          "matrix_shape": [
+            1305,
+            1305
+          ],
+          "storage": "csr-estimate",
+          "block_size": 3,
+          "owned_cell_count": 240,
+          "owned_node_count": 236,
+          "ghost_node_count": 199,
+          "local_node_count": 435,
+          "owned_dof_count": 708,
+          "ghost_dof_count": 597,
+          "local_dof_count": 1305,
+          "matrix_nnz_blocks": 136613,
+          "matrix_nnz_entries": 1229517,
+          "matrix_density": 0.7219606288809618,
+          "matrix_storage_bytes": 12032392
+        }
+      ],
+      "stage_linear_system_plans": [
+        {
+          "stage_index": 0,
+          "stage_name": "initial",
+          "active_partition_count": 2,
+          "active_partition_ids": [
+            0,
+            1
+          ],
+          "idle_partition_ids": [],
+          "active_cell_count": 480,
+          "active_owned_node_total": 693,
+          "active_local_node_total": 892,
+          "estimated_active_local_dof_total": 2676,
+          "estimated_matrix_storage_bytes": 19982112,
+          "partition_local_systems": [
+            {
+              "partition_id": 0,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 240,
+              "active_gp_state_count": 429,
+              "active_owned_node_count": 457,
+              "active_owned_dof_count": 1371,
+              "estimated_active_local_dof_count": 1371,
+              "matrix_shape": [
+                1371,
+                1371
+              ],
+              "matrix_nnz_entries_estimate": 811917,
+              "matrix_nnz_blocks_estimate": 90213,
+              "matrix_storage_bytes_estimate": 7949720
+            },
+            {
+              "partition_id": 1,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 240,
+              "active_gp_state_count": 429,
+              "active_owned_node_count": 236,
+              "active_owned_dof_count": 708,
+              "estimated_active_local_dof_count": 1305,
+              "matrix_shape": [
+                1305,
+                1305
+              ],
+              "matrix_nnz_entries_estimate": 1229517,
+              "matrix_nnz_blocks_estimate": 136613,
+              "matrix_storage_bytes_estimate": 12032392
+            }
+          ]
+        },
+        {
+          "stage_index": 1,
+          "stage_name": "wall_activation",
+          "active_partition_count": 2,
+          "active_partition_ids": [
+            0,
+            1
+          ],
+          "idle_partition_ids": [],
+          "active_cell_count": 480,
+          "active_owned_node_total": 693,
+          "active_local_node_total": 892,
+          "estimated_active_local_dof_total": 2676,
+          "estimated_matrix_storage_bytes": 19982112,
+          "partition_local_systems": [
+            {
+              "partition_id": 0,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 240,
+              "active_gp_state_count": 429,
+              "active_owned_node_count": 457,
+              "active_owned_dof_count": 1371,
+              "estimated_active_local_dof_count": 1371,
+              "matrix_shape": [
+                1371,
+                1371
+              ],
+              "matrix_nnz_entries_estimate": 811917,
+              "matrix_nnz_blocks_estimate": 90213,
+              "matrix_storage_bytes_estimate": 7949720
+            },
+            {
+              "partition_id": 1,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 240,
+              "active_gp_state_count": 429,
+              "active_owned_node_count": 236,
+              "active_owned_dof_count": 708,
+              "estimated_active_local_dof_count": 1305,
+              "matrix_shape": [
+                1305,
+                1305
+              ],
+              "matrix_nnz_entries_estimate": 1229517,
+              "matrix_nnz_blocks_estimate": 136613,
+              "matrix_storage_bytes_estimate": 12032392
+            }
+          ]
+        },
+        {
+          "stage_index": 2,
+          "stage_name": "excavate_level_1",
+          "active_partition_count": 2,
+          "active_partition_ids": [
+            0,
+            1
+          ],
+          "idle_partition_ids": [],
+          "active_cell_count": 448,
+          "active_owned_node_total": 693,
+          "active_local_node_total": 892,
+          "estimated_active_local_dof_total": 2676,
+          "estimated_matrix_storage_bytes": 19982112,
+          "partition_local_systems": [
+            {
+              "partition_id": 0,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 240,
+              "active_gp_state_count": 429,
+              "active_owned_node_count": 457,
+              "active_owned_dof_count": 1371,
+              "estimated_active_local_dof_count": 1371,
+              "matrix_shape": [
+                1371,
+                1371
+              ],
+              "matrix_nnz_entries_estimate": 811917,
+              "matrix_nnz_blocks_estimate": 90213,
+              "matrix_storage_bytes_estimate": 7949720
+            },
+            {
+              "partition_id": 1,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 208,
+              "active_gp_state_count": 376,
+              "active_owned_node_count": 236,
+              "active_owned_dof_count": 708,
+              "estimated_active_local_dof_count": 1305,
+              "matrix_shape": [
+                1305,
+                1305
+              ],
+              "matrix_nnz_entries_estimate": 1229517,
+              "matrix_nnz_blocks_estimate": 136613,
+              "matrix_storage_bytes_estimate": 12032392
+            }
+          ]
+        },
+        {
+          "stage_index": 3,
+          "stage_name": "excavate_level_2",
+          "active_partition_count": 2,
+          "active_partition_ids": [
+            0,
+            1
+          ],
+          "idle_partition_ids": [],
+          "active_cell_count": 416,
+          "active_owned_node_total": 693,
+          "active_local_node_total": 892,
+          "estimated_active_local_dof_total": 2676,
+          "estimated_matrix_storage_bytes": 19982112,
+          "partition_local_systems": [
+            {
+              "partition_id": 0,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 240,
+              "active_gp_state_count": 429,
+              "active_owned_node_count": 457,
+              "active_owned_dof_count": 1371,
+              "estimated_active_local_dof_count": 1371,
+              "matrix_shape": [
+                1371,
+                1371
+              ],
+              "matrix_nnz_entries_estimate": 811917,
+              "matrix_nnz_blocks_estimate": 90213,
+              "matrix_storage_bytes_estimate": 7949720
+            },
+            {
+              "partition_id": 1,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 176,
+              "active_gp_state_count": 316,
+              "active_owned_node_count": 236,
+              "active_owned_dof_count": 708,
+              "estimated_active_local_dof_count": 1305,
+              "matrix_shape": [
+                1305,
+                1305
+              ],
+              "matrix_nnz_entries_estimate": 1229517,
+              "matrix_nnz_blocks_estimate": 136613,
+              "matrix_storage_bytes_estimate": 12032392
+            }
+          ]
+        }
+      ],
+      "bootstrap_summary": {
+        "rank_contexts": [
+          {
+            "rank": 0,
+            "world_size": 2,
+            "local_rank": 0,
+            "partition_id": 0,
+            "hostname": "moqiweideMacBook-Pro.local"
+          },
+          {
+            "rank": 1,
+            "world_size": 2,
+            "local_rank": 1,
+            "partition_id": 1,
+            "hostname": "moqiweideMacBook-Pro.local"
+          }
+        ],
+        "device_contexts": [
+          {
+            "device_kind": "cpu",
+            "device_name": "cpu",
+            "device_alias": "cpu",
+            "memory_limit_bytes": null
+          },
+          {
+            "device_kind": "cpu",
+            "device_name": "cpu",
+            "device_alias": "cpu",
+            "memory_limit_bytes": null
+          }
+        ],
+        "bootstrap_partition_states": [
+          {
+            "partition_id": 0,
+            "owned_cell_count": 240,
+            "ndof": 1371
+          },
+          {
+            "partition_id": 1,
+            "owned_cell_count": 240,
+            "ndof": 1305
+          }
+        ]
+      },
+      "stage_execution_diagnostics": {
+        "backend": "reference-linear-stage-runtime",
+        "supported": false,
+        "mesh_family": "hex8",
+        "forced_legacy_backend": false,
+        "structure_count": 8,
+        "interface_count": 12,
+        "interface_element_count": 48,
+        "structure_kinds": [
+          "truss2"
+        ],
+        "interface_kinds": [
+          "node_pair"
+        ],
+        "unsupported_structure_kinds": [],
+        "unsupported_interface_kinds": [],
+        "supports_structures": true,
+        "supports_interfaces": true,
+        "interface_elements_only": false,
+        "material_models": [
+          "linear_elastic",
+          "mohr_coulomb"
+        ],
+        "reasons": [
+          "nonlinear or unsupported material models require fallback: ['mohr_coulomb']"
+        ]
+      }
+    },
+    "stage_summaries": [
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "status": "completed",
+        "active_cell_count": 480,
+        "active_region_count": 4,
+        "increment_count": 3,
+        "iteration_count": 41,
+        "field_names": [
+          "U",
+          "U_mag",
+          "stress",
+          "von_mises",
+          "R_struct",
+          "yield_fraction",
+          "eq_plastic"
+        ],
+        "active_partition_count": 2,
+        "stage_locality_ratio": 1.0,
+        "active_partition_balance_ratio": 1.0,
+        "active_node_balance_ratio": 1.9364406779661016,
+        "idle_partition_ids": [],
+        "active_cells_per_partition": [
+          240,
+          240
+        ],
+        "active_gp_states_per_partition": [
+          429,
+          429
+        ],
+        "active_owned_nodes_per_partition": [
+          457,
+          236
+        ],
+        "active_owned_dofs_per_partition": [
+          1371,
+          708
+        ],
+        "linear_system_diagnostics_summary": {
+          "has_actual_operator_summary": false,
+          "planned_estimated_matrix_storage_bytes": 19982112,
+          "actual_matrix_storage_bytes": 0,
+          "actual_global_dof_count": 0,
+          "actual_global_rhs_size": 0,
+          "actual_global_residual_norm": 0.0,
+          "actual_global_reaction_norm": 0.0,
+          "actual_partition_rhs_size_total": 0,
+          "actual_partition_residual_norm_sum": 0.0,
+          "actual_partition_reaction_norm_sum": 0.0,
+          "active_cell_count_match": true,
+          "active_partition_count_match": true,
+          "consistency_level": "estimated-only",
+          "ok": true
+        }
+      },
+      {
+        "stage_index": 1,
+        "stage_name": "wall_activation",
+        "status": "not-executed",
+        "active_cell_count": 480,
+        "active_region_count": 4,
+        "increment_count": 1,
+        "iteration_count": 0,
+        "field_names": [],
+        "active_partition_count": 2,
+        "stage_locality_ratio": 1.0,
+        "active_partition_balance_ratio": 1.0,
+        "active_node_balance_ratio": 1.9364406779661016,
+        "idle_partition_ids": [],
+        "active_cells_per_partition": [
+          240,
+          240
+        ],
+        "active_gp_states_per_partition": [
+          429,
+          429
+        ],
+        "active_owned_nodes_per_partition": [
+          457,
+          236
+        ],
+        "active_owned_dofs_per_partition": [
+          1371,
+          708
+        ],
+        "linear_system_diagnostics_summary": {
+          "has_actual_operator_summary": false,
+          "planned_estimated_matrix_storage_bytes": 19982112,
+          "actual_matrix_storage_bytes": 0,
+          "actual_global_dof_count": 0,
+          "actual_global_rhs_size": 0,
+          "actual_global_residual_norm": 0.0,
+          "actual_global_reaction_norm": 0.0,
+          "actual_partition_rhs_size_total": 0,
+          "actual_partition_residual_norm_sum": 0.0,
+          "actual_partition_reaction_norm_sum": 0.0,
+          "active_cell_count_match": true,
+          "active_partition_count_match": true,
+          "consistency_level": "estimated-only",
+          "ok": true
+        }
+      }
+    ],
+    "increment_summaries": [
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 1,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 1.0,
+          "iteration": 1,
+          "residual_norm": 14226340.588062976,
+          "force_norm": 14226340.588062976,
+          "ratio": 1.0,
+          "load_increment": 1.0,
+          "fraction": 0.03333333333333333,
+          "message": "Nonlinear iteration 1: ratio=1.000e+00",
+          "linear_backend": "scipy-cg",
+          "line_search_alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 2,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 1.0,
+          "iteration": 2,
+          "residual_norm": 14226340.588062976,
+          "force_norm": 14226340.588062976,
+          "ratio": 1.0,
+          "load_increment": 1.0,
+          "fraction": 0.11666666666666665,
+          "message": "Nonlinear iteration 2: ratio=1.000e+00",
+          "linear_backend": "scipy-cg",
+          "line_search_alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 3,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 1.0,
+          "iteration": 3,
+          "residual_norm": 14226340.588062976,
+          "force_norm": 14226340.588062976,
+          "ratio": 1.0,
+          "load_increment": 1.0,
+          "fraction": 0.19999999999999998,
+          "message": "Nonlinear iteration 3: ratio=1.000e+00"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 4,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 0.5,
+          "iteration": 1,
+          "residual_norm": 7113170.294031488,
+          "force_norm": 7113170.294031488,
+          "ratio": 1.0,
+          "load_increment": 0.5,
+          "fraction": 0.016666666666666666,
+          "message": "Nonlinear iteration 1: ratio=1.000e+00",
+          "linear_backend": "scipy-cg",
+          "line_search_alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 5,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 0.5,
+          "iteration": 2,
+          "residual_norm": 7113170.294031488,
+          "force_norm": 7113170.294031488,
+          "ratio": 1.0,
+          "load_increment": 0.5,
+          "fraction": 0.05833333333333333,
+          "message": "Nonlinear iteration 2: ratio=1.000e+00",
+          "linear_backend": "scipy-cg",
+          "line_search_alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 6,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 0.5,
+          "iteration": 3,
+          "residual_norm": 7113170.294031488,
+          "force_norm": 7113170.294031488,
+          "ratio": 1.0,
+          "load_increment": 0.5,
+          "fraction": 0.09999999999999999,
+          "message": "Nonlinear iteration 3: ratio=1.000e+00"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 7,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 0.25,
+          "iteration": 1,
+          "residual_norm": 3556585.147015744,
+          "force_norm": 3556585.147015744,
+          "ratio": 1.0,
+          "load_increment": 0.25,
+          "fraction": 0.008333333333333333,
+          "message": "Nonlinear iteration 1: ratio=1.000e+00",
+          "linear_backend": "scipy-cg",
+          "line_search_alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 8,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 0.25,
+          "iteration": 2,
+          "residual_norm": 3556585.147015744,
+          "force_norm": 3556585.147015744,
+          "ratio": 1.0,
+          "load_increment": 0.25,
+          "fraction": 0.029166666666666664,
+          "message": "Nonlinear iteration 2: ratio=1.000e+00",
+          "linear_backend": "scipy-cg",
+          "line_search_alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 9,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 0.25,
+          "iteration": 3,
+          "residual_norm": 3556585.147015744,
+          "force_norm": 3556585.147015744,
+          "ratio": 1.0,
+          "load_increment": 0.25,
+          "fraction": 0.049999999999999996,
+          "message": "Nonlinear iteration 3: ratio=1.000e+00"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 10,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 0.125,
+          "iteration": 1,
+          "residual_norm": 1778292.573507872,
+          "force_norm": 1778292.573507872,
+          "ratio": 1.0,
+          "load_increment": 0.125,
+          "fraction": 0.004166666666666667,
+          "message": "Nonlinear iteration 1: ratio=1.000e+00",
+          "linear_backend": "scipy-cg",
+          "line_search_alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 11,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 0.125,
+          "iteration": 2,
+          "residual_norm": 1778292.573507872,
+          "force_norm": 1778292.573507872,
+          "ratio": 1.0,
+          "load_increment": 0.125,
+          "fraction": 0.014583333333333332,
+          "message": "Nonlinear iteration 2: ratio=1.000e+00",
+          "linear_backend": "scipy-cg",
+          "line_search_alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 12,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 0.125,
+          "iteration": 3,
+          "residual_norm": 1778292.573507872,
+          "force_norm": 1778292.573507872,
+          "ratio": 1.0,
+          "load_increment": 0.125,
+          "fraction": 0.024999999999999998,
+          "message": "Nonlinear iteration 3: ratio=1.000e+00"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 13,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "assembly",
+          "seconds": 0.12206416600383818,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 14,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "linear-solve",
+          "seconds": 0.5152767079998739,
+          "backend": "scipy-cg"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 15,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "line-search",
+          "seconds": 1.0239522499614395,
+          "alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 16,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "assembly",
+          "seconds": 0.12114249996375293,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 17,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "linear-solve",
+          "seconds": 0.5547078750096262,
+          "backend": "scipy-cg"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 18,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "line-search",
+          "seconds": 1.0493317499640398,
+          "alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 19,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 3,
+          "phase": "assembly",
+          "seconds": 0.11650449997978285,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 20,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "assembly",
+          "seconds": 0.1481290000374429,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 21,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "linear-solve",
+          "seconds": 0.49462058302015066,
+          "backend": "scipy-cg"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 22,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "line-search",
+          "seconds": 0.8603396659600548,
+          "alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 23,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "assembly",
+          "seconds": 0.11751495802309364,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 24,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "linear-solve",
+          "seconds": 0.5095656659686938,
+          "backend": "scipy-cg"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 25,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "line-search",
+          "seconds": 0.8622327499906532,
+          "alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 26,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 3,
+          "phase": "assembly",
+          "seconds": 0.11851800000295043,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 27,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "assembly",
+          "seconds": 0.11946679197717458,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 28,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "linear-solve",
+          "seconds": 0.4994399160495959,
+          "backend": "scipy-cg"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 29,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "line-search",
+          "seconds": 0.7083440839778632,
+          "alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 30,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "assembly",
+          "seconds": 0.11553570895921439,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 31,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "linear-solve",
+          "seconds": 0.500292000011541,
+          "backend": "scipy-cg"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 32,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "line-search",
+          "seconds": 0.6802175000193529,
+          "alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 33,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 3,
+          "phase": "assembly",
+          "seconds": 0.12021199997980148,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 34,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "assembly",
+          "seconds": 0.11836412502452731,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 35,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "linear-solve",
+          "seconds": 0.4991910409880802,
+          "backend": "scipy-cg"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 36,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 1,
+          "phase": "line-search",
+          "seconds": 0.49157595896394923,
+          "alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 37,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "assembly",
+          "seconds": 0.11753137496998534,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 38,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "linear-solve",
+          "seconds": 0.49877562501933426,
+          "backend": "scipy-cg"
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 39,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 2,
+          "phase": "line-search",
+          "seconds": 0.4987705409876071,
+          "alpha": 0.125
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 40,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "iteration": 3,
+          "phase": "assembly",
+          "seconds": 0.11768041696632281,
+          "tangent_reused": 0
+        }
+      },
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "increment_index": 41,
+        "payload": {
+          "stage": "initial",
+          "step": 1,
+          "lambda": 0.0,
+          "phase": "aborted",
+          "message": "Stagnation detected at step 1, iteration 3: ratio=1.000e+00, best_recent=1.000e+00. Triggering cutback / stop."
+        }
+      }
+    ],
+    "field_snapshots": [
+      {
+        "name": "U",
+        "association": "point",
+        "components": 3,
+        "stage": "initial",
+        "metadata": {},
+        "array_key": "result_field_0000"
+      },
+      {
+        "name": "U_mag",
+        "association": "point",
+        "components": 1,
+        "stage": "initial",
+        "metadata": {},
+        "array_key": "result_field_0001"
+      },
+      {
+        "name": "stress",
+        "association": "cell",
+        "components": 6,
+        "stage": "initial",
+        "metadata": {},
+        "array_key": "result_field_0002"
+      },
+      {
+        "name": "von_mises",
+        "association": "cell",
+        "components": 1,
+        "stage": "initial",
+        "metadata": {},
+        "array_key": "result_field_0003"
+      },
+      {
+        "name": "R_struct",
+        "association": "point",
+        "components": 3,
+        "stage": "initial",
+        "metadata": {},
+        "array_key": "result_field_0004"
+      },
+      {
+        "name": "yield_fraction",
+        "association": "cell",
+        "components": 1,
+        "stage": "initial",
+        "metadata": {},
+        "array_key": "result_field_0005"
+      },
+      {
+        "name": "eq_plastic",
+        "association": "cell",
+        "components": 1,
+        "stage": "initial",
+        "metadata": {},
+        "array_key": "result_field_0006"
+      }
+    ],
+    "stage_assets": [
+      {
+        "stage_index": 0,
+        "stage_name": "initial",
+        "execution_path": "postprocessed-full-model",
+        "status": "completed",
+        "stage_summary": {
+          "stage_index": 0,
+          "stage_name": "initial",
+          "status": "completed",
+          "active_cell_count": 480,
+          "active_region_count": 4,
+          "increment_count": 3,
+          "iteration_count": 41,
+          "field_names": [
+            "U",
+            "U_mag",
+            "stress",
+            "von_mises",
+            "R_struct",
+            "yield_fraction",
+            "eq_plastic"
+          ],
+          "active_partition_count": 2,
+          "stage_locality_ratio": 1.0,
+          "active_partition_balance_ratio": 1.0,
+          "active_node_balance_ratio": 1.9364406779661016,
+          "idle_partition_ids": [],
+          "active_cells_per_partition": [
+            240,
+            240
+          ],
+          "active_gp_states_per_partition": [
+            429,
+            429
+          ],
+          "active_owned_nodes_per_partition": [
+            457,
+            236
+          ],
+          "active_owned_dofs_per_partition": [
+            1371,
+            708
+          ],
+          "linear_system_diagnostics_summary": {
+            "has_actual_operator_summary": false,
+            "planned_estimated_matrix_storage_bytes": 19982112,
+            "actual_matrix_storage_bytes": 0,
+            "actual_global_dof_count": 0,
+            "actual_global_rhs_size": 0,
+            "actual_global_residual_norm": 0.0,
+            "actual_global_reaction_norm": 0.0,
+            "actual_partition_rhs_size_total": 0,
+            "actual_partition_residual_norm_sum": 0.0,
+            "actual_partition_reaction_norm_sum": 0.0,
+            "active_cell_count_match": true,
+            "active_partition_count_match": true,
+            "consistency_level": "estimated-only",
+            "ok": true
+          }
+        },
+        "stage_linear_system_plan": {
+          "stage_index": 0,
+          "stage_name": "initial",
+          "active_partition_count": 2,
+          "active_partition_ids": [
+            0,
+            1
+          ],
+          "idle_partition_ids": [],
+          "active_cell_count": 480,
+          "active_owned_node_total": 693,
+          "active_local_node_total": 892,
+          "estimated_active_local_dof_total": 2676,
+          "estimated_matrix_storage_bytes": 19982112,
+          "partition_local_systems": [
+            {
+              "partition_id": 0,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 240,
+              "active_gp_state_count": 429,
+              "active_owned_node_count": 457,
+              "active_owned_dof_count": 1371,
+              "estimated_active_local_dof_count": 1371,
+              "matrix_shape": [
+                1371,
+                1371
+              ],
+              "matrix_nnz_entries_estimate": 811917,
+              "matrix_nnz_blocks_estimate": 90213,
+              "matrix_storage_bytes_estimate": 7949720
+            },
+            {
+              "partition_id": 1,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 240,
+              "active_gp_state_count": 429,
+              "active_owned_node_count": 236,
+              "active_owned_dof_count": 708,
+              "estimated_active_local_dof_count": 1305,
+              "matrix_shape": [
+                1305,
+                1305
+              ],
+              "matrix_nnz_entries_estimate": 1229517,
+              "matrix_nnz_blocks_estimate": 136613,
+              "matrix_storage_bytes_estimate": 12032392
+            }
+          ]
+        },
+        "linear_system_diagnostics": {
+          "stage_index": 0,
+          "stage_name": "initial",
+          "execution_path": "postprocessed-full-model",
+          "status": "completed",
+          "has_stage_plan": true,
+          "has_operator_summary": false,
+          "has_actual_operator_summary": false,
+          "planned_active_partition_count": 2,
+          "actual_active_partition_count": 2,
+          "active_partition_count_match": true,
+          "planned_active_cell_count": 480,
+          "actual_active_cell_count": 480,
+          "active_cell_count_match": true,
+          "planned_partition_row_count": 2,
+          "actual_partition_row_count": 0,
+          "matched_partition_row_count": 0,
+          "partition_row_sources": [],
+          "actual_partition_local_system_count": 0,
+          "estimated_partition_local_system_count": 0,
+          "partition_active_match_count": 0,
+          "partition_active_cell_match_count": 0,
+          "planned_estimated_active_local_dof_total": 2676,
+          "actual_global_dof_count": 0,
+          "actual_global_rhs_size": 0,
+          "actual_global_rhs_norm": 0.0,
+          "actual_global_residual_size": 0,
+          "actual_global_residual_norm": 0.0,
+          "actual_global_reaction_size": 0,
+          "actual_global_reaction_norm": 0.0,
+          "actual_fixed_dof_count": 0,
+          "actual_free_dof_count": 0,
+          "actual_solution_size": 0,
+          "actual_solution_norm": 0.0,
+          "actual_matrix_shape": [
+            0,
+            0
+          ],
+          "planned_estimated_matrix_storage_bytes": 19982112,
+          "actual_matrix_storage_bytes": 0,
+          "actual_partition_rhs_size_total": 0,
+          "actual_partition_rhs_norm_sum": 0.0,
+          "actual_partition_residual_norm_sum": 0.0,
+          "actual_partition_reaction_norm_sum": 0.0,
+          "actual_partition_solution_norm_sum": 0.0,
+          "actual_partition_fixed_local_dof_total": 0,
+          "actual_partition_free_local_dof_total": 0,
+          "matrix_storage_ratio_actual_to_estimated": 0.0,
+          "global_dof_ratio_actual_to_estimated_local": 0.0,
+          "global_plan_vs_actual_ok": true,
+          "consistency_level": "estimated-only",
+          "ok": true,
+          "issues": [],
+          "warnings": [
+            "global operator linear system summary is missing",
+            "partition_local_systems are missing"
+          ],
+          "partition_rows": [
+            {
+              "partition_id": 0,
+              "planned_present": true,
+              "actual_present": false,
+              "planned_active": true,
+              "actual_active": null,
+              "planned_active_cell_count": 240,
+              "actual_active_cell_count": null,
+              "planned_estimated_local_dof_count": 1371,
+              "actual_local_dof_count": null,
+              "planned_matrix_storage_bytes": 7949720,
+              "actual_matrix_storage_bytes": null,
+              "actual_rhs_size": null,
+              "actual_rhs_norm": null,
+              "actual_fixed_local_dof_count": null,
+              "actual_free_local_dof_count": null,
+              "actual_solution_norm": null,
+              "active_match": null,
+              "active_cell_count_match": null
+            },
+            {
+              "partition_id": 1,
+              "planned_present": true,
+              "actual_present": false,
+              "planned_active": true,
+              "actual_active": null,
+              "planned_active_cell_count": 240,
+              "actual_active_cell_count": null,
+              "planned_estimated_local_dof_count": 1305,
+              "actual_local_dof_count": null,
+              "planned_matrix_storage_bytes": 12032392,
+              "actual_matrix_storage_bytes": null,
+              "actual_rhs_size": null,
+              "actual_rhs_norm": null,
+              "actual_fixed_local_dof_count": null,
+              "actual_free_local_dof_count": null,
+              "actual_solution_norm": null,
+              "active_match": null,
+              "active_cell_count_match": null
+            }
+          ]
+        }
+      },
+      {
+        "stage_index": 1,
+        "stage_name": "wall_activation",
+        "execution_path": "postprocessed-full-model",
+        "status": "not-executed",
+        "stage_summary": {
+          "stage_index": 1,
+          "stage_name": "wall_activation",
+          "status": "not-executed",
+          "active_cell_count": 480,
+          "active_region_count": 4,
+          "increment_count": 1,
+          "iteration_count": 0,
+          "field_names": [],
+          "active_partition_count": 2,
+          "stage_locality_ratio": 1.0,
+          "active_partition_balance_ratio": 1.0,
+          "active_node_balance_ratio": 1.9364406779661016,
+          "idle_partition_ids": [],
+          "active_cells_per_partition": [
+            240,
+            240
+          ],
+          "active_gp_states_per_partition": [
+            429,
+            429
+          ],
+          "active_owned_nodes_per_partition": [
+            457,
+            236
+          ],
+          "active_owned_dofs_per_partition": [
+            1371,
+            708
+          ],
+          "linear_system_diagnostics_summary": {
+            "has_actual_operator_summary": false,
+            "planned_estimated_matrix_storage_bytes": 19982112,
+            "actual_matrix_storage_bytes": 0,
+            "actual_global_dof_count": 0,
+            "actual_global_rhs_size": 0,
+            "actual_global_residual_norm": 0.0,
+            "actual_global_reaction_norm": 0.0,
+            "actual_partition_rhs_size_total": 0,
+            "actual_partition_residual_norm_sum": 0.0,
+            "actual_partition_reaction_norm_sum": 0.0,
+            "active_cell_count_match": true,
+            "active_partition_count_match": true,
+            "consistency_level": "estimated-only",
+            "ok": true
+          }
+        },
+        "stage_linear_system_plan": {
+          "stage_index": 1,
+          "stage_name": "wall_activation",
+          "active_partition_count": 2,
+          "active_partition_ids": [
+            0,
+            1
+          ],
+          "idle_partition_ids": [],
+          "active_cell_count": 480,
+          "active_owned_node_total": 693,
+          "active_local_node_total": 892,
+          "estimated_active_local_dof_total": 2676,
+          "estimated_matrix_storage_bytes": 19982112,
+          "partition_local_systems": [
+            {
+              "partition_id": 0,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 240,
+              "active_gp_state_count": 429,
+              "active_owned_node_count": 457,
+              "active_owned_dof_count": 1371,
+              "estimated_active_local_dof_count": 1371,
+              "matrix_shape": [
+                1371,
+                1371
+              ],
+              "matrix_nnz_entries_estimate": 811917,
+              "matrix_nnz_blocks_estimate": 90213,
+              "matrix_storage_bytes_estimate": 7949720
+            },
+            {
+              "partition_id": 1,
+              "active": true,
+              "activity_ratio": 1.0,
+              "active_cell_count": 240,
+              "active_gp_state_count": 429,
+              "active_owned_node_count": 236,
+              "active_owned_dof_count": 708,
+              "estimated_active_local_dof_count": 1305,
+              "matrix_shape": [
+                1305,
+                1305
+              ],
+              "matrix_nnz_entries_estimate": 1229517,
+              "matrix_nnz_blocks_estimate": 136613,
+              "matrix_storage_bytes_estimate": 12032392
+            }
+          ]
+        },
+        "linear_system_diagnostics": {
+          "stage_index": 1,
+          "stage_name": "wall_activation",
+          "execution_path": "postprocessed-full-model",
+          "status": "not-executed",
+          "has_stage_plan": true,
+          "has_operator_summary": false,
+          "has_actual_operator_summary": false,
+          "planned_active_partition_count": 2,
+          "actual_active_partition_count": 2,
+          "active_partition_count_match": true,
+          "planned_active_cell_count": 480,
+          "actual_active_cell_count": 480,
+          "active_cell_count_match": true,
+          "planned_partition_row_count": 2,
+          "actual_partition_row_count": 0,
+          "matched_partition_row_count": 0,
+          "partition_row_sources": [],
+          "actual_partition_local_system_count": 0,
+          "estimated_partition_local_system_count": 0,
+          "partition_active_match_count": 0,
+          "partition_active_cell_match_count": 0,
+          "planned_estimated_active_local_dof_total": 2676,
+          "actual_global_dof_count": 0,
+          "actual_global_rhs_size": 0,
+          "actual_global_rhs_norm": 0.0,
+          "actual_global_residual_size": 0,
+          "actual_global_residual_norm": 0.0,
+          "actual_global_reaction_size": 0,
+          "actual_global_reaction_norm": 0.0,
+          "actual_fixed_dof_count": 0,
+          "actual_free_dof_count": 0,
+          "actual_solution_size": 0,
+          "actual_solution_norm": 0.0,
+          "actual_matrix_shape": [
+            0,
+            0
+          ],
+          "planned_estimated_matrix_storage_bytes": 19982112,
+          "actual_matrix_storage_bytes": 0,
+          "actual_partition_rhs_size_total": 0,
+          "actual_partition_rhs_norm_sum": 0.0,
+          "actual_partition_residual_norm_sum": 0.0,
+          "actual_partition_reaction_norm_sum": 0.0,
+          "actual_partition_solution_norm_sum": 0.0,
+          "actual_partition_fixed_local_dof_total": 0,
+          "actual_partition_free_local_dof_total": 0,
+          "matrix_storage_ratio_actual_to_estimated": 0.0,
+          "global_dof_ratio_actual_to_estimated_local": 0.0,
+          "global_plan_vs_actual_ok": true,
+          "consistency_level": "estimated-only",
+          "ok": true,
+          "issues": [],
+          "warnings": [],
+          "partition_rows": [
+            {
+              "partition_id": 0,
+              "planned_present": true,
+              "actual_present": false,
+              "planned_active": true,
+              "actual_active": null,
+              "planned_active_cell_count": 240,
+              "actual_active_cell_count": null,
+              "planned_estimated_local_dof_count": 1371,
+              "actual_local_dof_count": null,
+              "planned_matrix_storage_bytes": 7949720,
+              "actual_matrix_storage_bytes": null,
+              "actual_rhs_size": null,
+              "actual_rhs_norm": null,
+              "actual_fixed_local_dof_count": null,
+              "actual_free_local_dof_count": null,
+              "actual_solution_norm": null,
+              "active_match": null,
+              "active_cell_count_match": null
+            },
+            {
+              "partition_id": 1,
+              "planned_present": true,
+              "actual_present": false,
+              "planned_active": true,
+              "actual_active": null,
+              "planned_active_cell_count": 240,
+              "actual_active_cell_count": null,
+              "planned_estimated_local_dof_count": 1305,
+              "actual_local_dof_count": null,
+              "planned_matrix_storage_bytes": 12032392,
+              "actual_matrix_storage_bytes": null,
+              "actual_rhs_size": null,
+              "actual_rhs_norm": null,
+              "actual_fixed_local_dof_count": null,
+              "actual_free_local_dof_count": null,
+              "actual_solution_norm": null,
+              "active_match": null,
+              "active_cell_count_match": null
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "backend_resume_state": {},
+  "stage_summary": {
+    "stage_index": 1,
+    "stage_name": "wall_activation",
+    "status": "not-executed",
+    "active_cell_count": 480,
+    "active_region_count": 4,
+    "increment_count": 1,
+    "iteration_count": 0,
+    "field_names": [],
+    "active_partition_count": 2,
+    "stage_locality_ratio": 1.0,
+    "active_partition_balance_ratio": 1.0,
+    "active_node_balance_ratio": 1.9364406779661016,
+    "idle_partition_ids": [],
+    "active_cells_per_partition": [
+      240,
+      240
+    ],
+    "active_gp_states_per_partition": [
+      429,
+      429
+    ],
+    "active_owned_nodes_per_partition": [
+      457,
+      236
+    ],
+    "active_owned_dofs_per_partition": [
+      1371,
+      708
+    ],
+    "linear_system_diagnostics_summary": {
+      "has_actual_operator_summary": false,
+      "planned_estimated_matrix_storage_bytes": 19982112,
+      "actual_matrix_storage_bytes": 0,
+      "actual_global_dof_count": 0,
+      "actual_global_rhs_size": 0,
+      "actual_global_residual_norm": 0.0,
+      "actual_global_reaction_norm": 0.0,
+      "actual_partition_rhs_size_total": 0,
+      "actual_partition_residual_norm_sum": 0.0,
+      "actual_partition_reaction_norm_sum": 0.0,
+      "active_cell_count_match": true,
+      "active_partition_count_match": true,
+      "consistency_level": "estimated-only",
+      "ok": true
+    }
+  },
+  "array_asset": "stage-001.npz",
+  "array_keys": [
+    "partition_0_du",
+    "partition_0_u",
+    "partition_1_du",
+    "partition_1_u",
+    "result_field_0000",
+    "result_field_0001",
+    "result_field_0002",
+    "result_field_0003",
+    "result_field_0004",
+    "result_field_0005",
+    "result_field_0006"
+  ]
+}

@@ -1,8 +1,6 @@
-PYTHONPATH=src python -m geoai_simkit check-env
-PYTHONPATH=src python -m geoai_simkit demo --out-dir exports_root
-PYTHONPATH=src python -m geoai_simkit gui
+@echo off
+set PYTHONPATH=src
 
-
-python run_demo.py
-
-python run_gui.py
+python -m geoai_simkit check-env
+python -m geoai_simkit demo --out-dir exports_root
+REM python -m geoai_simkit gui

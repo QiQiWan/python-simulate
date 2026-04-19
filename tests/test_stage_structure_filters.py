@@ -31,14 +31,14 @@ def _model() -> SimulationModel:
         'demo_enabled_interface_groups': ['outer', 'inner_upper', 'inner_lower'],
     })
     model.structures = [
-        StructuralElementDefinition('crown', 'frame3d', (0, 1), active_stages=('initial', 'excavate_level_1', 'excavate_level_2'), metadata={'support_group': 'crown_beam'}),
+        StructuralElementDefinition('crown', 'frame3d', (0, 1), active_stages=('wall_activation', 'excavate_level_1', 'excavate_level_2'), metadata={'support_group': 'crown_beam'}),
         StructuralElementDefinition('strut1', 'truss2', (0, 1), active_stages=('excavate_level_1', 'excavate_level_2'), metadata={'support_group': 'strut_level_1'}),
         StructuralElementDefinition('strut2', 'truss2', (0, 1), active_stages=('excavate_level_2',), metadata={'support_group': 'strut_level_2'}),
     ]
     model.interfaces = [
         InterfaceDefinition('outer', 'node_pair', (0,), (1,), active_stages=(), metadata={'wall_contact_group': 'outer'}),
-        InterfaceDefinition('upper', 'node_pair', (0,), (1,), active_stages=('initial',), metadata={'wall_contact_group': 'inner_upper'}),
-        InterfaceDefinition('lower', 'node_pair', (0,), (1,), active_stages=('initial', 'excavate_level_1'), metadata={'wall_contact_group': 'inner_lower'}),
+        InterfaceDefinition('upper', 'node_pair', (0,), (1,), active_stages=('wall_activation',), metadata={'wall_contact_group': 'inner_upper'}),
+        InterfaceDefinition('lower', 'node_pair', (0,), (1,), active_stages=('wall_activation', 'excavate_level_1'), metadata={'wall_contact_group': 'inner_lower'}),
     ]
     model.stages = build_demo_stages(model, wall_active=True)
     return model
@@ -46,16 +46,19 @@ def _model() -> SimulationModel:
 
 def test_demo_stages_expose_expected_active_support_groups() -> None:
     model = _model()
-    assert model.stage_by_name('initial').metadata['active_support_groups'] == ['crown_beam']
+    assert model.stage_by_name('initial').metadata['active_support_groups'] == []
+    assert model.stage_by_name('wall_activation').metadata['active_support_groups'] == ['crown_beam']
     assert model.stage_by_name('excavate_level_1').metadata['active_support_groups'] == ['crown_beam', 'strut_level_1']
     assert model.stage_by_name('excavate_level_2').metadata['active_support_groups'] == ['crown_beam', 'strut_level_1', 'strut_level_2']
 
 
 def test_model_structure_and_interface_filters_respect_stage_metadata() -> None:
     model = _model()
-    assert {s.metadata['support_group'] for s in model.structures_for_stage('initial')} == {'crown_beam'}
+    assert {s.metadata['support_group'] for s in model.structures_for_stage('initial')} == set()
+    assert {s.metadata['support_group'] for s in model.structures_for_stage('wall_activation')} == {'crown_beam'}
     assert {s.metadata['support_group'] for s in model.structures_for_stage('excavate_level_1')} == {'crown_beam', 'strut_level_1'}
     assert {s.metadata['support_group'] for s in model.structures_for_stage('excavate_level_2')} == {'crown_beam', 'strut_level_1', 'strut_level_2'}
-    assert {i.metadata['wall_contact_group'] for i in model.interfaces_for_stage('initial')} == {'outer', 'inner_upper', 'inner_lower'}
+    assert {i.metadata['wall_contact_group'] for i in model.interfaces_for_stage('initial')} == set()
+    assert {i.metadata['wall_contact_group'] for i in model.interfaces_for_stage('wall_activation')} == {'outer', 'inner_upper', 'inner_lower'}
     assert {i.metadata['wall_contact_group'] for i in model.interfaces_for_stage('excavate_level_1')} == {'outer', 'inner_lower'}
     assert {i.metadata['wall_contact_group'] for i in model.interfaces_for_stage('excavate_level_2')} == {'outer'}

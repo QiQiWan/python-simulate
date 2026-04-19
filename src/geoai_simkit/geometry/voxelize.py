@@ -348,7 +348,7 @@ class VoxelMesher:
                     "result_cells": int(kept.n_cells),
                     "warning": "Input was already a Hex/Voxel volume mesh, so surface voxelization was skipped.",
                 }
-        surf = block.extract_surface().triangulate()
+        surf = block.extract_surface(algorithm='dataset_surface').triangulate()
         if int(getattr(surf, "n_points", 0) or 0) < 3 or int(getattr(surf, "n_cells", 0) or 0) == 0:
             raise VoxelizationError(
                 object_name,
@@ -415,7 +415,13 @@ class VoxelMesher:
         centers = img.cell_centers()
         warning = ""
         try:
-            selected = centers.select_enclosed_points(surf, tolerance=0.0, check_surface=False)
+            if hasattr(centers, 'select_interior_points'):
+                try:
+                    selected = centers.select_interior_points(surf, tolerance=0.0, check_surface=False)
+                except TypeError:
+                    selected = centers.select_interior_points(surf)
+            else:
+                selected = centers.select_enclosed_points(surf, tolerance=0.0, check_surface=False)
             raw_mask = np.asarray(selected.point_data.get("SelectedPoints", []), dtype=np.uint8)
             mask = raw_mask.astype(bool)
         except Exception as exc:

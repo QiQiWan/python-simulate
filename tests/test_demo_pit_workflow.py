@@ -39,13 +39,15 @@ def _make_model() -> SimulationModel:
 def test_stage_manager_tracks_two_level_excavation_sequence() -> None:
     model = _make_model()
     model.add_stage(AnalysisStage(name='initial', metadata={'activation_map': {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': False}}))
-    model.add_stage(AnalysisStage(name='excavate_level_1', metadata={'activation_map': {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': True, 'wall': False}}))
-    model.add_stage(AnalysisStage(name='excavate_level_2', metadata={'activation_map': {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': False, 'wall': False}}))
+    model.add_stage(AnalysisStage(name='wall_activation', metadata={'activation_map': {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': True}}))
+    model.add_stage(AnalysisStage(name='excavate_level_1', metadata={'activation_map': {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': True, 'wall': True}}))
+    model.add_stage(AnalysisStage(name='excavate_level_2', metadata={'activation_map': {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': False, 'wall': True}}))
 
     contexts = StageManager(model).iter_stages()
     assert contexts[0].active_regions == {'soil_mass', 'soil_excavation_1', 'soil_excavation_2'}
-    assert contexts[1].active_regions == {'soil_mass', 'soil_excavation_2'}
-    assert contexts[2].active_regions == {'soil_mass'}
+    assert contexts[1].active_regions == {'soil_mass', 'soil_excavation_1', 'soil_excavation_2', 'wall'}
+    assert contexts[2].active_regions == {'soil_mass', 'soil_excavation_2', 'wall'}
+    assert contexts[3].active_regions == {'soil_mass', 'wall'}
 
 
 
@@ -77,13 +79,15 @@ def test_presolve_allows_auto_interface_wall_when_expected_groups_exist() -> Non
     model.metadata['demo_wall_mode'] = 'auto_interface'
     model.interfaces = [
         InterfaceDefinition('outer_a', 'node_pair', (1,), (2,), active_stages=(), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'outer'}),
-        InterfaceDefinition('inner_upper_a', 'node_pair', (3,), (4,), active_stages=('initial',), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_upper'}),
-        InterfaceDefinition('inner_lower_a', 'node_pair', (5,), (6,), active_stages=('initial', 'excavate_level_1'), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_lower'}),
+        InterfaceDefinition('inner_upper_a', 'node_pair', (3,), (4,), active_stages=('wall_activation',), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_upper'}),
+        InterfaceDefinition('inner_lower_a', 'node_pair', (5,), (6,), active_stages=('wall_activation', 'excavate_level_1'), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_lower'}),
     ]
-    activation0 = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': True}
+    activation0 = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': False}
+    activation_wall = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': True}
     activation1 = {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': True, 'wall': True}
     activation2 = {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': False, 'wall': True}
     model.add_stage(AnalysisStage(name='initial', activate_regions=tuple(activation0.keys()), steps=1, metadata={'activation_map': activation0, 'initial_increment': 0.05}))
+    model.add_stage(AnalysisStage(name='wall_activation', activate_regions=tuple(activation_wall.keys()), steps=1, metadata={'activation_map': activation_wall, 'initial_increment': 0.025}))
     model.add_stage(AnalysisStage(name='excavate_level_1', activate_regions=tuple(activation1.keys()), steps=1, metadata={'activation_map': activation1, 'initial_increment': 0.05}))
     model.add_stage(AnalysisStage(name='excavate_level_2', activate_regions=tuple(activation2.keys()), steps=1, metadata={'activation_map': activation2, 'initial_increment': 0.05}))
 
@@ -95,11 +99,13 @@ def test_presolve_blocks_auto_interface_wall_when_outer_group_missing() -> None:
     model = _make_model()
     model.metadata['demo_wall_mode'] = 'auto_interface'
     model.interfaces = [
-        InterfaceDefinition('inner_upper_a', 'node_pair', (3,), (4,), active_stages=('initial',), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_upper'}),
-        InterfaceDefinition('inner_lower_a', 'node_pair', (5,), (6,), active_stages=('initial', 'excavate_level_1'), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_lower'}),
+        InterfaceDefinition('inner_upper_a', 'node_pair', (3,), (4,), active_stages=('wall_activation',), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_upper'}),
+        InterfaceDefinition('inner_lower_a', 'node_pair', (5,), (6,), active_stages=('wall_activation', 'excavate_level_1'), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'inner_lower'}),
     ]
-    activation = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': True}
-    model.add_stage(AnalysisStage(name='initial', activate_regions=tuple(activation.keys()), steps=1, metadata={'activation_map': activation, 'initial_increment': 0.05}))
+    activation0 = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': False}
+    activation_wall = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': True}
+    model.add_stage(AnalysisStage(name='initial', activate_regions=tuple(activation0.keys()), steps=1, metadata={'activation_map': activation0, 'initial_increment': 0.05}))
+    model.add_stage(AnalysisStage(name='wall_activation', activate_regions=tuple(activation_wall.keys()), steps=1, metadata={'activation_map': activation_wall, 'initial_increment': 0.025}))
 
     report = analyze_presolve_state(model)
     assert report.ok is False
@@ -122,7 +128,7 @@ def test_presolve_respects_enabled_interface_group_subset() -> None:
     model.interfaces = [
         InterfaceDefinition('outer_a', 'node_pair', (1,), (2,), active_stages=(), metadata={'source': 'parametric_pit_auto_wall', 'wall_contact_group': 'outer'}),
     ]
-    activation = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': True}
+    activation = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': False}
     model.add_stage(AnalysisStage(name='initial', activate_regions=tuple(activation.keys()), steps=1, metadata={'activation_map': activation, 'initial_increment': 0.05}))
 
     report = analyze_presolve_state(model)
@@ -139,13 +145,15 @@ def test_presolve_respects_enabled_support_group_subset() -> None:
     ]
     from geoai_simkit.core.model import StructuralElementDefinition
     model.structures = [
-        StructuralElementDefinition('crown_1', 'frame3d', (0, 1), active_stages=('initial', 'excavate_level_1', 'excavate_level_2'), metadata={'source': 'parametric_pit_auto_support', 'support_group': 'crown_beam'}),
+        StructuralElementDefinition('crown_1', 'frame3d', (0, 1), active_stages=('wall_activation', 'excavate_level_1', 'excavate_level_2'), metadata={'source': 'parametric_pit_auto_support', 'support_group': 'crown_beam'}),
         StructuralElementDefinition('strut_1', 'truss2', (2, 3), active_stages=('excavate_level_1', 'excavate_level_2'), metadata={'source': 'parametric_pit_auto_support', 'support_group': 'strut_level_1'}),
     ]
-    activation0 = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': True}
+    activation0 = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': False}
+    activation_wall = {'soil_mass': True, 'soil_excavation_1': True, 'soil_excavation_2': True, 'wall': True}
     activation1 = {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': True, 'wall': True}
     activation2 = {'soil_mass': True, 'soil_excavation_1': False, 'soil_excavation_2': False, 'wall': True}
     model.add_stage(AnalysisStage(name='initial', activate_regions=tuple(activation0.keys()), steps=1, metadata={'activation_map': activation0, 'initial_increment': 0.05}))
+    model.add_stage(AnalysisStage(name='wall_activation', activate_regions=tuple(activation_wall.keys()), steps=1, metadata={'activation_map': activation_wall, 'initial_increment': 0.025}))
     model.add_stage(AnalysisStage(name='excavate_level_1', activate_regions=tuple(activation1.keys()), steps=1, metadata={'activation_map': activation1, 'initial_increment': 0.05}))
     model.add_stage(AnalysisStage(name='excavate_level_2', activate_regions=tuple(activation2.keys()), steps=1, metadata={'activation_map': activation2, 'initial_increment': 0.05}))
 

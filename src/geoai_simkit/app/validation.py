@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from geoai_simkit.core.model import SimulationModel
 from geoai_simkit.solver.staging import StageManager
 from geoai_simkit.validation_rules import (
+    normalize_region_name,
     validate_bc_inputs,
     validate_load_inputs,
     validate_solver_settings,
@@ -59,7 +60,7 @@ def validate_model(model: SimulationModel | None) -> list[ValidationIssue]:
         issues.append(ValidationIssue('warning', '边界/阶段', '尚未定义施工阶段，求解时将使用默认阶段。'))
     else:
         stage_names = [s.name for s in model.stages]
-        region_names = {r.name for r in model.region_tags}
+        region_names = {normalize_region_name(r.name) for r in model.region_tags}
         dup = sorted({n for n in stage_names if stage_names.count(n) > 1})
         if dup:
             issues.append(ValidationIssue('error', '边界/阶段', f'存在重复 Stage 名称: {", ".join(dup[:8])}'))
@@ -81,8 +82,8 @@ def validate_model(model: SimulationModel | None) -> list[ValidationIssue]:
                 issues.append(ValidationIssue(item.level, '边界/阶段', f'{stage.name}: {item.message}'))
             referenced = set(stage.activate_regions) | set(stage.deactivate_regions)
             amap = meta.get('activation_map') if isinstance(meta.get('activation_map'), dict) else {}
-            referenced |= {str(k) for k in amap.keys()}
-            missing = sorted(name for name in referenced if name and name not in region_names)
+            referenced |= {normalize_region_name(k) for k in amap.keys()}
+            missing = sorted(name for name in {normalize_region_name(item) for item in referenced if str(item).strip()} if name and name not in region_names)
             if missing:
                 issues.append(ValidationIssue('error', '边界/阶段', f'{stage.name}: 以下区域未在当前模型中找到: {", ".join(missing[:8])}'))
             if previous_active is not None and ctx.active_regions == previous_active and not stage.boundary_conditions and not stage.loads:
