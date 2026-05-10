@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geoai-simkit"
+version = "0.8.73"
+description = "GeoAI SimKit modular 3D geotechnical FEM workflow with production meshing validation"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10", "typing_extensions>=4.8"]
+
+
+[project.optional-dependencies]
+solver = ["scipy>=1.10"]
+gui = ["PySide6", "pyvista", "pyvistaqt"]
+meshing = ["gmsh", "meshio"]
+gpu = ["warp-lang"]
+dev = ["pytest"]
+
+[project.scripts]
+geoai-simkit = "geoai_simkit.cli:main"
+geoai-simkit-gui = "geoai_simkit.app.launch:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+  "fast: dependency-light tests",
+  "solver: solver and benchmark tests",
+  "gui: GUI contract tests",
+  "slow: long-running engineering smoke tests",
+  "gpu: CUDA/Warp tests",
+  "meshing: gmsh/meshio tests",
+]

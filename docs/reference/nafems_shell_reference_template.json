@@ -1,0 +1,11 @@
+{
+  "notes": "Replace surrogate values with official NAFEMS/MacNeal-Harder published reference values before claiming certification-grade validation.",
+  "cases": {
+    "membrane_patch": {"reference_value": null, "quantity": "strain_error_norm", "tolerance": 1e-8, "source": "official-reference-required"},
+    "nafems_cantilever_bending": {"reference_value": null, "quantity": "tip_displacement", "tolerance": 0.05, "source": "official-reference-required"},
+    "macneal_harder_twisted_beam": {"reference_value": null, "quantity": "tip_displacement", "tolerance": 0.1, "source": "official-reference-required"},
+    "distorted_quad_bending": {"reference_value": null, "quantity": "relative_error", "tolerance": 0.15, "source": "official-reference-required"},
+    "thin_shell_locking": {"reference_value": null, "quantity": "locking_index", "tolerance": 0.25, "source": "official-reference-required"},
+    "large_rotation_objectivity": {"reference_value": null, "quantity": "objectivity_error", "tolerance": 1e-6, "source": "official-reference-required"}
+  }
+}

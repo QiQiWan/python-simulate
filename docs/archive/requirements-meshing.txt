@@ -1,0 +1,4 @@
+-r requirements-core.txt
+pyvista>=0.43
+gmsh>=4.11
+meshio>=5.3

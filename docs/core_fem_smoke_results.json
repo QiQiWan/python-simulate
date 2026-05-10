@@ -1,0 +1,109 @@
+{
+  "suite": "core_fem_numerical_smoke",
+  "ok": true,
+  "passed_count": 7,
+  "check_count": 7,
+  "checks": [
+    {
+      "key": "geometry",
+      "ok": true,
+      "value": 2.0,
+      "expected": 2.0,
+      "status": "numerical_smoke",
+      "metric": "quad_area"
+    },
+    {
+      "key": "mesh",
+      "ok": true,
+      "value": {
+        "h": 0.5,
+        "quality": 1.0
+      },
+      "expected": {
+        "h": 0.5,
+        "quality": 1.0
+      },
+      "status": "numerical_smoke"
+    },
+    {
+      "key": "material",
+      "ok": true,
+      "value": [
+        1.2,
+        0.4,
+        0.4
+      ],
+      "expected": [
+        1.2,
+        0.4,
+        0.4
+      ],
+      "status": "numerical_smoke",
+      "metric": "linear_elastic_3d"
+    },
+    {
+      "key": "element",
+      "ok": true,
+      "value": [
+        0.0,
+        2.0
+      ],
+      "expected": [
+        0.0,
+        2.0
+      ],
+      "status": "numerical_smoke",
+      "metric": "bar_eigenvalues"
+    },
+    {
+      "key": "assembly",
+      "ok": true,
+      "value": [
+        [
+          1.0,
+          -1.0,
+          0.0
+        ],
+        [
+          -1.0,
+          2.0,
+          -1.0
+        ],
+        [
+          0.0,
+          -1.0,
+          1.0
+        ]
+      ],
+      "expected": "3-node chain stiffness",
+      "status": "numerical_smoke"
+    },
+    {
+      "key": "solver",
+      "ok": true,
+      "value": [
+        0.6666666666666666,
+        0.3333333333333333
+      ],
+      "expected": [
+        0.6666666666666666,
+        0.3333333333333333
+      ],
+      "status": "numerical_smoke",
+      "residual": 0.0
+    },
+    {
+      "key": "result",
+      "ok": true,
+      "value": {
+        "peak": 0.3,
+        "argmax": 2
+      },
+      "expected": {
+        "peak": 0.3,
+        "argmax": 2
+      },
+      "status": "numerical_smoke"
+    }
+  ]
+}

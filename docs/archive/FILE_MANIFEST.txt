@@ -1,0 +1,1 @@
+v0.8.34: Root simplified. Core FEM docs live in docs/. Historical notes remain archived here.

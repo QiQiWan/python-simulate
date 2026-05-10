@@ -1,0 +1,23 @@
+# GeoAI SimKit unified requirements
+# Minimal numerical runtime
+numpy>=1.24
+typing_extensions>=4.8
+
+# Sparse solvers and benchmarks
+scipy>=1.10
+pytest
+
+# Desktop GUI. PySide6 is enough to open the main workbench.
+PySide6
+
+# Optional 3D viewport / meshing. Uncomment if needed.
+# pyvista
+# pyvistaqt
+# gmsh
+# meshio
+
+# Optional GPU runtime. Install only on CUDA-capable machines.
+# warp-lang
+
+# Optional native OCC/BRep history.
+# pythonocc-core
