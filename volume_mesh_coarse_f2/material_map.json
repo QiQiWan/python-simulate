@@ -1,0 +1,142 @@
+{
+  "materials": [
+    {
+      "soil_id": 0,
+      "soil_name": "素填土",
+      "material_id": "mat_soil_000",
+      "material_status": "placeholder",
+      "material_index": 0
+    },
+    {
+      "soil_id": 1,
+      "soil_name": "砂质粉土",
+      "material_id": "mat_soil_001",
+      "material_status": "placeholder",
+      "material_index": 1
+    },
+    {
+      "soil_id": 2,
+      "soil_name": "粉砂夹粉土",
+      "material_id": "mat_soil_002",
+      "material_status": "placeholder",
+      "material_index": 2
+    },
+    {
+      "soil_id": 3,
+      "soil_name": "砂质粉土夹淤泥质粉质黏土",
+      "material_id": "mat_soil_003",
+      "material_status": "placeholder",
+      "material_index": 3
+    },
+    {
+      "soil_id": 4,
+      "soil_name": "淤泥质粉质黏土",
+      "material_id": "mat_soil_004",
+      "material_status": "placeholder",
+      "material_index": 4
+    },
+    {
+      "soil_id": 5,
+      "soil_name": "黏土",
+      "material_id": "mat_soil_005",
+      "material_status": "placeholder",
+      "material_index": 5
+    },
+    {
+      "soil_id": 6,
+      "soil_name": "粉质黏土",
+      "material_id": "mat_soil_006",
+      "material_status": "placeholder",
+      "material_index": 6
+    },
+    {
+      "soil_id": 7,
+      "soil_name": "细砂",
+      "material_id": "mat_soil_007",
+      "material_status": "placeholder",
+      "material_index": 7
+    },
+    {
+      "soil_id": 8,
+      "soil_name": "圆砾",
+      "material_id": "mat_soil_008",
+      "material_status": "placeholder",
+      "material_index": 8
+    },
+    {
+      "soil_id": 9,
+      "soil_name": "强风化泥质粉砂岩",
+      "material_id": "mat_soil_009",
+      "material_status": "placeholder",
+      "material_index": 9
+    },
+    {
+      "soil_id": 10,
+      "soil_name": "中风化泥质粉砂岩",
+      "material_id": "mat_soil_010",
+      "material_status": "placeholder",
+      "material_index": 10
+    },
+    {
+      "soil_id": 11,
+      "soil_name": "杂填土",
+      "material_id": "mat_soil_011",
+      "material_status": "placeholder",
+      "material_index": 11
+    },
+    {
+      "soil_id": 12,
+      "soil_name": "淤泥质粉质黏土夹粉土",
+      "material_id": "mat_soil_012",
+      "material_status": "placeholder",
+      "material_index": 12
+    },
+    {
+      "soil_id": 13,
+      "soil_name": "含砂粉质黏土",
+      "material_id": "mat_soil_013",
+      "material_status": "placeholder",
+      "material_index": 13
+    },
+    {
+      "soil_id": 14,
+      "soil_name": "全风化泥质粉砂岩",
+      "material_id": "mat_soil_014",
+      "material_status": "placeholder",
+      "material_index": 14
+    },
+    {
+      "soil_id": 15,
+      "soil_name": "中砂",
+      "material_id": "mat_soil_015",
+      "material_status": "placeholder",
+      "material_index": 15
+    },
+    {
+      "soil_id": 16,
+      "soil_name": "粉细砂",
+      "material_id": "mat_soil_016",
+      "material_status": "placeholder",
+      "material_index": 16
+    }
+  ],
+  "material_index_map": {
+    "0": 0,
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    "6": 6,
+    "7": 7,
+    "8": 8,
+    "9": 9,
+    "10": 10,
+    "11": 11,
+    "12": 12,
+    "13": 13,
+    "14": 14,
+    "15": 15,
+    "16": 16
+  }
+}

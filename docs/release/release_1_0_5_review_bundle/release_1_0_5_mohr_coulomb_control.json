@@ -1,0 +1,25 @@
+{
+  "contract": "geoai_simkit_staged_mohr_coulomb_control_payload_v1",
+  "control_mode": "engineering_preview",
+  "phase_ids": [
+    "initial",
+    "excavation_1",
+    "support_1",
+    "excavation_2",
+    "support_2"
+  ],
+  "material_ids": [
+    "alpha_soft_clay",
+    "alpha_dense_sand",
+    "soft_clay",
+    "silty_clay",
+    "dense_sand"
+  ],
+  "max_iterations": 35,
+  "tolerance": 1e-06,
+  "use_k0_initial_stress": true,
+  "limitations": [
+    "Global equilibrium solve remains the 1.0 compact linear-static kernel in this basic release.",
+    "Mohr-Coulomb state is tracked through staged control metadata and material readiness gates."
+  ]
+}

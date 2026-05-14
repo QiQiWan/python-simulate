@@ -21,19 +21,25 @@ from .solver_actions import SolverActionController
 from .stage_actions import StageActionController
 from .workflow_artifact_actions import WorkflowArtifactActionController
 from .workflow_controller import run_headless_project_workflow
+from .workbench_phase_actions import WorkbenchPhaseActionController
 
 from .geometry_actions import GeometryActionController
+from .geometry_kernel_actions import GeometryKernelActionController
 from .export_actions import ExportActionController
 from .compute_preference_actions import ComputePreferenceActionController
+from .complete_3d_mesh_actions import Complete3DMeshActionController
 from .mesher_backend_actions import MesherBackendActionController
 from .meshing_validation_actions import MeshingValidationActionController
 from .quality_gate_actions import QualityGateActionController
 __all__ = [
+    "WorkbenchPhaseActionController",
+    "Complete3DMeshActionController",
     "QualityGateActionController",
     "MesherBackendActionController",
     "MeshingValidationActionController",
     "ComputePreferenceActionController",
     "ExportActionController",
+    "GeometryKernelActionController",
     "GeometryActionController",
     "BoundaryConditionActionController",
     "GeotechnicalActionController",

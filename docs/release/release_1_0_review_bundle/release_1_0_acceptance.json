@@ -1,0 +1,255 @@
+{
+  "contract": "geoai_simkit_release_1_0_acceptance_v1",
+  "status": "accepted_1_0_basic",
+  "accepted": true,
+  "blocker_count": 0,
+  "warning_count": 0,
+  "findings": [],
+  "scorecard": {
+    "geometry_ready": true,
+    "semantic_ready": true,
+    "mesh_ready": true,
+    "production_mesh": true,
+    "phase_compiled": true,
+    "solver_accepted": true,
+    "results_complete": true,
+    "error_count": 0,
+    "warning_count": 0
+  },
+  "validation": {
+    "contract": "geoproject_model_validation_v1",
+    "ok": true,
+    "status": "ready",
+    "error_count": 0,
+    "warning_count": 0,
+    "issues": [],
+    "counts": {
+      "volume_count": 4,
+      "surface_count": 4,
+      "curve_count": 2,
+      "material_count": 9,
+      "phase_count": 5,
+      "mesh_cell_count": 4,
+      "result_phase_count": 5
+    },
+    "readiness": {
+      "geometry_ready": true,
+      "semantic_ready": true,
+      "phase_ready": true,
+      "mesh_ready": true,
+      "result_ready": true
+    },
+    "metadata": {
+      "require_mesh": true,
+      "require_results": true
+    }
+  },
+  "compiler": {
+    "contract": "geoproject_phase_solver_compiler_v1",
+    "ok": true,
+    "compiled_phase_count": 5,
+    "blocked": false,
+    "validation": {
+      "contract": "geoproject_model_validation_v1",
+      "ok": true,
+      "status": "ready",
+      "error_count": 0,
+      "warning_count": 0,
+      "issues": [],
+      "counts": {
+        "volume_count": 4,
+        "surface_count": 4,
+        "curve_count": 2,
+        "material_count": 9,
+        "phase_count": 5,
+        "mesh_cell_count": 4,
+        "result_phase_count": 5
+      },
+      "readiness": {
+        "geometry_ready": true,
+        "semantic_ready": true,
+        "phase_ready": true,
+        "mesh_ready": true,
+        "result_ready": true
+      },
+      "metadata": {
+        "require_mesh": true,
+        "require_results": false
+      }
+    },
+    "phase_summaries": [
+      {
+        "id": "compiled_initial",
+        "phase_id": "initial",
+        "active_cell_count": 4,
+        "active_dof_count": 72,
+        "material_state_count": 4,
+        "interface_count": 0,
+        "has_mesh_block": true,
+        "has_element_block": true,
+        "has_material_block": true,
+        "has_boundary_block": true,
+        "has_load_block": true,
+        "has_result_request_block": true
+      },
+      {
+        "id": "compiled_excavation_1",
+        "phase_id": "excavation_1",
+        "active_cell_count": 3,
+        "active_dof_count": 60,
+        "material_state_count": 3,
+        "interface_count": 0,
+        "has_mesh_block": true,
+        "has_element_block": true,
+        "has_material_block": true,
+        "has_boundary_block": true,
+        "has_load_block": true,
+        "has_result_request_block": true
+      },
+      {
+        "id": "compiled_support_1",
+        "phase_id": "support_1",
+        "active_cell_count": 3,
+        "active_dof_count": 60,
+        "material_state_count": 3,
+        "interface_count": 0,
+        "has_mesh_block": true,
+        "has_element_block": true,
+        "has_material_block": true,
+        "has_boundary_block": true,
+        "has_load_block": true,
+        "has_result_request_block": true
+      },
+      {
+        "id": "compiled_excavation_2",
+        "phase_id": "excavation_2",
+        "active_cell_count": 2,
+        "active_dof_count": 36,
+        "material_state_count": 2,
+        "interface_count": 0,
+        "has_mesh_block": true,
+        "has_element_block": true,
+        "has_material_block": true,
+        "has_boundary_block": true,
+        "has_load_block": true,
+        "has_result_request_block": true
+      },
+      {
+        "id": "compiled_support_2",
+        "phase_id": "support_2",
+        "active_cell_count": 2,
+        "active_dof_count": 36,
+        "material_state_count": 2,
+        "interface_count": 0,
+        "has_mesh_block": true,
+        "has_element_block": true,
+        "has_material_block": true,
+        "has_boundary_block": true,
+        "has_load_block": true,
+        "has_result_request_block": true
+      }
+    ],
+    "metadata": {
+      "block_on_errors": false,
+      "compiler": "GeoProjectDocument.compile_phase_models"
+    }
+  },
+  "solver_summary": {
+    "accepted": true,
+    "phase_records": [
+      {
+        "phase_id": "initial",
+        "active_cell_count": 4,
+        "active_interface_count": 0,
+        "total_dofs": 72,
+        "free_dofs": 44,
+        "constrained_dofs": 28,
+        "residual_norm": 0.0,
+        "relative_residual_norm": 0.0,
+        "convergence_tolerance": 1e-08,
+        "converged": true,
+        "max_displacement": 0.0,
+        "max_settlement": 0.0,
+        "max_von_mises_stress": 0.0,
+        "assembly_status": "ok",
+        "solve_status": "sparse_direct"
+      },
+      {
+        "phase_id": "excavation_1",
+        "active_cell_count": 3,
+        "active_interface_count": 0,
+        "total_dofs": 60,
+        "free_dofs": 32,
+        "constrained_dofs": 28,
+        "residual_norm": 0.0,
+        "relative_residual_norm": 0.0,
+        "convergence_tolerance": 1e-08,
+        "converged": true,
+        "max_displacement": 0.0,
+        "max_settlement": 0.0,
+        "max_von_mises_stress": 0.0,
+        "assembly_status": "ok",
+        "solve_status": "sparse_direct"
+      },
+      {
+        "phase_id": "support_1",
+        "active_cell_count": 3,
+        "active_interface_count": 0,
+        "total_dofs": 60,
+        "free_dofs": 32,
+        "constrained_dofs": 28,
+        "residual_norm": 1.4131049845964359e-12,
+        "relative_residual_norm": 2.453307264924368e-16,
+        "convergence_tolerance": 1e-08,
+        "converged": true,
+        "max_displacement": 0.012970584245712307,
+        "max_settlement": 0.012970584245712307,
+        "max_von_mises_stress": 12.222222222222223,
+        "assembly_status": "ok",
+        "solve_status": "sparse_direct"
+      },
+      {
+        "phase_id": "excavation_2",
+        "active_cell_count": 2,
+        "active_interface_count": 0,
+        "total_dofs": 36,
+        "free_dofs": 8,
+        "constrained_dofs": 28,
+        "residual_norm": 8.038873388460929e-13,
+        "relative_residual_norm": 1.3956377410522446e-16,
+        "convergence_tolerance": 1e-08,
+        "converged": true,
+        "max_displacement": 0.012970584245712305,
+        "max_settlement": 0.012970584245712305,
+        "max_von_mises_stress": 24.444444444444454,
+        "assembly_status": "ok",
+        "solve_status": "sparse_direct"
+      },
+      {
+        "phase_id": "support_2",
+        "active_cell_count": 2,
+        "active_interface_count": 0,
+        "total_dofs": 36,
+        "free_dofs": 8,
+        "constrained_dofs": 28,
+        "residual_norm": 8.038873388460929e-13,
+        "relative_residual_norm": 1.3956377410522446e-16,
+        "convergence_tolerance": 1e-08,
+        "converged": true,
+        "max_displacement": 0.012970584245712305,
+        "max_settlement": 0.012970584245712305,
+        "max_von_mises_stress": 24.444444444444454,
+        "assembly_status": "ok",
+        "solve_status": "sparse_direct"
+      }
+    ],
+    "result_phase_count": 5,
+    "cell_state_count": 4,
+    "interface_state_count": 0,
+    "metadata": {
+      "contract": "geoproject_incremental_solver_v1",
+      "write_results": true
+    }
+  },
+  "metadata": {}
+}

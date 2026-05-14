@@ -1,0 +1,23 @@
+{
+  "contract": "geoai_simkit_native_brep_serialization_capability_v1",
+  "ocp_available": false,
+  "pythonocc_available": false,
+  "topods_shape_available": false,
+  "brep_tools_write_available": false,
+  "top_exp_available": false,
+  "ifcopenshell_available": false,
+  "ifcopenshell_geom_available": false,
+  "native_brep_serialization_possible": false,
+  "native_topology_enumeration_possible": false,
+  "errors": {
+    "OCP.TopoDS": "ModuleNotFoundError: No module named 'OCP'",
+    "OCC.Core.TopoDS": "ModuleNotFoundError: No module named 'OCC'",
+    "OCP.BRepTools": "ModuleNotFoundError: No module named 'OCP'",
+    "OCC.Core.BRepTools": "ModuleNotFoundError: No module named 'OCC'",
+    "OCP.TopExp": "ModuleNotFoundError: No module named 'OCP'",
+    "OCC.Core.TopExp": "ModuleNotFoundError: No module named 'OCC'",
+    "ifcopenshell": "ModuleNotFoundError: No module named 'ifcopenshell'",
+    "ifcopenshell.geom": "ModuleNotFoundError: No module named 'ifcopenshell'"
+  },
+  "certification_policy": "native_brep_certified requires real TopoDS_Shape serialization plus native topology enumeration"
+}

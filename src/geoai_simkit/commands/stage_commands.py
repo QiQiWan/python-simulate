@@ -100,3 +100,121 @@ class SetStageBlockActivationCommand(Command):
 
     def affected_entities(self) -> list[str]:
         return [self.stage_id, self.block_id]
+
+@dataclass(slots=True)
+class AddPhaseCommand(Command):
+    phase_id: str
+    name_override: str | None = None
+    predecessor_id: str | None = None
+    copy_from: str | None = None
+    id: str = "add_phase"
+    name: str = "Add construction phase"
+    _created: bool = field(default=False, init=False, repr=False)
+
+    def execute(self, document: Any) -> CommandResult:
+        if not _is_geoproject(document):
+            return CommandResult(self.id, self.name, ok=False, message="AddPhaseCommand requires GeoProjectDocument")
+        stage = document.add_phase(self.phase_id, name=self.name_override, predecessor_id=self.predecessor_id, copy_from=self.copy_from)
+        self._created = True
+        return CommandResult(self.id, self.name, affected_entities=[stage.id], message=f"Added phase {stage.id}", metadata=stage.to_dict())
+
+    def undo(self, document: Any) -> CommandResult:
+        if _is_geoproject(document) and self._created:
+            document.remove_phase(self.phase_id)
+        return CommandResult(self.id, f"Undo {self.name}", affected_entities=[self.phase_id])
+
+
+@dataclass(slots=True)
+class SetPhaseStructureActivationCommand(Command):
+    phase_id: str
+    structure_id: str
+    active: bool
+    id: str = "set_phase_structure_activation"
+    name: str = "Set phase structure activation"
+    _backup: dict[str, Any] | None = field(default=None, init=False, repr=False)
+
+    def execute(self, document: Any) -> CommandResult:
+        if not _is_geoproject(document):
+            return CommandResult(self.id, self.name, ok=False, message="Requires GeoProjectDocument")
+        self._backup = document.to_dict()
+        snapshot = document.set_phase_structure_activation(self.phase_id, self.structure_id, self.active)
+        return CommandResult(self.id, self.name, affected_entities=[self.phase_id, self.structure_id], metadata=snapshot.to_dict())
+
+    def undo(self, document: Any) -> CommandResult:
+        if _is_geoproject(document) and self._backup is not None:
+            restored = document.from_dict(self._backup)
+            for field_name in document.__dataclass_fields__:
+                setattr(document, field_name, getattr(restored, field_name))
+        return CommandResult(self.id, f"Undo {self.name}", affected_entities=[self.phase_id, self.structure_id])
+
+
+@dataclass(slots=True)
+class SetPhaseInterfaceActivationCommand(Command):
+    phase_id: str
+    interface_id: str
+    active: bool
+    id: str = "set_phase_interface_activation"
+    name: str = "Set phase interface activation"
+    _backup: dict[str, Any] | None = field(default=None, init=False, repr=False)
+
+    def execute(self, document: Any) -> CommandResult:
+        if not _is_geoproject(document):
+            return CommandResult(self.id, self.name, ok=False, message="Requires GeoProjectDocument")
+        self._backup = document.to_dict()
+        snapshot = document.set_phase_interface_activation(self.phase_id, self.interface_id, self.active)
+        return CommandResult(self.id, self.name, affected_entities=[self.phase_id, self.interface_id], metadata=snapshot.to_dict())
+
+    def undo(self, document: Any) -> CommandResult:
+        if _is_geoproject(document) and self._backup is not None:
+            restored = document.from_dict(self._backup)
+            for field_name in document.__dataclass_fields__:
+                setattr(document, field_name, getattr(restored, field_name))
+        return CommandResult(self.id, f"Undo {self.name}", affected_entities=[self.phase_id, self.interface_id])
+
+
+@dataclass(slots=True)
+class SetPhaseLoadActivationCommand(Command):
+    phase_id: str
+    load_id: str
+    active: bool
+    id: str = "set_phase_load_activation"
+    name: str = "Set phase load activation"
+    _backup: dict[str, Any] | None = field(default=None, init=False, repr=False)
+
+    def execute(self, document: Any) -> CommandResult:
+        if not _is_geoproject(document):
+            return CommandResult(self.id, self.name, ok=False, message="Requires GeoProjectDocument")
+        self._backup = document.to_dict()
+        snapshot = document.set_phase_load_activation(self.phase_id, self.load_id, self.active)
+        return CommandResult(self.id, self.name, affected_entities=[self.phase_id, self.load_id], metadata=snapshot.to_dict())
+
+    def undo(self, document: Any) -> CommandResult:
+        if _is_geoproject(document) and self._backup is not None:
+            restored = document.from_dict(self._backup)
+            for field_name in document.__dataclass_fields__:
+                setattr(document, field_name, getattr(restored, field_name))
+        return CommandResult(self.id, f"Undo {self.name}", affected_entities=[self.phase_id, self.load_id])
+
+
+@dataclass(slots=True)
+class SetPhaseWaterConditionCommand(Command):
+    phase_id: str
+    water_condition_id: str | None = None
+    water_level: float | None = None
+    id: str = "set_phase_water_condition"
+    name: str = "Set phase water condition"
+    _backup: dict[str, Any] | None = field(default=None, init=False, repr=False)
+
+    def execute(self, document: Any) -> CommandResult:
+        if not _is_geoproject(document):
+            return CommandResult(self.id, self.name, ok=False, message="Requires GeoProjectDocument")
+        self._backup = document.to_dict()
+        snapshot = document.set_phase_water_condition(self.phase_id, self.water_condition_id, water_level=self.water_level)
+        return CommandResult(self.id, self.name, affected_entities=[self.phase_id, self.water_condition_id or "water_level"], metadata=snapshot.to_dict())
+
+    def undo(self, document: Any) -> CommandResult:
+        if _is_geoproject(document) and self._backup is not None:
+            restored = document.from_dict(self._backup)
+            for field_name in document.__dataclass_fields__:
+                setattr(document, field_name, getattr(restored, field_name))
+        return CommandResult(self.id, f"Undo {self.name}", affected_entities=[self.phase_id])

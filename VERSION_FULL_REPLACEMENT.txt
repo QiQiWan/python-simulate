@@ -1,1 +1,8 @@
-GeoAI SimKit 0.8.73 - Module Optimization Readiness and Complete Modularization Closure
+GeoAI SimKit 1.5.0 GUI Benchmark / Readiness Panel
+
+Replace the prior 1.4.9 package with this package to obtain:
+- P8.5 report loading in GUI readiness/benchmark tabs.
+- Clickable blocker-to-fix suggestions.
+- Simplified right inspector dock.
+- Consolidated bottom logs/readiness/diagnostics/benchmark/demo/dependency tabs.
+- Floating help/fix-detail tool window.

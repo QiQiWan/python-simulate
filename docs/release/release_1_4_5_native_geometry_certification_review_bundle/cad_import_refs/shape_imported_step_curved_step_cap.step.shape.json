@@ -1,0 +1,40 @@
+{
+  "contract": "geoai_simkit_imported_step_ifc_shape_reference_v1",
+  "source_path": "docs/release/release_1_4_5_native_geometry_certification_review_bundle/sample_curved_step_1_4_5.step",
+  "source_format": "step",
+  "source_digest": "03eaf1311f402a2aae3e",
+  "source_native_id": "",
+  "entity_id": "imported_step_curved_step_cap",
+  "shape_id": "shape_imported_step_curved_step_cap",
+  "bounds": [
+    -8.0,
+    8.0,
+    -5.0,
+    5.0,
+    -0.3,
+    0.0
+  ],
+  "native_brep_certified": false,
+  "backend": "step_topology_surrogate",
+  "record": {
+    "id": "curved_step_cap",
+    "name": "Curved STEP Cap Reference",
+    "source_format": "step",
+    "bounds": [
+      -8.0,
+      8.0,
+      -5.0,
+      5.0,
+      -0.3,
+      0.0
+    ],
+    "role": "imported_cap",
+    "material_id": "concrete",
+    "native_shape_available": false,
+    "native_brep_certified": false,
+    "source_native_id": "",
+    "metadata": {
+      "embedded_geoai_manifest": true
+    }
+  }
+}

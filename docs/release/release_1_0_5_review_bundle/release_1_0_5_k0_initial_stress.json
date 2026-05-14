@@ -1,0 +1,92 @@
+{
+  "contract": "geoai_simkit_k0_initial_stress_payload_v1",
+  "phase_id": "initial",
+  "ground_level": 0.0,
+  "compression_negative": true,
+  "states": [
+    {
+      "cell_id": 0,
+      "block_id": "soil_lower",
+      "material_id": "alpha_dense_sand",
+      "centroid": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "depth": 12.0,
+      "unit_weight": 19.5,
+      "k0": 0.41221474770752686,
+      "stress": [
+        -96.45825096356128,
+        -96.45825096356128,
+        -234.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "cell_id": 1,
+      "block_id": "soil_upper",
+      "material_id": "alpha_soft_clay",
+      "centroid": [
+        0.0,
+        0.0,
+        -4.0
+      ],
+      "depth": 4.0,
+      "unit_weight": 18.0,
+      "k0": 0.5932633569241998,
+      "stress": [
+        -42.71496169854239,
+        -42.71496169854239,
+        -72.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "cell_id": 2,
+      "block_id": "excavation_step_1",
+      "material_id": "alpha_soft_clay",
+      "centroid": [
+        0.0,
+        0.0,
+        -2.0
+      ],
+      "depth": 2.0,
+      "unit_weight": 18.0,
+      "k0": 0.5932633569241998,
+      "stress": [
+        -21.357480849271195,
+        -21.357480849271195,
+        -36.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "cell_id": 3,
+      "block_id": "excavation_step_2",
+      "material_id": "alpha_soft_clay",
+      "centroid": [
+        0.0,
+        0.0,
+        -6.0
+      ],
+      "depth": 6.0,
+      "unit_weight": 18.0,
+      "k0": 0.5932633569241998,
+      "stress": [
+        -64.07244254781358,
+        -64.07244254781358,
+        -108.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ]
+}

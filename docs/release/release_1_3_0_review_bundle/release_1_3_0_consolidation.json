@@ -1,0 +1,47 @@
+{
+  "contract": "geoai_simkit_consolidation_coupling_v1",
+  "ok": true,
+  "phase_count": 5,
+  "coupled": true,
+  "phase_records": [
+    {
+      "phase_id": "initial",
+      "degree_of_consolidation": 0.0,
+      "max_excess_pore_pressure": 0.0,
+      "settlement_increment": 0.0,
+      "converged": true
+    },
+    {
+      "phase_id": "excavation_1",
+      "degree_of_consolidation": 0.0875,
+      "max_excess_pore_pressure": 107.4195,
+      "settlement_increment": 0.00047742000000000005,
+      "converged": true
+    },
+    {
+      "phase_id": "support_1",
+      "degree_of_consolidation": 0.175,
+      "max_excess_pore_pressure": 80.9325,
+      "settlement_increment": 0.000291357,
+      "converged": true
+    },
+    {
+      "phase_id": "excavation_2",
+      "degree_of_consolidation": 0.26249999999999996,
+      "max_excess_pore_pressure": 57.879000000000005,
+      "settlement_increment": 0.00021704625000000004,
+      "converged": true
+    },
+    {
+      "phase_id": "support_2",
+      "degree_of_consolidation": 0.35,
+      "max_excess_pore_pressure": 38.259,
+      "settlement_increment": 0.00012753,
+      "converged": true
+    }
+  ],
+  "metadata": {
+    "drainage_factor": 0.35,
+    "solver_level": "1.2.2_basic_coupled_consolidation"
+  }
+}

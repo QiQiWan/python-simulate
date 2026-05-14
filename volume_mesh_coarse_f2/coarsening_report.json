@@ -1,0 +1,198 @@
+{
+  "original_shape": [
+    153,
+    17,
+    77
+  ],
+  "coarse_shape": [
+    77,
+    9,
+    39
+  ],
+  "factor": [
+    2,
+    2,
+    2
+  ],
+  "method": "majority",
+  "edge_policy": "partial_blocks",
+  "total_original_voxels": 200277,
+  "total_coarse_voxels": 27027,
+  "element_reduction_ratio": 0.8650519031141868,
+  "max_abs_volume_change_ratio": 0.5882352941176481,
+  "per_soil_volume_comparison": [
+    {
+      "soil_id": 0,
+      "soil_name": "素填土",
+      "original_voxel_count": 2270,
+      "coarse_voxel_count": 337,
+      "original_volume": 4429.023658994683,
+      "coarse_volume": 4863.877688949697,
+      "volume_change_abs": 434.8540299550141,
+      "volume_change_ratio": 0.09818281938320442
+    },
+    {
+      "soil_id": 1,
+      "soil_name": "砂质粉土",
+      "original_voxel_count": 16959,
+      "coarse_voxel_count": 2341,
+      "original_volume": 33088.90406733904,
+      "coarse_volume": 34470.016807051645,
+      "volume_change_abs": 1381.1127397126038,
+      "volume_change_ratio": 0.041739452503531366
+    },
+    {
+      "soil_id": 2,
+      "soil_name": "粉砂夹粉土",
+      "original_voxel_count": 22475,
+      "coarse_voxel_count": 3031,
+      "original_volume": 43851.23644751244,
+      "coarse_volume": 45115.06907974477,
+      "volume_change_abs": 1263.8326322323264,
+      "volume_change_ratio": 0.028820912125136215
+    },
+    {
+      "soil_id": 3,
+      "soil_name": "砂质粉土夹淤泥质粉质黏土",
+      "original_voxel_count": 17612,
+      "coarse_voxel_count": 2336,
+      "original_volume": 34362.98003620299,
+      "coarse_volume": 34651.98846330523,
+      "volume_change_abs": 289.00842710223515,
+      "volume_change_ratio": 0.008410458778538746
+    },
+    {
+      "soil_id": 4,
+      "soil_name": "淤泥质粉质黏土",
+      "original_voxel_count": 4007,
+      "coarse_voxel_count": 543,
+      "original_volume": 7818.104758410693,
+      "coarse_volume": 8026.385937087437,
+      "volume_change_abs": 208.28117867674428,
+      "volume_change_ratio": 0.026640878462606432
+    },
+    {
+      "soil_id": 5,
+      "soil_name": "黏土",
+      "original_voxel_count": 21974,
+      "coarse_voxel_count": 2983,
+      "original_volume": 42873.729463744,
+      "coarse_volume": 44216.82601057739,
+      "volume_change_abs": 1343.0965468333889,
+      "volume_change_ratio": 0.03132679530408413
+    },
+    {
+      "soil_id": 6,
+      "soil_name": "粉质黏土",
+      "original_voxel_count": 35805,
+      "coarse_voxel_count": 4890,
+      "original_volume": 69859.55599569953,
+      "coarse_volume": 72345.0284686829,
+      "volume_change_abs": 2485.472472983369,
+      "volume_change_ratio": 0.03557813154633235
+    },
+    {
+      "soil_id": 7,
+      "soil_name": "细砂",
+      "original_voxel_count": 2180,
+      "coarse_voxel_count": 249,
+      "original_volume": 4253.423602030151,
+      "coarse_volume": 3863.2012532198455,
+      "volume_change_abs": -390.2223488103059,
+      "volume_change_ratio": -0.09174311926610212
+    },
+    {
+      "soil_id": 8,
+      "soil_name": "圆砾",
+      "original_voxel_count": 21706,
+      "coarse_voxel_count": 2893,
+      "original_volume": 42350.83151633888,
+      "coarse_volume": 42846.17001038181,
+      "volume_change_abs": 495.33849404292414,
+      "volume_change_ratio": 0.011696074818550454
+    },
+    {
+      "soil_id": 9,
+      "soil_name": "强风化泥质粉砂岩",
+      "original_voxel_count": 5652,
+      "coarse_voxel_count": 779,
+      "original_volume": 11027.68357737394,
+      "coarse_volume": 11523.753738297797,
+      "volume_change_abs": 496.07016092385675,
+      "volume_change_ratio": 0.04498407643302979
+    },
+    {
+      "soil_id": 10,
+      "soil_name": "中风化泥质粉砂岩",
+      "original_voxel_count": 21150,
+      "coarse_voxel_count": 2766,
+      "original_volume": 41266.01338664749,
+      "coarse_volume": 40984.809406557215,
+      "volume_change_abs": -281.2039800902785,
+      "volume_change_ratio": -0.006814420803277016
+    },
+    {
+      "soil_id": 11,
+      "soil_name": "杂填土",
+      "original_voxel_count": 7620,
+      "coarse_voxel_count": 1155,
+      "original_volume": 14867.471489665646,
+      "coarse_volume": 15334.45789115419,
+      "volume_change_abs": 466.9864014885443,
+      "volume_change_ratio": 0.031409940944776366
+    },
+    {
+      "soil_id": 12,
+      "soil_name": "淤泥质粉质黏土夹粉土",
+      "original_voxel_count": 19433,
+      "coarse_voxel_count": 2566,
+      "original_volume": 37915.95452211583,
+      "coarse_volume": 37890.5900694613,
+      "volume_change_abs": -25.364452654532215,
+      "volume_change_ratio": -0.0006689651618749963
+    },
+    {
+      "soil_id": 13,
+      "soil_name": "含砂粉质黏土",
+      "original_voxel_count": 448,
+      "coarse_voxel_count": 49,
+      "original_volume": 874.0980613345897,
+      "coarse_volume": 682.8891104176515,
+      "volume_change_abs": -191.2089509169382,
+      "volume_change_ratio": -0.21874999999999623
+    },
+    {
+      "soil_id": 14,
+      "soil_name": "全风化泥质粉砂岩",
+      "original_voxel_count": 432,
+      "coarse_voxel_count": 51,
+      "original_volume": 842.8802734297851,
+      "coarse_volume": 739.9591289311244,
+      "volume_change_abs": -102.92114449866074,
+      "volume_change_ratio": -0.12210648148148223
+    },
+    {
+      "soil_id": 15,
+      "soil_name": "中砂",
+      "original_voxel_count": 537,
+      "coarse_voxel_count": 57,
+      "original_volume": 1047.7470065550779,
+      "coarse_volume": 878.0002848226943,
+      "volume_change_abs": -169.74672173238355,
+      "volume_change_ratio": -0.16201117318435432
+    },
+    {
+      "soil_id": 16,
+      "soil_name": "粉细砂",
+      "original_voxel_count": 17,
+      "coarse_voxel_count": 1,
+      "original_volume": 33.1688996488574,
+      "coarse_volume": 13.657782208353012,
+      "volume_change_abs": -19.511117440504385,
+      "volume_change_ratio": -0.5882352941176481
+    }
+  ],
+  "warnings": [
+    "Input shape is not divisible by factor; partial boundary blocks were used."
+  ]
+}

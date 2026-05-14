@@ -1,0 +1,17 @@
+{
+  "contract": "geoai_simkit_contact_interface_enhancement_v1",
+  "ok": true,
+  "interface_count": 4,
+  "materialized_count": 4,
+  "active_phase_count": 4,
+  "findings": [],
+  "metadata": {
+    "active_phases": [
+      "excavation_1",
+      "support_1",
+      "excavation_2",
+      "support_2"
+    ],
+    "interface_material_id": "alpha_wall_soil_interface"
+  }
+}

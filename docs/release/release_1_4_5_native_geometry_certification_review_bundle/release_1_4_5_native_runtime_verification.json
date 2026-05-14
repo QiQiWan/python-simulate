@@ -1,0 +1,127 @@
+{
+  "contract": "geoai_simkit_native_runtime_verification_v1",
+  "ok": true,
+  "status": "native_runtime_verified",
+  "desktop_runtime_ready": false,
+  "native_brep_certification_possible": false,
+  "exact_step_import_possible": false,
+  "exact_ifc_product_extraction_possible": false,
+  "modules": {
+    "OCP.TopoDS": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'OCP'"
+    },
+    "OCP.BRepTools": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'OCP'"
+    },
+    "OCP.TopExp": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'OCP'"
+    },
+    "OCP.STEPControl": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'OCP'"
+    },
+    "OCC.Core.TopoDS": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'OCC'"
+    },
+    "OCC.Core.BRepTools": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'OCC'"
+    },
+    "OCC.Core.TopExp": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'OCC'"
+    },
+    "OCC.Core.STEPControl": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'OCC'"
+    },
+    "ifcopenshell": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'ifcopenshell'"
+    },
+    "ifcopenshell.geom": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'ifcopenshell'"
+    },
+    "gmsh": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'gmsh'"
+    },
+    "meshio": {
+      "available": false,
+      "version": "",
+      "error": "ModuleNotFoundError: No module named 'meshio'"
+    }
+  },
+  "capability": {
+    "native_brep": {
+      "contract": "geoai_simkit_native_brep_serialization_capability_v1",
+      "ocp_available": false,
+      "pythonocc_available": false,
+      "topods_shape_available": false,
+      "brep_tools_write_available": false,
+      "top_exp_available": false,
+      "ifcopenshell_available": false,
+      "ifcopenshell_geom_available": false,
+      "native_brep_serialization_possible": false,
+      "native_topology_enumeration_possible": false,
+      "errors": {
+        "OCP.TopoDS": "ModuleNotFoundError: No module named 'OCP'",
+        "OCC.Core.TopoDS": "ModuleNotFoundError: No module named 'OCC'",
+        "OCP.BRepTools": "ModuleNotFoundError: No module named 'OCP'",
+        "OCC.Core.BRepTools": "ModuleNotFoundError: No module named 'OCC'",
+        "OCP.TopExp": "ModuleNotFoundError: No module named 'OCP'",
+        "OCC.Core.TopExp": "ModuleNotFoundError: No module named 'OCC'",
+        "ifcopenshell": "ModuleNotFoundError: No module named 'ifcopenshell'",
+        "ifcopenshell.geom": "ModuleNotFoundError: No module named 'ifcopenshell'"
+      },
+      "certification_policy": "native_brep_certified requires real TopoDS_Shape serialization plus native topology enumeration"
+    },
+    "step_ifc": {
+      "contract": "geoai_simkit_step_ifc_import_capability_v1",
+      "gmsh_available": false,
+      "gmsh_occ_import_shapes": false,
+      "ifcopenshell_available": false,
+      "ocp_available": false,
+      "pythonocc_available": false,
+      "native_step_possible": false,
+      "native_ifc_possible": false,
+      "native_brep_serialization_possible": false,
+      "native_topology_enumeration_possible": false,
+      "errors": {
+        "gmsh": "ModuleNotFoundError: No module named 'gmsh'",
+        "ifcopenshell": "ModuleNotFoundError: No module named 'ifcopenshell'",
+        "OCP": "ModuleNotFoundError: No module named 'OCP'",
+        "OCC.Core": "ModuleNotFoundError: No module named 'OCC'",
+        "native_brep.OCP.TopoDS": "ModuleNotFoundError: No module named 'OCP'",
+        "native_brep.OCC.Core.TopoDS": "ModuleNotFoundError: No module named 'OCC'",
+        "native_brep.OCP.BRepTools": "ModuleNotFoundError: No module named 'OCP'",
+        "native_brep.OCC.Core.BRepTools": "ModuleNotFoundError: No module named 'OCC'",
+        "native_brep.OCP.TopExp": "ModuleNotFoundError: No module named 'OCP'",
+        "native_brep.OCC.Core.TopExp": "ModuleNotFoundError: No module named 'OCC'",
+        "native_brep.ifcopenshell.geom": "ModuleNotFoundError: No module named 'ifcopenshell'"
+      },
+      "native_binding_policy": "native only when STEP/IFC runtime imports exact solids; surrogate imports are explicitly marked"
+    }
+  },
+  "blockers": [],
+  "warnings": [
+    "IfcOpenShell exact product extraction is unavailable; IFC imports will use surrogate product/bounds extraction when possible.",
+    "Native STEP TopoDS import/certification is unavailable; STEP imports will use serialized topology references."
+  ]
+}

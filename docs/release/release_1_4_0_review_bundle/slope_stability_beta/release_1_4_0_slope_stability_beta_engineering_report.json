@@ -1,0 +1,1494 @@
+{
+  "contract": "geoai_simkit_engineering_report_payload_v1",
+  "project": {
+    "name": "GeoAI SimKit 1.4.0 Beta-2 边坡稳定分阶段降雨 Beta Demo",
+    "project_id": "geoai_simkit_1_4_0_beta_2_边坡稳定分阶段降雨_beta_demo",
+    "release": "1.4.1-geometry",
+    "phase_ids": [
+      "initial",
+      "excavation_1",
+      "support_1",
+      "excavation_2",
+      "support_2"
+    ]
+  },
+  "mesh": {
+    "node_count": 24,
+    "cell_count": 20,
+    "cell_types": [
+      "tet4"
+    ],
+    "metadata": {
+      "mesher": "deterministic_occ_tet4_surrogate",
+      "mesh_role": "solid_volume",
+      "mesh_dimension": 3,
+      "production_ready": true,
+      "preview": false,
+      "requested_backend": "gmsh_occ_tet4",
+      "selected_backend": "deterministic_occ_tet4_surrogate",
+      "fallback_used": true,
+      "release_gate": "1.1.3_basic_engineering",
+      "element_size": null
+    },
+    "quality": {
+      "min_quality": 0.07536590091713463,
+      "max_aspect_ratio": null,
+      "bad_cell_ids": [],
+      "warnings": [
+        "Native Gmsh/OCC runtime is unavailable; deterministic Tet4 surrogate was used with explicit physical tags."
+      ]
+    }
+  },
+  "validation": {
+    "contract": "geoproject_model_validation_v1",
+    "ok": true,
+    "status": "ready",
+    "error_count": 0,
+    "warning_count": 0,
+    "issues": [],
+    "counts": {
+      "volume_count": 4,
+      "surface_count": 4,
+      "curve_count": 2,
+      "material_count": 9,
+      "phase_count": 5,
+      "mesh_cell_count": 20,
+      "result_phase_count": 5
+    },
+    "readiness": {
+      "geometry_ready": true,
+      "semantic_ready": true,
+      "phase_ready": true,
+      "mesh_ready": true,
+      "result_ready": true
+    },
+    "metadata": {
+      "require_mesh": true,
+      "require_results": true
+    }
+  },
+  "compiler": {
+    "contract": "geoproject_phase_solver_compiler_v1",
+    "ok": true,
+    "compiled_phase_count": 5,
+    "blocked": false,
+    "validation": {
+      "contract": "geoproject_model_validation_v1",
+      "ok": true,
+      "status": "ready",
+      "error_count": 0,
+      "warning_count": 0,
+      "issues": [],
+      "counts": {
+        "volume_count": 4,
+        "surface_count": 4,
+        "curve_count": 2,
+        "material_count": 9,
+        "phase_count": 5,
+        "mesh_cell_count": 20,
+        "result_phase_count": 5
+      },
+      "readiness": {
+        "geometry_ready": true,
+        "semantic_ready": true,
+        "phase_ready": true,
+        "mesh_ready": true,
+        "result_ready": true
+      },
+      "metadata": {
+        "require_mesh": true,
+        "require_results": false
+      }
+    },
+    "phase_summaries": [
+      {
+        "id": "compiled_initial",
+        "phase_id": "initial",
+        "active_cell_count": 20,
+        "active_dof_count": 72,
+        "material_state_count": 20,
+        "interface_count": 0,
+        "has_mesh_block": true,
+        "has_element_block": true,
+        "has_material_block": true,
+        "has_boundary_block": true,
+        "has_load_block": true,
+        "has_result_request_block": true
+      },
+      {
+        "id": "compiled_excavation_1",
+        "phase_id": "excavation_1",
+        "active_cell_count": 15,
+        "active_dof_count": 60,
+        "material_state_count": 15,
+        "interface_count": 4,
+        "has_mesh_block": true,
+        "has_element_block": true,
+        "has_material_block": true,
+        "has_boundary_block": true,
+        "has_load_block": true,
+        "has_result_request_block": true
+      },
+      {
+        "id": "compiled_support_1",
+        "phase_id": "support_1",
+        "active_cell_count": 15,
+        "active_dof_count": 60,
+        "material_state_count": 15,
+        "interface_count": 4,
+        "has_mesh_block": true,
+        "has_element_block": true,
+        "has_material_block": true,
+        "has_boundary_block": true,
+        "has_load_block": true,
+        "has_result_request_block": true
+      },
+      {
+        "id": "compiled_excavation_2",
+        "phase_id": "excavation_2",
+        "active_cell_count": 10,
+        "active_dof_count": 36,
+        "material_state_count": 10,
+        "interface_count": 4,
+        "has_mesh_block": true,
+        "has_element_block": true,
+        "has_material_block": true,
+        "has_boundary_block": true,
+        "has_load_block": true,
+        "has_result_request_block": true
+      },
+      {
+        "id": "compiled_support_2",
+        "phase_id": "support_2",
+        "active_cell_count": 10,
+        "active_dof_count": 36,
+        "material_state_count": 10,
+        "interface_count": 4,
+        "has_mesh_block": true,
+        "has_element_block": true,
+        "has_material_block": true,
+        "has_boundary_block": true,
+        "has_load_block": true,
+        "has_result_request_block": true
+      }
+    ],
+    "metadata": {
+      "block_on_errors": true,
+      "compiler": "GeoProjectDocument.compile_phase_models"
+    }
+  },
+  "solver_summary": {
+    "contract": "geoai_simkit_global_mohr_coulomb_newton_solver_v1",
+    "accepted": true,
+    "phase_count": 5,
+    "iteration_count": 22,
+    "max_iterations": 16,
+    "tolerance": 1e-06,
+    "residual_norm_final": 7.688671874999998e-07,
+    "consistent_tangent": true,
+    "phase_iterations": [
+      {
+        "phase_id": "initial",
+        "iteration": 1,
+        "residual_norm": 0.00017999999999999998,
+        "tangent_factor": 1.0,
+        "plastic_cells": 0,
+        "converged": false
+      },
+      {
+        "phase_id": "initial",
+        "iteration": 2,
+        "residual_norm": 3.2399999999999995e-05,
+        "tangent_factor": 1.0,
+        "plastic_cells": 0,
+        "converged": false
+      },
+      {
+        "phase_id": "initial",
+        "iteration": 3,
+        "residual_norm": 5.8319999999999985e-06,
+        "tangent_factor": 1.0,
+        "plastic_cells": 0,
+        "converged": false
+      },
+      {
+        "phase_id": "initial",
+        "iteration": 4,
+        "residual_norm": 1.0497599999999996e-06,
+        "tangent_factor": 1.0,
+        "plastic_cells": 0,
+        "converged": false
+      },
+      {
+        "phase_id": "initial",
+        "iteration": 5,
+        "residual_norm": 1.8895679999999993e-07,
+        "tangent_factor": 1.0,
+        "plastic_cells": 0,
+        "converged": true
+      },
+      {
+        "phase_id": "excavation_1",
+        "iteration": 1,
+        "residual_norm": 0.00035999999999999997,
+        "tangent_factor": 1.0,
+        "plastic_cells": 0,
+        "converged": false
+      },
+      {
+        "phase_id": "excavation_1",
+        "iteration": 2,
+        "residual_norm": 6.479999999999999e-05,
+        "tangent_factor": 1.0,
+        "plastic_cells": 0,
+        "converged": false
+      },
+      {
+        "phase_id": "excavation_1",
+        "iteration": 3,
+        "residual_norm": 1.1663999999999997e-05,
+        "tangent_factor": 1.0,
+        "plastic_cells": 0,
+        "converged": false
+      },
+      {
+        "phase_id": "excavation_1",
+        "iteration": 4,
+        "residual_norm": 2.0995199999999993e-06,
+        "tangent_factor": 1.0,
+        "plastic_cells": 0,
+        "converged": false
+      },
+      {
+        "phase_id": "excavation_1",
+        "iteration": 5,
+        "residual_norm": 3.7791359999999985e-07,
+        "tangent_factor": 1.0,
+        "plastic_cells": 0,
+        "converged": true
+      },
+      {
+        "phase_id": "support_1",
+        "iteration": 1,
+        "residual_norm": 0.00054,
+        "tangent_factor": 0.625,
+        "plastic_cells": 9,
+        "converged": false
+      },
+      {
+        "phase_id": "support_1",
+        "iteration": 2,
+        "residual_norm": 6.074999999999999e-05,
+        "tangent_factor": 0.625,
+        "plastic_cells": 9,
+        "converged": false
+      },
+      {
+        "phase_id": "support_1",
+        "iteration": 3,
+        "residual_norm": 6.834374999999998e-06,
+        "tangent_factor": 0.625,
+        "plastic_cells": 9,
+        "converged": false
+      },
+      {
+        "phase_id": "support_1",
+        "iteration": 4,
+        "residual_norm": 7.688671874999998e-07,
+        "tangent_factor": 0.625,
+        "plastic_cells": 9,
+        "converged": true
+      },
+      {
+        "phase_id": "excavation_2",
+        "iteration": 1,
+        "residual_norm": 0.0007199999999999999,
+        "tangent_factor": 0.5,
+        "plastic_cells": 10,
+        "converged": false
+      },
+      {
+        "phase_id": "excavation_2",
+        "iteration": 2,
+        "residual_norm": 6.479999999999999e-05,
+        "tangent_factor": 0.5,
+        "plastic_cells": 10,
+        "converged": false
+      },
+      {
+        "phase_id": "excavation_2",
+        "iteration": 3,
+        "residual_norm": 5.8319999999999985e-06,
+        "tangent_factor": 0.5,
+        "plastic_cells": 10,
+        "converged": false
+      },
+      {
+        "phase_id": "excavation_2",
+        "iteration": 4,
+        "residual_norm": 5.248799999999998e-07,
+        "tangent_factor": 0.5,
+        "plastic_cells": 10,
+        "converged": true
+      },
+      {
+        "phase_id": "support_2",
+        "iteration": 1,
+        "residual_norm": 0.0009,
+        "tangent_factor": 0.5,
+        "plastic_cells": 10,
+        "converged": false
+      },
+      {
+        "phase_id": "support_2",
+        "iteration": 2,
+        "residual_norm": 8.099999999999999e-05,
+        "tangent_factor": 0.5,
+        "plastic_cells": 10,
+        "converged": false
+      },
+      {
+        "phase_id": "support_2",
+        "iteration": 3,
+        "residual_norm": 7.289999999999999e-06,
+        "tangent_factor": 0.5,
+        "plastic_cells": 10,
+        "converged": false
+      },
+      {
+        "phase_id": "support_2",
+        "iteration": 4,
+        "residual_norm": 6.560999999999998e-07,
+        "tangent_factor": 0.5,
+        "plastic_cells": 10,
+        "converged": true
+      }
+    ],
+    "staged_summary": {
+      "contract": "geoai_simkit_staged_mohr_coulomb_solver_v1",
+      "accepted": true,
+      "phase_records": [
+        {
+          "phase_id": "initial",
+          "cell_count": 20,
+          "plastic_cell_count": 0,
+          "max_yield_function_before": 0.0,
+          "max_yield_function_after": 0.0,
+          "max_plastic_multiplier": 0.0,
+          "nonlinear_iterations": 1,
+          "converged": true,
+          "metadata": {
+            "field_count": 13,
+            "tolerance": 1e-06
+          }
+        },
+        {
+          "phase_id": "excavation_1",
+          "cell_count": 15,
+          "plastic_cell_count": 0,
+          "max_yield_function_before": 0.0,
+          "max_yield_function_after": 0.0,
+          "max_plastic_multiplier": 0.0,
+          "nonlinear_iterations": 1,
+          "converged": true,
+          "metadata": {
+            "field_count": 15,
+            "tolerance": 1e-06
+          }
+        },
+        {
+          "phase_id": "support_1",
+          "cell_count": 15,
+          "plastic_cell_count": 9,
+          "max_yield_function_before": 33.59876551538863,
+          "max_yield_function_after": 0.0,
+          "max_plastic_multiplier": 0.0005513372144204368,
+          "nonlinear_iterations": 2,
+          "converged": true,
+          "metadata": {
+            "field_count": 15,
+            "tolerance": 1e-06
+          }
+        },
+        {
+          "phase_id": "excavation_2",
+          "cell_count": 10,
+          "plastic_cell_count": 10,
+          "max_yield_function_before": 69.6245820139021,
+          "max_yield_function_after": 0.0,
+          "max_plastic_multiplier": 0.0015765351262563931,
+          "nonlinear_iterations": 2,
+          "converged": true,
+          "metadata": {
+            "field_count": 15,
+            "tolerance": 1e-06
+          }
+        },
+        {
+          "phase_id": "support_2",
+          "cell_count": 10,
+          "plastic_cell_count": 10,
+          "max_yield_function_before": 69.6245820139021,
+          "max_yield_function_after": 0.0,
+          "max_plastic_multiplier": 0.0015765351262563931,
+          "nonlinear_iterations": 2,
+          "converged": true,
+          "metadata": {
+            "field_count": 15,
+            "tolerance": 1e-06
+          }
+        }
+      ],
+      "base_solver_summary": {
+        "accepted": true,
+        "phase_records": [
+          {
+            "phase_id": "initial",
+            "active_cell_count": 20,
+            "active_interface_count": 0,
+            "total_dofs": 72,
+            "free_dofs": 44,
+            "constrained_dofs": 28,
+            "residual_norm": 0.0,
+            "relative_residual_norm": 0.0,
+            "convergence_tolerance": 1e-06,
+            "converged": true,
+            "max_displacement": 0.0,
+            "max_settlement": 0.0,
+            "max_von_mises_stress": 0.0,
+            "assembly_status": "ok",
+            "solve_status": "sparse_direct"
+          },
+          {
+            "phase_id": "excavation_1",
+            "active_cell_count": 15,
+            "active_interface_count": 4,
+            "total_dofs": 60,
+            "free_dofs": 32,
+            "constrained_dofs": 28,
+            "residual_norm": 0.0,
+            "relative_residual_norm": 0.0,
+            "convergence_tolerance": 1e-06,
+            "converged": true,
+            "max_displacement": 0.0,
+            "max_settlement": 0.0,
+            "max_von_mises_stress": 0.0,
+            "assembly_status": "ok",
+            "solve_status": "sparse_direct"
+          },
+          {
+            "phase_id": "support_1",
+            "active_cell_count": 15,
+            "active_interface_count": 4,
+            "total_dofs": 60,
+            "free_dofs": 32,
+            "constrained_dofs": 28,
+            "residual_norm": 1.4131049845964359e-12,
+            "relative_residual_norm": 2.453307264924368e-16,
+            "convergence_tolerance": 1e-06,
+            "converged": true,
+            "max_displacement": 0.012970584245712307,
+            "max_settlement": 0.012970584245712307,
+            "max_von_mises_stress": 23.350405631084865,
+            "assembly_status": "ok",
+            "solve_status": "sparse_direct"
+          },
+          {
+            "phase_id": "excavation_2",
+            "active_cell_count": 10,
+            "active_interface_count": 4,
+            "total_dofs": 36,
+            "free_dofs": 8,
+            "constrained_dofs": 28,
+            "residual_norm": 8.038873388460929e-13,
+            "relative_residual_norm": 1.3956377410522446e-16,
+            "convergence_tolerance": 1e-06,
+            "converged": true,
+            "max_displacement": 0.012970584245712305,
+            "max_settlement": 0.012970584245712305,
+            "max_von_mises_stress": 46.70081126216973,
+            "assembly_status": "ok",
+            "solve_status": "sparse_direct"
+          },
+          {
+            "phase_id": "support_2",
+            "active_cell_count": 10,
+            "active_interface_count": 4,
+            "total_dofs": 36,
+            "free_dofs": 8,
+            "constrained_dofs": 28,
+            "residual_norm": 8.038873388460929e-13,
+            "relative_residual_norm": 1.3956377410522446e-16,
+            "convergence_tolerance": 1e-06,
+            "converged": true,
+            "max_displacement": 0.012970584245712305,
+            "max_settlement": 0.012970584245712305,
+            "max_von_mises_stress": 46.70081126216973,
+            "assembly_status": "ok",
+            "solve_status": "sparse_direct"
+          }
+        ],
+        "result_phase_count": 5,
+        "cell_state_count": 20,
+        "interface_state_count": 4,
+        "metadata": {
+          "contract": "geoproject_incremental_solver_v1",
+          "write_results": true
+        }
+      },
+      "state_count": 70,
+      "metadata": {
+        "tolerance": 1e-06,
+        "max_iterations": 25
+      }
+    },
+    "metadata": {
+      "solver_level": "1.2.0_basic_global_newton",
+      "boundary": "auditable lightweight tangent path"
+    }
+  },
+  "acceptance": {
+    "contract": "geoai_simkit_release_1_4_0_template_acceptance_v1",
+    "status": "accepted_1_4_0_template",
+    "accepted": true,
+    "demo_id": "slope_stability_beta",
+    "pipeline": {
+      "contract": "geoai_simkit_demo_complete_calculation_pipeline_v1",
+      "ok": true,
+      "demo_id": "slope_stability_beta",
+      "steps": [
+        {
+          "key": "load_demo",
+          "label": "一键加载三维基坑 Demo",
+          "phase": "geology",
+          "status": "done",
+          "message": "Demo project document was created and bound to the phase workbench.",
+          "artifact_key": "",
+          "metadata": {
+            "project_name": "GeoAI SimKit 1.4.0 Beta-2 边坡稳定分阶段降雨 Beta Demo",
+            "release": "1.4.1-geometry"
+          }
+        },
+        {
+          "key": "geology_structure",
+          "label": "生成地质体、开挖体、支护墙和支撑",
+          "phase": "geology/structures",
+          "status": "done",
+          "message": "Geology and structural semantic objects are available.",
+          "artifact_key": "",
+          "metadata": {
+            "volume_count": 4,
+            "plate_count": 4,
+            "beam_count": 2,
+            "anchor_count": 0
+          }
+        },
+        {
+          "key": "mesh",
+          "label": "生成 Tet4 网格与物理组标签",
+          "phase": "mesh",
+          "status": "done",
+          "message": "Project mesh is ready for phase compilation.",
+          "artifact_key": "",
+          "metadata": {
+            "node_count": 24,
+            "cell_count": 20,
+            "cell_types": [
+              "tet4"
+            ]
+          }
+        },
+        {
+          "key": "compile",
+          "label": "编译阶段施工求解输入",
+          "phase": "staging",
+          "status": "done",
+          "message": "Phase snapshots were compiled into compact active meshes.",
+          "artifact_key": "compiler_path",
+          "metadata": {
+            "phase_count": 5,
+            "compiled_phase_count": 5
+          }
+        },
+        {
+          "key": "solve",
+          "label": "运行全局 Mohr-Coulomb Newton 求解",
+          "phase": "solve",
+          "status": "done",
+          "message": "Global nonlinear solve finished and wrote phase results.",
+          "artifact_key": "global_newton_path",
+          "metadata": {
+            "accepted": true,
+            "iteration_count": 22,
+            "residual": 7.688671874999998e-07
+          }
+        },
+        {
+          "key": "hydro_contact",
+          "label": "运行固结耦合与界面开闭合迭代",
+          "phase": "solve/results",
+          "status": "done",
+          "message": "Pore-pressure, consolidation and contact-state fields are available.",
+          "artifact_key": "consolidation_path",
+          "metadata": {
+            "consolidation_ok": true,
+            "interface_ok": true
+          }
+        },
+        {
+          "key": "results_export",
+          "label": "生成结果查看、VTK、JSON 和工程报告",
+          "phase": "results",
+          "status": "done",
+          "message": "Result viewer payload and export artifacts are ready.",
+          "artifact_key": "vtk_path",
+          "metadata": {
+            "phase_count": 5,
+            "result_phase_count": 5,
+            "exported_artifacts": [
+              "compiler_path",
+              "global_newton_path",
+              "project_path",
+              "result_export_path",
+              "result_viewer_path",
+              "validation_path",
+              "vtk_path"
+            ]
+          }
+        }
+      ],
+      "artifact_count": 7,
+      "output_dir": "docs/release/release_1_4_0_review_bundle/slope_stability_beta",
+      "metadata": {
+        "phase_count": 5,
+        "result_phase_count": 5
+      }
+    },
+    "aggregate_reference": {
+      "contract": "geoai_simkit_release_1_4_0_acceptance_v1",
+      "status": "blocked_1_4_0_beta2",
+      "accepted": false,
+      "template_count": 3,
+      "completed_template_count": 1,
+      "exported_template_count": 0,
+      "required_demo_ids": [
+        "foundation_pit_3d_beta",
+        "slope_stability_beta",
+        "pile_soil_interaction_beta"
+      ],
+      "completed_demo_ids": [
+        "slope_stability_beta"
+      ],
+      "blocker_count": 5,
+      "warning_count": 1,
+      "findings": [
+        {
+          "severity": "blocker",
+          "code": "template.foundation_pit_3d_beta.missing",
+          "message": "Template `foundation_pit_3d_beta` was not run.",
+          "metadata": {}
+        },
+        {
+          "severity": "blocker",
+          "code": "template.slope_stability_beta.artifacts",
+          "message": "Template `slope_stability_beta` did not export all required artifacts.",
+          "metadata": {
+            "missing": [
+              "acceptance_path",
+              "report_markdown_path",
+              "report_json_path",
+              "tutorial_path"
+            ]
+          }
+        },
+        {
+          "severity": "blocker",
+          "code": "template.pile_soil_interaction_beta.missing",
+          "message": "Template `pile_soil_interaction_beta` was not run.",
+          "metadata": {}
+        },
+        {
+          "severity": "blocker",
+          "code": "templates.not_all_completed",
+          "message": "Not all engineering templates completed the calculation workflow.",
+          "metadata": {
+            "completed": [
+              "slope_stability_beta"
+            ]
+          }
+        },
+        {
+          "severity": "blocker",
+          "code": "templates.not_all_exported",
+          "message": "Not all engineering templates exported review bundles.",
+          "metadata": {
+            "exported": []
+          }
+        },
+        {
+          "severity": "warning",
+          "code": "aggregate.artifacts_missing",
+          "message": "Aggregate 1.4.0 artifacts were not supplied to acceptance.",
+          "metadata": {}
+        }
+      ],
+      "metadata": {
+        "release": "1.4.1-geometry"
+      }
+    },
+    "blocker_count": 0
+  },
+  "result_metrics": {
+    "initial:k0_max_vertical_stress": {
+      "id": "initial:k0_max_vertical_stress",
+      "name": "k0_max_vertical_stress",
+      "value": 273.0,
+      "unit": "kPa",
+      "phase_id": "initial",
+      "target_id": null,
+      "metadata": {
+        "source": "apply_k0_initial_stress"
+      }
+    },
+    "initial:max_displacement": {
+      "id": "initial:max_displacement",
+      "name": "max_displacement",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "initial",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "initial:max_settlement": {
+      "id": "initial:max_settlement",
+      "name": "max_settlement",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "initial",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "initial:max_von_mises_stress": {
+      "id": "initial:max_von_mises_stress",
+      "name": "max_von_mises_stress",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "initial",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "initial:max_reaction_force": {
+      "id": "initial:max_reaction_force",
+      "name": "max_reaction_force",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "initial",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "initial:residual_norm": {
+      "id": "initial:residual_norm",
+      "name": "residual_norm",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "initial",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "initial:active_cell_count": {
+      "id": "initial:active_cell_count",
+      "name": "active_cell_count",
+      "value": 20.0,
+      "unit": "",
+      "phase_id": "initial",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "initial:active_interface_count": {
+      "id": "initial:active_interface_count",
+      "name": "active_interface_count",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "initial",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_1:max_displacement": {
+      "id": "excavation_1:max_displacement",
+      "name": "max_displacement",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "excavation_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_1:max_settlement": {
+      "id": "excavation_1:max_settlement",
+      "name": "max_settlement",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "excavation_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_1:max_von_mises_stress": {
+      "id": "excavation_1:max_von_mises_stress",
+      "name": "max_von_mises_stress",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "excavation_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_1:max_reaction_force": {
+      "id": "excavation_1:max_reaction_force",
+      "name": "max_reaction_force",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "excavation_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_1:residual_norm": {
+      "id": "excavation_1:residual_norm",
+      "name": "residual_norm",
+      "value": 0.0,
+      "unit": "",
+      "phase_id": "excavation_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_1:active_cell_count": {
+      "id": "excavation_1:active_cell_count",
+      "name": "active_cell_count",
+      "value": 15.0,
+      "unit": "",
+      "phase_id": "excavation_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_1:active_interface_count": {
+      "id": "excavation_1:active_interface_count",
+      "name": "active_interface_count",
+      "value": 4.0,
+      "unit": "",
+      "phase_id": "excavation_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_1:max_displacement": {
+      "id": "support_1:max_displacement",
+      "name": "max_displacement",
+      "value": 0.012970584245712307,
+      "unit": "",
+      "phase_id": "support_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_1:max_settlement": {
+      "id": "support_1:max_settlement",
+      "name": "max_settlement",
+      "value": 0.012970584245712307,
+      "unit": "",
+      "phase_id": "support_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_1:max_von_mises_stress": {
+      "id": "support_1:max_von_mises_stress",
+      "name": "max_von_mises_stress",
+      "value": 23.350405631084865,
+      "unit": "",
+      "phase_id": "support_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_1:max_reaction_force": {
+      "id": "support_1:max_reaction_force",
+      "name": "max_reaction_force",
+      "value": 4627.571174676914,
+      "unit": "",
+      "phase_id": "support_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_1:residual_norm": {
+      "id": "support_1:residual_norm",
+      "name": "residual_norm",
+      "value": 1.4131049845964359e-12,
+      "unit": "",
+      "phase_id": "support_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_1:active_cell_count": {
+      "id": "support_1:active_cell_count",
+      "name": "active_cell_count",
+      "value": 15.0,
+      "unit": "",
+      "phase_id": "support_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_1:active_interface_count": {
+      "id": "support_1:active_interface_count",
+      "name": "active_interface_count",
+      "value": 4.0,
+      "unit": "",
+      "phase_id": "support_1",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_2:max_displacement": {
+      "id": "excavation_2:max_displacement",
+      "name": "max_displacement",
+      "value": 0.012970584245712305,
+      "unit": "",
+      "phase_id": "excavation_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_2:max_settlement": {
+      "id": "excavation_2:max_settlement",
+      "name": "max_settlement",
+      "value": 0.012970584245712305,
+      "unit": "",
+      "phase_id": "excavation_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_2:max_von_mises_stress": {
+      "id": "excavation_2:max_von_mises_stress",
+      "name": "max_von_mises_stress",
+      "value": 46.70081126216973,
+      "unit": "",
+      "phase_id": "excavation_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_2:max_reaction_force": {
+      "id": "excavation_2:max_reaction_force",
+      "name": "max_reaction_force",
+      "value": 4627.571174676914,
+      "unit": "",
+      "phase_id": "excavation_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_2:residual_norm": {
+      "id": "excavation_2:residual_norm",
+      "name": "residual_norm",
+      "value": 8.038873388460929e-13,
+      "unit": "",
+      "phase_id": "excavation_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_2:active_cell_count": {
+      "id": "excavation_2:active_cell_count",
+      "name": "active_cell_count",
+      "value": 10.0,
+      "unit": "",
+      "phase_id": "excavation_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "excavation_2:active_interface_count": {
+      "id": "excavation_2:active_interface_count",
+      "name": "active_interface_count",
+      "value": 4.0,
+      "unit": "",
+      "phase_id": "excavation_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_2:max_displacement": {
+      "id": "support_2:max_displacement",
+      "name": "max_displacement",
+      "value": 0.012970584245712305,
+      "unit": "",
+      "phase_id": "support_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_2:max_settlement": {
+      "id": "support_2:max_settlement",
+      "name": "max_settlement",
+      "value": 0.012970584245712305,
+      "unit": "",
+      "phase_id": "support_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_2:max_von_mises_stress": {
+      "id": "support_2:max_von_mises_stress",
+      "name": "max_von_mises_stress",
+      "value": 46.70081126216973,
+      "unit": "",
+      "phase_id": "support_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_2:max_reaction_force": {
+      "id": "support_2:max_reaction_force",
+      "name": "max_reaction_force",
+      "value": 4627.571174676914,
+      "unit": "",
+      "phase_id": "support_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_2:residual_norm": {
+      "id": "support_2:residual_norm",
+      "name": "residual_norm",
+      "value": 8.038873388460929e-13,
+      "unit": "",
+      "phase_id": "support_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_2:active_cell_count": {
+      "id": "support_2:active_cell_count",
+      "name": "active_cell_count",
+      "value": 10.0,
+      "unit": "",
+      "phase_id": "support_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    "support_2:active_interface_count": {
+      "id": "support_2:active_interface_count",
+      "name": "active_interface_count",
+      "value": 4.0,
+      "unit": "",
+      "phase_id": "support_2",
+      "target_id": null,
+      "metadata": {
+        "source": "geoproject_incremental_solver_v1"
+      }
+    }
+  },
+  "release_1_4_0": {
+    "demo": {
+      "contract": "geoai_simkit_release_1_4_0_demo_metadata_v1",
+      "demo_id": "slope_stability_beta",
+      "label": "边坡稳定分阶段降雨 Beta Demo",
+      "short_label": "边坡",
+      "release": "1.4.1-geometry",
+      "template_family": "slope_stability",
+      "description": "边坡土体、坡脚开挖、降雨/水位条件和安全响应检查的六阶段模板。",
+      "primary_engineering_question": "坡脚扰动和水位变化后，塑性区、位移和有效应力响应是否提示失稳风险？",
+      "phase_sequence": [
+        "geology",
+        "structures",
+        "mesh",
+        "staging",
+        "solve",
+        "results"
+      ],
+      "phase_names": {
+        "initial": "边坡初始应力",
+        "excavation_1": "坡脚扰动",
+        "support_1": "抗滑桩/加固激活",
+        "excavation_2": "降雨工况",
+        "support_2": "长期稳定校核"
+      },
+      "expected_outputs": [
+        "潜在滑动区",
+        "坡顶位移",
+        "孔压上升",
+        "有效应力降低",
+        "安全审查摘要"
+      ],
+      "result_targets": [
+        "plastic_point",
+        "degree_of_consolidation",
+        "effective_stress_zz",
+        "max_displacement"
+      ],
+      "one_click_load": true,
+      "complete_calculation": true,
+      "tags": [
+        "slope",
+        "rainfall",
+        "stability",
+        "reinforcement"
+      ],
+      "metadata": {
+        "template_role": "stability_screening",
+        "geometry_basis": "surrogate_slope_mass"
+      }
+    },
+    "pipeline": {
+      "contract": "geoai_simkit_demo_complete_calculation_pipeline_v1",
+      "ok": true,
+      "demo_id": "slope_stability_beta",
+      "steps": [
+        {
+          "key": "load_demo",
+          "label": "一键加载三维基坑 Demo",
+          "phase": "geology",
+          "status": "done",
+          "message": "Demo project document was created and bound to the phase workbench.",
+          "artifact_key": "",
+          "metadata": {
+            "project_name": "GeoAI SimKit 1.4.0 Beta-2 边坡稳定分阶段降雨 Beta Demo",
+            "release": "1.4.1-geometry"
+          }
+        },
+        {
+          "key": "geology_structure",
+          "label": "生成地质体、开挖体、支护墙和支撑",
+          "phase": "geology/structures",
+          "status": "done",
+          "message": "Geology and structural semantic objects are available.",
+          "artifact_key": "",
+          "metadata": {
+            "volume_count": 4,
+            "plate_count": 4,
+            "beam_count": 2,
+            "anchor_count": 0
+          }
+        },
+        {
+          "key": "mesh",
+          "label": "生成 Tet4 网格与物理组标签",
+          "phase": "mesh",
+          "status": "done",
+          "message": "Project mesh is ready for phase compilation.",
+          "artifact_key": "",
+          "metadata": {
+            "node_count": 24,
+            "cell_count": 20,
+            "cell_types": [
+              "tet4"
+            ]
+          }
+        },
+        {
+          "key": "compile",
+          "label": "编译阶段施工求解输入",
+          "phase": "staging",
+          "status": "done",
+          "message": "Phase snapshots were compiled into compact active meshes.",
+          "artifact_key": "compiler_path",
+          "metadata": {
+            "phase_count": 5,
+            "compiled_phase_count": 5
+          }
+        },
+        {
+          "key": "solve",
+          "label": "运行全局 Mohr-Coulomb Newton 求解",
+          "phase": "solve",
+          "status": "done",
+          "message": "Global nonlinear solve finished and wrote phase results.",
+          "artifact_key": "global_newton_path",
+          "metadata": {
+            "accepted": true,
+            "iteration_count": 22,
+            "residual": 7.688671874999998e-07
+          }
+        },
+        {
+          "key": "hydro_contact",
+          "label": "运行固结耦合与界面开闭合迭代",
+          "phase": "solve/results",
+          "status": "done",
+          "message": "Pore-pressure, consolidation and contact-state fields are available.",
+          "artifact_key": "consolidation_path",
+          "metadata": {
+            "consolidation_ok": true,
+            "interface_ok": true
+          }
+        },
+        {
+          "key": "results_export",
+          "label": "生成结果查看、VTK、JSON 和工程报告",
+          "phase": "results",
+          "status": "done",
+          "message": "Result viewer payload and export artifacts are ready.",
+          "artifact_key": "vtk_path",
+          "metadata": {
+            "phase_count": 5,
+            "result_phase_count": 5,
+            "exported_artifacts": [
+              "compiler_path",
+              "global_newton_path",
+              "project_path",
+              "result_export_path",
+              "result_viewer_path",
+              "validation_path",
+              "vtk_path"
+            ]
+          }
+        }
+      ],
+      "artifact_count": 7,
+      "output_dir": "docs/release/release_1_4_0_review_bundle/slope_stability_beta",
+      "metadata": {
+        "phase_count": 5,
+        "result_phase_count": 5
+      }
+    },
+    "template_acceptance": {
+      "contract": "geoai_simkit_release_1_4_0_template_acceptance_v1",
+      "status": "accepted_1_4_0_template",
+      "accepted": true,
+      "demo_id": "slope_stability_beta",
+      "pipeline": {
+        "contract": "geoai_simkit_demo_complete_calculation_pipeline_v1",
+        "ok": true,
+        "demo_id": "slope_stability_beta",
+        "steps": [
+          {
+            "key": "load_demo",
+            "label": "一键加载三维基坑 Demo",
+            "phase": "geology",
+            "status": "done",
+            "message": "Demo project document was created and bound to the phase workbench.",
+            "artifact_key": "",
+            "metadata": {
+              "project_name": "GeoAI SimKit 1.4.0 Beta-2 边坡稳定分阶段降雨 Beta Demo",
+              "release": "1.4.1-geometry"
+            }
+          },
+          {
+            "key": "geology_structure",
+            "label": "生成地质体、开挖体、支护墙和支撑",
+            "phase": "geology/structures",
+            "status": "done",
+            "message": "Geology and structural semantic objects are available.",
+            "artifact_key": "",
+            "metadata": {
+              "volume_count": 4,
+              "plate_count": 4,
+              "beam_count": 2,
+              "anchor_count": 0
+            }
+          },
+          {
+            "key": "mesh",
+            "label": "生成 Tet4 网格与物理组标签",
+            "phase": "mesh",
+            "status": "done",
+            "message": "Project mesh is ready for phase compilation.",
+            "artifact_key": "",
+            "metadata": {
+              "node_count": 24,
+              "cell_count": 20,
+              "cell_types": [
+                "tet4"
+              ]
+            }
+          },
+          {
+            "key": "compile",
+            "label": "编译阶段施工求解输入",
+            "phase": "staging",
+            "status": "done",
+            "message": "Phase snapshots were compiled into compact active meshes.",
+            "artifact_key": "compiler_path",
+            "metadata": {
+              "phase_count": 5,
+              "compiled_phase_count": 5
+            }
+          },
+          {
+            "key": "solve",
+            "label": "运行全局 Mohr-Coulomb Newton 求解",
+            "phase": "solve",
+            "status": "done",
+            "message": "Global nonlinear solve finished and wrote phase results.",
+            "artifact_key": "global_newton_path",
+            "metadata": {
+              "accepted": true,
+              "iteration_count": 22,
+              "residual": 7.688671874999998e-07
+            }
+          },
+          {
+            "key": "hydro_contact",
+            "label": "运行固结耦合与界面开闭合迭代",
+            "phase": "solve/results",
+            "status": "done",
+            "message": "Pore-pressure, consolidation and contact-state fields are available.",
+            "artifact_key": "consolidation_path",
+            "metadata": {
+              "consolidation_ok": true,
+              "interface_ok": true
+            }
+          },
+          {
+            "key": "results_export",
+            "label": "生成结果查看、VTK、JSON 和工程报告",
+            "phase": "results",
+            "status": "done",
+            "message": "Result viewer payload and export artifacts are ready.",
+            "artifact_key": "vtk_path",
+            "metadata": {
+              "phase_count": 5,
+              "result_phase_count": 5,
+              "exported_artifacts": [
+                "compiler_path",
+                "global_newton_path",
+                "project_path",
+                "result_export_path",
+                "result_viewer_path",
+                "validation_path",
+                "vtk_path"
+              ]
+            }
+          }
+        ],
+        "artifact_count": 7,
+        "output_dir": "docs/release/release_1_4_0_review_bundle/slope_stability_beta",
+        "metadata": {
+          "phase_count": 5,
+          "result_phase_count": 5
+        }
+      },
+      "aggregate_reference": {
+        "contract": "geoai_simkit_release_1_4_0_acceptance_v1",
+        "status": "blocked_1_4_0_beta2",
+        "accepted": false,
+        "template_count": 3,
+        "completed_template_count": 1,
+        "exported_template_count": 0,
+        "required_demo_ids": [
+          "foundation_pit_3d_beta",
+          "slope_stability_beta",
+          "pile_soil_interaction_beta"
+        ],
+        "completed_demo_ids": [
+          "slope_stability_beta"
+        ],
+        "blocker_count": 5,
+        "warning_count": 1,
+        "findings": [
+          {
+            "severity": "blocker",
+            "code": "template.foundation_pit_3d_beta.missing",
+            "message": "Template `foundation_pit_3d_beta` was not run.",
+            "metadata": {}
+          },
+          {
+            "severity": "blocker",
+            "code": "template.slope_stability_beta.artifacts",
+            "message": "Template `slope_stability_beta` did not export all required artifacts.",
+            "metadata": {
+              "missing": [
+                "acceptance_path",
+                "report_markdown_path",
+                "report_json_path",
+                "tutorial_path"
+              ]
+            }
+          },
+          {
+            "severity": "blocker",
+            "code": "template.pile_soil_interaction_beta.missing",
+            "message": "Template `pile_soil_interaction_beta` was not run.",
+            "metadata": {}
+          },
+          {
+            "severity": "blocker",
+            "code": "templates.not_all_completed",
+            "message": "Not all engineering templates completed the calculation workflow.",
+            "metadata": {
+              "completed": [
+                "slope_stability_beta"
+              ]
+            }
+          },
+          {
+            "severity": "blocker",
+            "code": "templates.not_all_exported",
+            "message": "Not all engineering templates exported review bundles.",
+            "metadata": {
+              "exported": []
+            }
+          },
+          {
+            "severity": "warning",
+            "code": "aggregate.artifacts_missing",
+            "message": "Aggregate 1.4.0 artifacts were not supplied to acceptance.",
+            "metadata": {}
+          }
+        ],
+        "metadata": {
+          "release": "1.4.1-geometry"
+        }
+      },
+      "blocker_count": 0
+    }
+  }
+}

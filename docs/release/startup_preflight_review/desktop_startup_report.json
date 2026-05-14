@@ -1,0 +1,300 @@
+{
+  "ok": false,
+  "entrypoint": "start_gui.py",
+  "launch_path": "tk_fallback",
+  "diagnostics": {
+    "gui_ready": false,
+    "message": "The desktop GUI requires the optional dependency 'PySide6'. Install the matching extra with: python -m pip install \"geoai-simkit[gui]\". When working from a local checkout, use the same extra with '-e .[...]'.",
+    "missing_feature": "PySide6",
+    "pyvista_ready": false,
+    "fallback_available": true
+  },
+  "dependency_preflight": {
+    "contract": "geoai_simkit_dependency_preflight_v1",
+    "python": {
+      "version": "3.13.5",
+      "ok": true,
+      "minimum": "3.10"
+    },
+    "ok": false,
+    "blocking": true,
+    "checked_count": 10,
+    "required_count": 8,
+    "available_required_count": 3,
+    "missing_required": [
+      "pyside6",
+      "pyvista",
+      "pyvistaqt",
+      "gmsh",
+      "meshio"
+    ],
+    "missing_optional": [
+      "warp",
+      "pythonocc"
+    ],
+    "checks": [
+      {
+        "key": "numpy",
+        "label": "NumPy",
+        "module": "numpy",
+        "package": "numpy",
+        "group": "core",
+        "required": true,
+        "ok": true,
+        "installed_version": "2.3.5",
+        "min_version": "1.24",
+        "purpose": "numerical arrays",
+        "install_hint": "python -m pip install numpy>=1.24",
+        "error": null
+      },
+      {
+        "key": "scipy",
+        "label": "SciPy",
+        "module": "scipy",
+        "package": "scipy",
+        "group": "core",
+        "required": true,
+        "ok": true,
+        "installed_version": "1.17.0",
+        "min_version": "1.10",
+        "purpose": "sparse solvers and benchmarks",
+        "install_hint": "python -m pip install scipy>=1.10",
+        "error": null
+      },
+      {
+        "key": "typing_extensions",
+        "label": "typing_extensions",
+        "module": "typing_extensions",
+        "package": "typing_extensions",
+        "group": "core",
+        "required": true,
+        "ok": true,
+        "installed_version": "4.15.0",
+        "min_version": "4.8",
+        "purpose": "typing compatibility",
+        "install_hint": "python -m pip install typing_extensions>=4.8",
+        "error": null
+      },
+      {
+        "key": "pyside6",
+        "label": "PySide6",
+        "module": "PySide6",
+        "package": "PySide6",
+        "group": "desktop_gui",
+        "required": true,
+        "ok": false,
+        "installed_version": null,
+        "min_version": null,
+        "purpose": "six-phase Qt workbench",
+        "install_hint": "python -m pip install PySide6",
+        "error": "ModuleNotFoundError: No module named 'PySide6'"
+      },
+      {
+        "key": "pyvista",
+        "label": "PyVista",
+        "module": "pyvista",
+        "package": "pyvista",
+        "group": "three_d_viewport",
+        "required": true,
+        "ok": false,
+        "installed_version": null,
+        "min_version": null,
+        "purpose": "3D visualization and model viewport",
+        "install_hint": "python -m pip install pyvista pyvistaqt",
+        "error": "ModuleNotFoundError: No module named 'pyvista'"
+      },
+      {
+        "key": "pyvistaqt",
+        "label": "pyvistaqt",
+        "module": "pyvistaqt",
+        "package": "pyvistaqt",
+        "group": "three_d_viewport",
+        "required": true,
+        "ok": false,
+        "installed_version": null,
+        "min_version": null,
+        "purpose": "Qt integration for PyVista",
+        "install_hint": "python -m pip install pyvista pyvistaqt",
+        "error": "ModuleNotFoundError: No module named 'pyvistaqt'"
+      },
+      {
+        "key": "gmsh",
+        "label": "Gmsh",
+        "module": "gmsh",
+        "package": "gmsh",
+        "group": "meshing",
+        "required": true,
+        "ok": false,
+        "installed_version": null,
+        "min_version": null,
+        "purpose": "native OCC/Tet4 production meshing",
+        "install_hint": "python -m pip install gmsh meshio",
+        "error": "ModuleNotFoundError: No module named 'gmsh'"
+      },
+      {
+        "key": "meshio",
+        "label": "meshio",
+        "module": "meshio",
+        "package": "meshio",
+        "group": "meshing",
+        "required": true,
+        "ok": false,
+        "installed_version": null,
+        "min_version": null,
+        "purpose": "mesh exchange and physical group import/export",
+        "install_hint": "python -m pip install gmsh meshio",
+        "error": "ModuleNotFoundError: No module named 'meshio'"
+      },
+      {
+        "key": "warp",
+        "label": "warp-lang",
+        "module": "warp",
+        "package": "warp-lang",
+        "group": "optional_acceleration",
+        "required": false,
+        "ok": false,
+        "installed_version": null,
+        "min_version": null,
+        "purpose": "CUDA/GPU experimental runtime",
+        "install_hint": "python -m pip install warp-lang",
+        "error": "ModuleNotFoundError: No module named 'warp'"
+      },
+      {
+        "key": "pythonocc",
+        "label": "pythonocc-core",
+        "module": "OCC",
+        "package": "pythonocc-core",
+        "group": "optional_cad",
+        "required": false,
+        "ok": false,
+        "installed_version": null,
+        "min_version": null,
+        "purpose": "native OCC/BRep history integration",
+        "install_hint": "conda install -c conda-forge pythonocc-core",
+        "error": "ModuleNotFoundError: No module named 'OCC'"
+      }
+    ],
+    "install_commands": [
+      "python -m pip install PySide6",
+      "python -m pip install pyvista pyvistaqt",
+      "python -m pip install gmsh meshio",
+      "python -m pip install warp-lang",
+      "conda install -c conda-forge pythonocc-core"
+    ],
+    "groups": {
+      "core": {
+        "ok": true,
+        "required": true,
+        "checks": [
+          "numpy",
+          "scipy",
+          "typing_extensions"
+        ],
+        "missing": []
+      },
+      "desktop_gui": {
+        "ok": false,
+        "required": true,
+        "checks": [
+          "pyside6"
+        ],
+        "missing": [
+          "pyside6"
+        ]
+      },
+      "three_d_viewport": {
+        "ok": false,
+        "required": true,
+        "checks": [
+          "pyvista",
+          "pyvistaqt"
+        ],
+        "missing": [
+          "pyvista",
+          "pyvistaqt"
+        ]
+      },
+      "meshing": {
+        "ok": false,
+        "required": true,
+        "checks": [
+          "gmsh",
+          "meshio"
+        ],
+        "missing": [
+          "gmsh",
+          "meshio"
+        ]
+      },
+      "optional_acceleration": {
+        "ok": false,
+        "required": false,
+        "checks": [
+          "warp"
+        ],
+        "missing": [
+          "warp"
+        ]
+      },
+      "optional_cad": {
+        "ok": false,
+        "required": false,
+        "checks": [
+          "pythonocc"
+        ],
+        "missing": [
+          "pythonocc"
+        ]
+      }
+    },
+    "next_action": "show_missing_dependency_prompt"
+  },
+  "startup_dependency_screen": {
+    "contract": "geoai_simkit_startup_dependency_screen_v1",
+    "status": "blocked",
+    "auto_enter_main": false,
+    "main_workbench": "six_phase_workbench"
+  },
+  "imports": {
+    "geoai_simkit.app.shell.unified_workbench_window": {
+      "available": true,
+      "error": null
+    },
+    "geoai_simkit.app.shell.phase_workbench_qt": {
+      "available": true,
+      "error": null
+    },
+    "geoai_simkit.app.fallback_gui": {
+      "available": true,
+      "error": null
+    }
+  },
+  "qt_application": {
+    "available": false,
+    "created": false,
+    "platform": null,
+    "error": null
+  },
+  "workbench_payload": {
+    "available": true,
+    "contract": "unified_workbench_payload_v2",
+    "page_count": 6,
+    "has_visual_modeling": true,
+    "has_benchmark_panel": true,
+    "error": null
+  },
+  "geometry_debug_logging": {
+    "enabled": false,
+    "debug_dir": "/mnt/data/work_130/geoai_simkit_1_3_0_beta/log",
+    "log_path": "/mnt/data/work_130/geoai_simkit_1_3_0_beta/log/geometry_kernel.jsonl",
+    "stream_name": "geometry_kernel",
+    "metadata": {
+      "contract": "geometry_log_status_v1",
+      "contract_version": "geometry_log_status_v2"
+    }
+  },
+  "phase_workbench_qt": {
+    "available": true,
+    "error": null
+  }
+}

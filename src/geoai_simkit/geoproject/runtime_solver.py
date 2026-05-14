@@ -730,15 +730,19 @@ def run_geoproject_incremental_solve(project: GeoProjectDocument, *, compile_if_
     if write_results:
         _refresh_result_curves(project)
         project.mark_changed(["solver", "result"], action="run_geoproject_incremental_solve", affected_entities=[row.phase_id for row in phase_records])
+    accepted = bool(phase_records) and all(row.converged for row in phase_records)
     project.solver_model.metadata["last_incremental_solve"] = {
         "contract": "geoproject_incremental_solver_v1",
+        "accepted": bool(accepted),
         "phase_count": len(phase_records),
+        "result_phase_count": len(project.result_store.phase_results),
         "cell_state_count": len(all_cell_states),
         "interface_state_count": len(all_interface_states),
+        "phase_records": [row.to_dict() for row in phase_records],
         "accepted_by": "relative_residual_norm<=convergence_tolerance",
     }
     return IncrementalSolveSummary(
-        accepted=bool(phase_records) and all(row.converged for row in phase_records),
+        accepted=accepted,
         phase_records=phase_records,
         result_phase_count=len(project.result_store.phase_results),
         cell_state_count=len(all_cell_states),

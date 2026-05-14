@@ -1,0 +1,124 @@
+{
+  "contract": "geoai_simkit_release_1_4_3_step_ifc_shape_binding_acceptance_v1",
+  "status": "accepted_1_4_3_step_ifc_shape_binding",
+  "accepted": true,
+  "native_brep_certified": false,
+  "imported_shape_count": 1,
+  "blocker_count": 0,
+  "warning_count": 2,
+  "blockers": [],
+  "warnings": [
+    "STEP/IFC shapes are imported as serialized topology references; native BRep certification is false in this run.",
+    "1.4.3 accepted STEP/IFC serialized topology binding; native BRep certification remains false in this run."
+  ],
+  "metadata": {
+    "release": "1.4.3-step-ifc-shape-binding",
+    "require_native_brep": false,
+    "validation": {
+      "contract": "geoai_simkit_step_ifc_shape_binding_validation_v1",
+      "ok": true,
+      "blockers": [],
+      "warnings": [
+        "STEP/IFC shapes are imported as serialized topology references; native BRep certification is false in this run."
+      ],
+      "imported_shape_count": 1,
+      "imported_volume_ids": [
+        "imported_step_step_solid_001"
+      ],
+      "summary": {
+        "contract": "geoproject_cad_shape_store_v1",
+        "shape_count": 1,
+        "serialized_ref_count": 1,
+        "topology_record_count": 27,
+        "entity_binding_count": 1,
+        "operation_count": 1,
+        "native_shape_count": 0,
+        "brep_serialized_count": 1,
+        "metadata": {
+          "last_step_ifc_import": {
+            "source_path": "docs/release/release_1_4_3_step_ifc_shape_binding_review_bundle/sample_step_import.step",
+            "source_format": "step",
+            "shape_ids": [
+              "shape_imported_step_step_solid_001"
+            ],
+            "native_brep_certified": false
+          },
+          "summary": {
+            "contract": "geoproject_cad_shape_store_v1",
+            "shape_count": 1,
+            "serialized_ref_count": 1,
+            "topology_record_count": 27,
+            "entity_binding_count": 1,
+            "operation_count": 1,
+            "native_shape_count": 0,
+            "brep_serialized_count": 1,
+            "metadata": {
+              "last_step_ifc_import": {
+                "source_path": "docs/release/release_1_4_3_step_ifc_shape_binding_review_bundle/sample_step_import.step",
+                "source_format": "step",
+                "shape_ids": [
+                  "shape_imported_step_step_solid_001"
+                ],
+                "native_brep_certified": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "last_import": {
+      "source_path": "docs/release/release_1_4_3_step_ifc_shape_binding_review_bundle/sample_step_import.step",
+      "source_format": "step",
+      "backend": "step_topology_surrogate",
+      "native_backend_used": false,
+      "fallback_used": true,
+      "native_brep_certified": false,
+      "imported_volume_ids": [
+        "imported_step_step_solid_001"
+      ],
+      "shape_ids": [
+        "shape_imported_step_step_solid_001"
+      ]
+    },
+    "cad_shape_store_summary": {
+      "contract": "geoproject_cad_shape_store_v1",
+      "shape_count": 1,
+      "serialized_ref_count": 1,
+      "topology_record_count": 27,
+      "entity_binding_count": 1,
+      "operation_count": 1,
+      "native_shape_count": 0,
+      "brep_serialized_count": 1,
+      "metadata": {
+        "last_step_ifc_import": {
+          "source_path": "docs/release/release_1_4_3_step_ifc_shape_binding_review_bundle/sample_step_import.step",
+          "source_format": "step",
+          "shape_ids": [
+            "shape_imported_step_step_solid_001"
+          ],
+          "native_brep_certified": false
+        },
+        "summary": {
+          "contract": "geoproject_cad_shape_store_v1",
+          "shape_count": 1,
+          "serialized_ref_count": 1,
+          "topology_record_count": 27,
+          "entity_binding_count": 1,
+          "operation_count": 1,
+          "native_shape_count": 0,
+          "brep_serialized_count": 1,
+          "metadata": {
+            "last_step_ifc_import": {
+              "source_path": "docs/release/release_1_4_3_step_ifc_shape_binding_review_bundle/sample_step_import.step",
+              "source_format": "step",
+              "shape_ids": [
+                "shape_imported_step_step_solid_001"
+              ],
+              "native_brep_certified": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

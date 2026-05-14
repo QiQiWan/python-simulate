@@ -1,23 +1,48 @@
-# GeoAI SimKit unified requirements
-# Minimal numerical runtime
+# GeoAI SimKit 1.4.6 CAD workbench strict desktop requirements
+# ------------------------------------------------------------------
+# This single file contains the complete runtime stack required before the GUI
+# is allowed to start: numerical core, Qt desktop shell, PyVista/VTK 3D viewport,
+# Gmsh/OCC meshing, STEP/IFC/native-CAD bindings, reporting utilities, and
+# test/runtime verification tools.
+#
+# Conda users on Windows/macOS/Linux should prefer binary packages from
+# conda-forge first, then run this file for pure-Python completion:
+#   conda install -c conda-forge numpy scipy pyside6 vtk pyvista pyvistaqt gmsh meshio ifcopenshell ocp
+#   python -m pip install -r requirements.txt
+#
+# Do NOT run `pip --force-reinstall vtk` over a conda-installed VTK package.
+
+# Numerical core
 numpy>=1.24
+scipy>=1.10
 typing_extensions>=4.8
 
-# Sparse solvers and benchmarks
-scipy>=1.10
-pytest
+# Desktop GUI
+PySide6>=6.5
+QtPy>=2.4
 
-# Desktop GUI. PySide6 is enough to open the main workbench.
-PySide6
+# 3D visualization stack
+vtk>=9.2
+pyvista>=0.43
+pyvistaqt>=0.11
 
-# Optional 3D viewport / meshing. Uncomment if needed.
-# pyvista
-# pyvistaqt
-# gmsh
-# meshio
+# Meshing / physical group exchange / Gmsh-OCC facade
+gmsh
+meshio
 
-# Optional GPU runtime. Install only on CUDA-capable machines.
-# warp-lang
+# Native CAD / STEP / IFC bindings
+# cadquery-ocp provides the importable `OCP` module on pip environments.
+cadquery-ocp>=7.7
+ifcopenshell>=0.8
 
-# Optional native OCC/BRep history.
-# pythonocc-core
+# Common visualization / reports / networked artifact utilities
+matplotlib>=3.7
+pillow>=10
+pooch>=1.8
+scooby>=0.10
+packaging>=23
+requests>=2.31
+rich>=13
+
+# Test/runtime verification
+pytest>=8

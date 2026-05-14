@@ -1,4 +1,68 @@
+# v1.4.8-cad-fem-preprocessor
+
+- Added dependency-light CAD-FEM preprocessor contracts for physical groups, boundary candidates, mesh controls and solver readiness.
+- Added `build_cad_fem_preprocessor` and `validate_cad_fem_preprocessor` services driven by the P7 topology identity index.
+- Added `BuildCadFemPreprocessorCommand` so GUI workflows can build and undo pre-meshing readiness snapshots.
+- Exposed the CAD-FEM preprocessor bridge in the phase workbench payload.
+- Added release tests for topology-derived boundary candidates, mesh controls, command undo and GUI payload coverage.
+
 # Changelog
+
+## 1.4.6-hf1 - GUI startup and CAD picking hotfix
+
+- Fixed the PySide6 startup crash caused by the invalid `QStyle.StandardPixmap.SP_ArrowCursor` enum by adding safe standard-icon resolution.
+- Added VTK cell-aware picking metadata for PyVista actors so CadShapeStore face/edge topology records can be selected directly in the viewport.
+- Added automatic property-panel synchronization: selecting a CAD face/edge fills the Face/Edge/Solid topology ID field and preserves the source entity reference.
+- Added pickable CAD topology primitives from CadShapeStore records and per-cell topology IDs for block actors when face records are available.
+- Upgraded edit handles with center and X/Y/Z gizmo-axis actors; drag/copy operations now honor a picked axis handle.
+- Added live preview output for extrude, cut-plane and boolean bounding operations before command execution.
+- Added support for native OCC history-map rows in boolean topology lineage, while preserving the deterministic fallback matcher.
+- Added a real-file persistent naming benchmark harness for STEP/IFC certification on desktop installations with OCP/IfcOpenShell/Gmsh.
+
+## 0.8.80 - Interactive 3D Viewport Tool Runtime v2
+
+- Added phase-based 3D modeling workbench contracts and six canonical phases: geology, structures, mesh, staging, solve and results.
+- Added headless workbench phase service, phase ribbon model, phase sidebar model and Qt-free WorkbenchPhaseActionController.
+- Added viewport picking and tool-output contracts for PickResult, selection sets, preview geometry and work planes.
+- Added Qt/PyVista-independent ViewportToolRuntime v2 with activate, preview, commit, cancel and keyboard lifecycle handling.
+- Upgraded point, line, surface and box-volume tools to return typed viewport outputs and command results.
+- Added headless pick adapter and preview overlay helpers for future PyVista integration.
+
+## 0.8.80 - Interactive 3D Viewport Tool Runtime v2
+
+- Promoted `gmsh` and `meshio` into the consolidated `requirements.txt` so production STL/Tet4 meshing dependencies are installed by default from requirements.
+- Added command-line GUI debug mode via `--debug` for `start_gui.py`, `run_gui.py`, `python -m geoai_simkit gui`, `geoai-simkit gui`, and `geoai-simkit-gui`.
+- Kept debug logging disabled by default; when enabled from the GUI launcher, logs are written automatically to `./log/geometry_kernel.jsonl`.
+- Added process-local debug configuration that sets the same geometry-kernel environment variables internally, so users do not need manual environment setup for GUI debugging.
+- Added tests for CLI debug propagation, default local log directory behavior, requirements dependency coverage, and JSONL operation-log writing.
+
+## 0.8.76 - Real STL Geometry Kernel and Stratigraphic Closure
+
+- Added hardened geometry-kernel contracts for Gmsh/meshio validation, physical-group preservation, real stratigraphic surface closure, and volume mesh quality optimization.
+- Added dependency-light complex STL repair actions: duplicate-node merge, degenerate-face removal, small-hole fan patching, closed-shell normal reorientation, and self-intersection candidate diagnostics.
+- Added stratigraphic surface volume generation from real top/bottom STL surface tags, preserving layer, material, region, interface and Gmsh physical-group metadata.
+- Added local bad-cell filtering / quality optimization for Tet4/Hex8 volume meshes before FEM solve.
+- Added `stratigraphic_surface_volume_from_stl` mesh generator, meshing facade entries, workflow artifact integration, and Qt-free controller actions.
+- Added tests for complex STL repair, physical group diagnostics, real surface closure meshing, workflow artifacts, quality optimization, and dependency boundaries.
+
+## 0.8.75 - Strengthened Geometry Kernel for Real STL and Soil Layer Splitting
+
+- Added dependency-light geometry-kernel contracts for optional Gmsh/meshio status, STL optimization diagnostics, soil-layer definitions, and geometry-kernel reports.
+- Added a headless geometry-kernel service for STL node deduplication, degenerate triangle removal, closure/manifold diagnostics, and z-layer soil volume partitioning.
+- Added `soil_layered_volume_from_stl` mesh generator with Hex8/Tet4 output, material tags, region tags, interface candidates, and complete 3D boundary-face tagging.
+- Integrated geometry-kernel artifacts into the canonical workflow and exposed meshing facade/controller entrypoints.
+- Added tests for STL optimization, soil-layer volume generation, workflow artifacts, and dependency boundary safety.
+
+## 0.8.74 - Complete 3D Mesh Capability
+
+- Added dependency-light `contracts.mesh3d` DTOs for 3D boundary faces, boundary sets, regions, interfaces, topology reports and complete 3D mesh reports.
+- Added `mesh.complete_3d` utilities to extract exterior faces, classify boundary sets, summarize regions/materials and tag `MeshDocument.face_tags` for solver-ready 3D boundary conditions.
+- Added `structured_hex8_box` and `structured_tet4_box` mesh generators for standalone dependency-light 3D volume meshes.
+- Added `services.complete_3d_mesh` and meshing facade entries for supported 3D generators, boundary-face rows, boundary tagging and complete 3D mesh reports.
+- Extended canonical workflow reports with an optional typed `mesh3d` artifact for 3D mesh generation paths.
+- Added `Complete3DMeshActionController` for Qt-free GUI access to 3D mesh topology and boundary-face diagnostics.
+- Added 0.8.74 tests for Hex8/Tet4 generation, boundary sets, topology reports, workflow artifacts and dependency boundaries.
+
 
 ## 0.8.73 - Module Optimization Readiness and Complete Modularization Closure
 

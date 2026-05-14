@@ -156,6 +156,124 @@ def build_geoproject_object_tree(project: GeoProjectDocument) -> ObjectTreeNode:
     return root
 
 
+
+def _compact_group(root: ObjectTreeNode, group_id: str, label: str, nodes: list[ObjectTreeNode]) -> None:
+    # Keep the model browser engineering-facing: only show editable physical objects.
+    root.children.append(ObjectTreeNode(id=group_id, label=f"{label} ({len(nodes)})", type="group", children=nodes, metadata={"compact": True}))
+
+
+def _mesh_layer_nodes(project: GeoProjectDocument) -> list[ObjectTreeNode]:
+    mesh = getattr(getattr(project, "mesh_model", None), "mesh_document", None)
+    if mesh is None:
+        return []
+    tags = dict(getattr(mesh, "cell_tags", {}) or {})
+    scalar = None
+    meta = dict(getattr(mesh, "metadata", {}) or {})
+    preferred = [
+        str(meta.get("preferred_geology_scalar") or ""),
+        str(meta.get("active_cell_scalar") or ""),
+        "soil_id", "SoilID", "material_id", "stratum_id", "layer_id", "Layer", "gmsh_physical", "geology_layer_id", "display_group",
+    ]
+    for key in preferred:
+        if not key:
+            continue
+        values = list(tags.get(key, []) or [])
+        if values:
+            scalar = key
+            break
+    if scalar is None:
+        return [ObjectTreeNode(
+            id="imported_geology_model",
+            label=f"导入地质模型  [{getattr(mesh, 'cell_count', 0)} cells]",
+            type="geology_model",
+            entity_id="imported_geology_model",
+            source="geoproject.mesh_model",
+            metadata={"role": "geology", "mesh_node_count": getattr(mesh, "node_count", 0), "mesh_cell_count": getattr(mesh, "cell_count", 0)},
+        )]
+    counts: dict[str, int] = {}
+    for value in list(tags.get(scalar, []) or []):
+        label = str(value)
+        counts[label] = counts.get(label, 0) + 1
+    layer_props = dict(dict(getattr(mesh, "metadata", {}) or {}).get("layer_properties", {}) or {})
+    model_label = str(dict(getattr(mesh, "metadata", {}) or {}).get("display_name") or "导入地质模型")
+    rows = [ObjectTreeNode(
+        id="imported_geology_model",
+        label=f"{model_label}  [{len(counts)} layers]",
+        type="geology_model",
+        entity_id="imported_geology_model",
+        source="geoproject.mesh_model",
+        metadata={"role": "geology", "display_scalar": scalar, "mesh_node_count": getattr(mesh, "node_count", 0), "mesh_cell_count": getattr(mesh, "cell_count", 0), "name": model_label},
+    )]
+    child_nodes: list[ObjectTreeNode] = []
+    for label, count in sorted(counts.items(), key=lambda kv: kv[0]):
+        props = dict(layer_props.get(str(label), {}) or {})
+        display_name = str(props.get("name") or f"地层 {label}")
+        material_id = str(props.get("material_id") or (label if scalar in {"material_id", "soil_id", "SoilID"} else ""))
+        child_nodes.append(ObjectTreeNode(
+            id=f"geology_layer:{label}",
+            label=f"{display_name}  [{count} cells]" + (f"  <{material_id}>" if material_id else ""),
+            type="geology_layer",
+            entity_id=f"geology_layer:{label}",
+            source="geoproject.mesh_model.cell_tags",
+            metadata={"role": "geology", "display_scalar": scalar, "layer_value": label, "cell_count": count, "name": display_name, "material_id": material_id},
+        ))
+    rows[0].children.extend(child_nodes)
+    return rows
+
+
+def build_compact_engineering_object_tree(project: GeoProjectDocument) -> ObjectTreeNode:
+    """Build a concise engineering object tree for the Qt model browser.
+
+    The full object tree remains available through build_geoproject_object_tree.
+    This compact tree intentionally exposes only the physical objects that users
+    normally select/edit in the viewport: geology, retaining walls, horizontal
+    supports, beams and anchors.
+    """
+    summary = geoproject_summary(project)
+    root = ObjectTreeNode(id="project", label=project.project_settings.name, type="project", entity_id=project.project_settings.project_id, metadata={**summary, "compact": True})
+
+    geology_nodes: list[ObjectTreeNode] = []
+    geology_nodes.extend(_mesh_layer_nodes(project))
+    has_imported_mesh = bool(getattr(getattr(project, "mesh_model", None), "mesh_document", None) is not None)
+    for cid, row in project.soil_model.soil_clusters.items():
+        if has_imported_mesh and str(dict(getattr(row, "metadata", {}) or {}).get("source") or "") == "meshio_geology_importer":
+            continue
+        geology_nodes.append(ObjectTreeNode(id=f"soil_cluster:{cid}", label=f"{row.name}  [{row.material_id}]", type="geology_body", entity_id=cid, source="geoproject.soil_model", metadata={"role": "geology", **row.to_dict()}))
+    for vid, volume in project.geometry_model.volumes.items():
+        vmeta = dict(getattr(volume, "metadata", {}) or {})
+        if has_imported_mesh and str(vmeta.get("source") or "") == "meshio_geology_importer":
+            continue
+        if str(getattr(volume, "role", "")) in {"soil", "geology", "excavation"}:
+            geology_nodes.append(ObjectTreeNode(id=f"volume:{vid}", label=f"{volume.name}  [{volume.role}]", type="geology_body", entity_id=vid, source="geoproject.geometry_model", metadata={"role": "geology", **volume.to_dict()}))
+    _compact_group(root, "geology_bodies", "地质体", geology_nodes)
+
+    wall_nodes: list[ObjectTreeNode] = []
+    for sid, row in project.structure_model.plates.items():
+        data = row.to_dict()
+        role = str(data.get("role") or data.get("orientation") or "")
+        if role in {"wall", "retaining_wall", "diaphragm_wall", "围护墙", ""}:
+            wall_nodes.append(ObjectTreeNode(id=f"plate:{sid}", label=row.name, type="retaining_wall", entity_id=sid, source="geoproject.structure_model", metadata={"role": "retaining_wall", **data}))
+    for vid, volume in project.geometry_model.volumes.items():
+        if str(getattr(volume, "role", "")) == "wall":
+            wall_nodes.append(ObjectTreeNode(id=f"volume:{vid}", label=volume.name, type="retaining_wall", entity_id=vid, source="geoproject.geometry_model", metadata={"role": "retaining_wall", **volume.to_dict()}))
+    _compact_group(root, "retaining_walls", "围护墙", wall_nodes)
+
+    support_nodes: list[ObjectTreeNode] = []
+    beam_nodes: list[ObjectTreeNode] = []
+    for sid, row in project.structure_model.beams.items():
+        data = row.to_dict()
+        role = str(data.get("role") or data.get("orientation") or "")
+        node = ObjectTreeNode(id=f"beam:{sid}", label=row.name, type="horizontal_support" if role in {"support", "horizontal_support", "strut", "支撑"} else "beam", entity_id=sid, source="geoproject.structure_model", metadata={**data})
+        (support_nodes if node.type == "horizontal_support" else beam_nodes).append(node)
+    for sid, row in project.structure_model.embedded_beams.items():
+        beam_nodes.append(ObjectTreeNode(id=f"embedded_beam:{sid}", label=row.name, type="beam", entity_id=sid, source="geoproject.structure_model", metadata={"role": "beam", **row.to_dict()}))
+    _compact_group(root, "horizontal_supports", "水平支撑", support_nodes)
+    _compact_group(root, "beams", "梁", beam_nodes)
+
+    anchor_nodes = [ObjectTreeNode(id=f"anchor:{sid}", label=row.name, type="anchor", entity_id=sid, source="geoproject.structure_model", metadata={"role": "anchor", **row.to_dict()}) for sid, row in project.structure_model.anchors.items()]
+    _compact_group(root, "anchors", "锚杆", anchor_nodes)
+    return root
+
 def build_object_tree(document: Any) -> ObjectTreeNode:
     return build_geoproject_object_tree(get_geoproject_document(document))
 
@@ -169,4 +287,4 @@ def object_tree_to_rows(node: ObjectTreeNode, *, depth: int = 0) -> list[dict[st
     return rows
 
 
-__all__ = ["ObjectTreeNode", "build_object_tree", "build_geoproject_object_tree", "object_tree_to_rows"]
+__all__ = ["ObjectTreeNode", "build_object_tree", "build_geoproject_object_tree", "build_compact_engineering_object_tree", "object_tree_to_rows"]

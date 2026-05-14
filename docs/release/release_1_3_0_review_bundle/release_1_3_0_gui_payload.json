@@ -1,0 +1,39 @@
+{
+  "contract": "release_1_3_0_demo_center_gui_payload_v1",
+  "release": "1.3.0-beta",
+  "demo_center": {
+    "title": "工程 Beta Demo 中心",
+    "default_demo_id": "foundation_pit_3d_beta",
+    "one_click_load": true,
+    "complete_calculation": true,
+    "actions": [
+      "load_demo_project",
+      "run_complete_calculation",
+      "export_demo_bundle"
+    ],
+    "button_labels": {
+      "load_demo_project": "一键加载 1.3 Demo",
+      "run_complete_calculation": "运行完整计算流程",
+      "export_demo_bundle": "导出 Demo 审查包"
+    }
+  },
+  "phase_ids": [
+    "initial",
+    "excavation_1",
+    "support_1",
+    "excavation_2",
+    "support_2"
+  ],
+  "mesh": {
+    "node_count": 24,
+    "cell_count": 20,
+    "cell_types": [
+      "tet4"
+    ]
+  },
+  "actions": [
+    "load_demo_project",
+    "run_complete_calculation",
+    "export_demo_bundle"
+  ]
+}

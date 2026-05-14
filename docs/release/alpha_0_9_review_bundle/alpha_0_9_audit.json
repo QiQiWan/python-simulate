@@ -1,0 +1,72 @@
+{
+  "contract": "geoproject_alpha_system_audit_v1",
+  "status": "alpha_ready_with_risks",
+  "blocker_count": 0,
+  "risk_count": 2,
+  "findings": [
+    {
+      "severity": "warning",
+      "area": "mesh",
+      "message": "The current mesh uses preview element types.",
+      "recommendation": "Use production Gmsh/OCC or validated STL volume meshing for certification-grade studies.",
+      "metadata": {
+        "cell_types": [
+          "hex8_preview"
+        ]
+      }
+    },
+    {
+      "severity": "risk",
+      "area": "solver",
+      "message": "One or more phases did not satisfy residual convergence tolerance.",
+      "recommendation": "Treat results as diagnostic until boundary conditions, materials and mesh are improved.",
+      "metadata": {
+        "phase_ids": [
+          "initial",
+          "excavation_1",
+          "support_1",
+          "excavation_2",
+          "support_2"
+        ]
+      }
+    }
+  ],
+  "validation": {
+    "contract": "geoproject_model_validation_v1",
+    "ok": true,
+    "status": "ready",
+    "error_count": 0,
+    "warning_count": 0,
+    "issues": [],
+    "counts": {
+      "volume_count": 4,
+      "surface_count": 4,
+      "curve_count": 2,
+      "material_count": 9,
+      "phase_count": 5,
+      "mesh_cell_count": 4,
+      "result_phase_count": 5
+    },
+    "readiness": {
+      "geometry_ready": true,
+      "semantic_ready": true,
+      "phase_ready": true,
+      "mesh_ready": true,
+      "result_ready": true
+    },
+    "metadata": {
+      "require_mesh": true,
+      "require_results": true
+    }
+  },
+  "scorecard": {
+    "geometry_ready": true,
+    "semantic_ready": true,
+    "mesh_ready": true,
+    "phase_compiled": true,
+    "results_available": true,
+    "warnings": 0,
+    "errors": 0
+  },
+  "metadata": {}
+}

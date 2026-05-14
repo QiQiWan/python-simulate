@@ -1,0 +1,40 @@
+{
+  "contract": "geoai_simkit_imported_step_ifc_shape_reference_v1",
+  "source_path": "/mnt/data/work_144/docs/release/release_1_4_4_topology_binding_review_bundle/sample_step_import_1_4_4.step",
+  "source_format": "step",
+  "source_digest": "28f2dfe610807b27bd0e",
+  "source_native_id": "",
+  "entity_id": "imported_step_step_demo_wall",
+  "shape_id": "shape_imported_step_step_demo_wall",
+  "bounds": [
+    -8.0,
+    -7.2,
+    -5.0,
+    5.0,
+    -8.0,
+    0.0
+  ],
+  "native_brep_certified": false,
+  "backend": "step_topology_surrogate",
+  "record": {
+    "id": "step_demo_wall",
+    "name": "STEP Demo Retaining Wall",
+    "source_format": "step",
+    "bounds": [
+      -8.0,
+      -7.2,
+      -5.0,
+      5.0,
+      -8.0,
+      0.0
+    ],
+    "role": "imported_wall",
+    "material_id": "concrete",
+    "native_shape_available": false,
+    "native_brep_certified": false,
+    "source_native_id": "",
+    "metadata": {
+      "embedded_geoai_manifest": true
+    }
+  }
+}

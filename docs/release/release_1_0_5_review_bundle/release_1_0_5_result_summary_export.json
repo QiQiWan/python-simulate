@@ -1,0 +1,1065 @@
+{
+  "contract": "geoproject_result_viewer_v1",
+  "data_source": "GeoProjectDocument.ResultStore",
+  "active_phase_id": "initial",
+  "available": true,
+  "phase_rows": [
+    {
+      "phase_id": "initial",
+      "name": "Initial phase",
+      "has_result": true,
+      "metric_count": 7,
+      "field_count": 10
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "Excavate to -4 m",
+      "has_result": true,
+      "metric_count": 7,
+      "field_count": 10
+    },
+    {
+      "phase_id": "support_1",
+      "name": "Install first strut",
+      "has_result": true,
+      "metric_count": 7,
+      "field_count": 10
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "Excavate to -8 m",
+      "has_result": true,
+      "metric_count": 7,
+      "field_count": 10
+    },
+    {
+      "phase_id": "support_2",
+      "name": "Install second strut",
+      "has_result": true,
+      "metric_count": 7,
+      "field_count": 10
+    }
+  ],
+  "metric_rows": [
+    {
+      "phase_id": "initial",
+      "name": "max_displacement",
+      "value": 0.0
+    },
+    {
+      "phase_id": "initial",
+      "name": "max_settlement",
+      "value": 0.0
+    },
+    {
+      "phase_id": "initial",
+      "name": "max_von_mises_stress",
+      "value": 0.0
+    },
+    {
+      "phase_id": "initial",
+      "name": "max_reaction_force",
+      "value": 0.0
+    },
+    {
+      "phase_id": "initial",
+      "name": "residual_norm",
+      "value": 0.0
+    },
+    {
+      "phase_id": "initial",
+      "name": "active_cell_count",
+      "value": 4.0
+    },
+    {
+      "phase_id": "initial",
+      "name": "active_interface_count",
+      "value": 0.0
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "max_displacement",
+      "value": 0.0
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "max_settlement",
+      "value": 0.0
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "max_von_mises_stress",
+      "value": 0.0
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "max_reaction_force",
+      "value": 0.0
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "residual_norm",
+      "value": 0.0
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "active_cell_count",
+      "value": 3.0
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "active_interface_count",
+      "value": 0.0
+    },
+    {
+      "phase_id": "support_1",
+      "name": "max_displacement",
+      "value": 0.012970584245712307
+    },
+    {
+      "phase_id": "support_1",
+      "name": "max_settlement",
+      "value": 0.012970584245712307
+    },
+    {
+      "phase_id": "support_1",
+      "name": "max_von_mises_stress",
+      "value": 12.222222222222223
+    },
+    {
+      "phase_id": "support_1",
+      "name": "max_reaction_force",
+      "value": 4627.571174676914
+    },
+    {
+      "phase_id": "support_1",
+      "name": "residual_norm",
+      "value": 1.4131049845964359e-12
+    },
+    {
+      "phase_id": "support_1",
+      "name": "active_cell_count",
+      "value": 3.0
+    },
+    {
+      "phase_id": "support_1",
+      "name": "active_interface_count",
+      "value": 0.0
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "max_displacement",
+      "value": 0.012970584245712305
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "max_settlement",
+      "value": 0.012970584245712305
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "max_von_mises_stress",
+      "value": 24.444444444444454
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "max_reaction_force",
+      "value": 4627.571174676914
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "residual_norm",
+      "value": 8.038873388460929e-13
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "active_cell_count",
+      "value": 2.0
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "active_interface_count",
+      "value": 0.0
+    },
+    {
+      "phase_id": "support_2",
+      "name": "max_displacement",
+      "value": 0.012970584245712305
+    },
+    {
+      "phase_id": "support_2",
+      "name": "max_settlement",
+      "value": 0.012970584245712305
+    },
+    {
+      "phase_id": "support_2",
+      "name": "max_von_mises_stress",
+      "value": 24.444444444444454
+    },
+    {
+      "phase_id": "support_2",
+      "name": "max_reaction_force",
+      "value": 4627.571174676914
+    },
+    {
+      "phase_id": "support_2",
+      "name": "residual_norm",
+      "value": 8.038873388460929e-13
+    },
+    {
+      "phase_id": "support_2",
+      "name": "active_cell_count",
+      "value": 2.0
+    },
+    {
+      "phase_id": "support_2",
+      "name": "active_interface_count",
+      "value": 0.0
+    }
+  ],
+  "field_rows": [
+    {
+      "phase_id": "initial",
+      "name": "displacement",
+      "association": "node",
+      "entity_count": 24,
+      "value_count": 72,
+      "components": 3,
+      "unit": "m"
+    },
+    {
+      "phase_id": "initial",
+      "name": "ux",
+      "association": "node",
+      "entity_count": 24,
+      "value_count": 24,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "initial",
+      "name": "uy",
+      "association": "node",
+      "entity_count": 24,
+      "value_count": 24,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "initial",
+      "name": "uz",
+      "association": "node",
+      "entity_count": 24,
+      "value_count": 24,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "initial",
+      "name": "reaction_force",
+      "association": "node",
+      "entity_count": 24,
+      "value_count": 72,
+      "components": 3,
+      "unit": "kN"
+    },
+    {
+      "phase_id": "initial",
+      "name": "cell_stress",
+      "association": "cell",
+      "entity_count": 4,
+      "value_count": 24,
+      "components": 6,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "initial",
+      "name": "cell_strain",
+      "association": "cell",
+      "entity_count": 4,
+      "value_count": 24,
+      "components": 6,
+      "unit": ""
+    },
+    {
+      "phase_id": "initial",
+      "name": "cell_stress_zz",
+      "association": "cell",
+      "entity_count": 4,
+      "value_count": 4,
+      "components": 1,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "initial",
+      "name": "cell_von_mises",
+      "association": "cell",
+      "entity_count": 4,
+      "value_count": 4,
+      "components": 1,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "initial",
+      "name": "cell_equivalent_strain",
+      "association": "cell",
+      "entity_count": 4,
+      "value_count": 4,
+      "components": 1,
+      "unit": ""
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "displacement",
+      "association": "node",
+      "entity_count": 20,
+      "value_count": 60,
+      "components": 3,
+      "unit": "m"
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "ux",
+      "association": "node",
+      "entity_count": 20,
+      "value_count": 20,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "uy",
+      "association": "node",
+      "entity_count": 20,
+      "value_count": 20,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "uz",
+      "association": "node",
+      "entity_count": 20,
+      "value_count": 20,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "reaction_force",
+      "association": "node",
+      "entity_count": 20,
+      "value_count": 60,
+      "components": 3,
+      "unit": "kN"
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "cell_stress",
+      "association": "cell",
+      "entity_count": 3,
+      "value_count": 18,
+      "components": 6,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "cell_strain",
+      "association": "cell",
+      "entity_count": 3,
+      "value_count": 18,
+      "components": 6,
+      "unit": ""
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "cell_stress_zz",
+      "association": "cell",
+      "entity_count": 3,
+      "value_count": 3,
+      "components": 1,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "cell_von_mises",
+      "association": "cell",
+      "entity_count": 3,
+      "value_count": 3,
+      "components": 1,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "excavation_1",
+      "name": "cell_equivalent_strain",
+      "association": "cell",
+      "entity_count": 3,
+      "value_count": 3,
+      "components": 1,
+      "unit": ""
+    },
+    {
+      "phase_id": "support_1",
+      "name": "displacement",
+      "association": "node",
+      "entity_count": 20,
+      "value_count": 60,
+      "components": 3,
+      "unit": "m"
+    },
+    {
+      "phase_id": "support_1",
+      "name": "ux",
+      "association": "node",
+      "entity_count": 20,
+      "value_count": 20,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "support_1",
+      "name": "uy",
+      "association": "node",
+      "entity_count": 20,
+      "value_count": 20,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "support_1",
+      "name": "uz",
+      "association": "node",
+      "entity_count": 20,
+      "value_count": 20,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "support_1",
+      "name": "reaction_force",
+      "association": "node",
+      "entity_count": 20,
+      "value_count": 60,
+      "components": 3,
+      "unit": "kN"
+    },
+    {
+      "phase_id": "support_1",
+      "name": "cell_stress",
+      "association": "cell",
+      "entity_count": 3,
+      "value_count": 18,
+      "components": 6,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "support_1",
+      "name": "cell_strain",
+      "association": "cell",
+      "entity_count": 3,
+      "value_count": 18,
+      "components": 6,
+      "unit": ""
+    },
+    {
+      "phase_id": "support_1",
+      "name": "cell_stress_zz",
+      "association": "cell",
+      "entity_count": 3,
+      "value_count": 3,
+      "components": 1,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "support_1",
+      "name": "cell_von_mises",
+      "association": "cell",
+      "entity_count": 3,
+      "value_count": 3,
+      "components": 1,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "support_1",
+      "name": "cell_equivalent_strain",
+      "association": "cell",
+      "entity_count": 3,
+      "value_count": 3,
+      "components": 1,
+      "unit": ""
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "displacement",
+      "association": "node",
+      "entity_count": 12,
+      "value_count": 36,
+      "components": 3,
+      "unit": "m"
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "ux",
+      "association": "node",
+      "entity_count": 12,
+      "value_count": 12,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "uy",
+      "association": "node",
+      "entity_count": 12,
+      "value_count": 12,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "uz",
+      "association": "node",
+      "entity_count": 12,
+      "value_count": 12,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "reaction_force",
+      "association": "node",
+      "entity_count": 12,
+      "value_count": 36,
+      "components": 3,
+      "unit": "kN"
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "cell_stress",
+      "association": "cell",
+      "entity_count": 2,
+      "value_count": 12,
+      "components": 6,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "cell_strain",
+      "association": "cell",
+      "entity_count": 2,
+      "value_count": 12,
+      "components": 6,
+      "unit": ""
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "cell_stress_zz",
+      "association": "cell",
+      "entity_count": 2,
+      "value_count": 2,
+      "components": 1,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "cell_von_mises",
+      "association": "cell",
+      "entity_count": 2,
+      "value_count": 2,
+      "components": 1,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "excavation_2",
+      "name": "cell_equivalent_strain",
+      "association": "cell",
+      "entity_count": 2,
+      "value_count": 2,
+      "components": 1,
+      "unit": ""
+    },
+    {
+      "phase_id": "support_2",
+      "name": "displacement",
+      "association": "node",
+      "entity_count": 12,
+      "value_count": 36,
+      "components": 3,
+      "unit": "m"
+    },
+    {
+      "phase_id": "support_2",
+      "name": "ux",
+      "association": "node",
+      "entity_count": 12,
+      "value_count": 12,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "support_2",
+      "name": "uy",
+      "association": "node",
+      "entity_count": 12,
+      "value_count": 12,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "support_2",
+      "name": "uz",
+      "association": "node",
+      "entity_count": 12,
+      "value_count": 12,
+      "components": 1,
+      "unit": "m"
+    },
+    {
+      "phase_id": "support_2",
+      "name": "reaction_force",
+      "association": "node",
+      "entity_count": 12,
+      "value_count": 36,
+      "components": 3,
+      "unit": "kN"
+    },
+    {
+      "phase_id": "support_2",
+      "name": "cell_stress",
+      "association": "cell",
+      "entity_count": 2,
+      "value_count": 12,
+      "components": 6,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "support_2",
+      "name": "cell_strain",
+      "association": "cell",
+      "entity_count": 2,
+      "value_count": 12,
+      "components": 6,
+      "unit": ""
+    },
+    {
+      "phase_id": "support_2",
+      "name": "cell_stress_zz",
+      "association": "cell",
+      "entity_count": 2,
+      "value_count": 2,
+      "components": 1,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "support_2",
+      "name": "cell_von_mises",
+      "association": "cell",
+      "entity_count": 2,
+      "value_count": 2,
+      "components": 1,
+      "unit": "kPa"
+    },
+    {
+      "phase_id": "support_2",
+      "name": "cell_equivalent_strain",
+      "association": "cell",
+      "entity_count": 2,
+      "value_count": 2,
+      "components": 1,
+      "unit": ""
+    }
+  ],
+  "curve_rows": [
+    {
+      "id": "curve_active_cell_count",
+      "name": "active_cell_count",
+      "x": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0
+      ],
+      "y": [
+        4.0,
+        3.0,
+        3.0,
+        2.0,
+        2.0
+      ],
+      "x_label": "phase_index",
+      "y_label": "active_cell_count",
+      "metadata": {
+        "stage_ids": [
+          "initial",
+          "excavation_1",
+          "support_1",
+          "excavation_2",
+          "support_2"
+        ],
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    {
+      "id": "curve_active_interface_count",
+      "name": "active_interface_count",
+      "x": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0
+      ],
+      "y": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "x_label": "phase_index",
+      "y_label": "active_interface_count",
+      "metadata": {
+        "stage_ids": [
+          "initial",
+          "excavation_1",
+          "support_1",
+          "excavation_2",
+          "support_2"
+        ],
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    {
+      "id": "curve_max_displacement",
+      "name": "max_displacement",
+      "x": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0
+      ],
+      "y": [
+        0.0,
+        0.0,
+        0.012970584245712307,
+        0.012970584245712305,
+        0.012970584245712305
+      ],
+      "x_label": "phase_index",
+      "y_label": "max_displacement",
+      "metadata": {
+        "stage_ids": [
+          "initial",
+          "excavation_1",
+          "support_1",
+          "excavation_2",
+          "support_2"
+        ],
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    {
+      "id": "curve_max_reaction_force",
+      "name": "max_reaction_force",
+      "x": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0
+      ],
+      "y": [
+        0.0,
+        0.0,
+        4627.571174676914,
+        4627.571174676914,
+        4627.571174676914
+      ],
+      "x_label": "phase_index",
+      "y_label": "max_reaction_force",
+      "metadata": {
+        "stage_ids": [
+          "initial",
+          "excavation_1",
+          "support_1",
+          "excavation_2",
+          "support_2"
+        ],
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    {
+      "id": "curve_max_settlement",
+      "name": "max_settlement",
+      "x": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0
+      ],
+      "y": [
+        0.0,
+        0.0,
+        0.012970584245712307,
+        0.012970584245712305,
+        0.012970584245712305
+      ],
+      "x_label": "phase_index",
+      "y_label": "max_settlement",
+      "metadata": {
+        "stage_ids": [
+          "initial",
+          "excavation_1",
+          "support_1",
+          "excavation_2",
+          "support_2"
+        ],
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    {
+      "id": "curve_max_von_mises_stress",
+      "name": "max_von_mises_stress",
+      "x": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0
+      ],
+      "y": [
+        0.0,
+        0.0,
+        12.222222222222223,
+        24.444444444444454,
+        24.444444444444454
+      ],
+      "x_label": "phase_index",
+      "y_label": "max_von_mises_stress",
+      "metadata": {
+        "stage_ids": [
+          "initial",
+          "excavation_1",
+          "support_1",
+          "excavation_2",
+          "support_2"
+        ],
+        "source": "geoproject_incremental_solver_v1"
+      }
+    },
+    {
+      "id": "curve_residual_norm",
+      "name": "residual_norm",
+      "x": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0
+      ],
+      "y": [
+        0.0,
+        0.0,
+        1.4131049845964359e-12,
+        8.038873388460929e-13,
+        8.038873388460929e-13
+      ],
+      "x_label": "phase_index",
+      "y_label": "residual_norm",
+      "metadata": {
+        "stage_ids": [
+          "initial",
+          "excavation_1",
+          "support_1",
+          "excavation_2",
+          "support_2"
+        ],
+        "source": "geoproject_incremental_solver_v1"
+      }
+    }
+  ],
+  "section_rows": [
+    {
+      "id": "sec_wall_deflection",
+      "name": "Wall deflection control section",
+      "target_ids": [
+        "wall_west",
+        "wall_east",
+        "wall_south",
+        "wall_north"
+      ],
+      "station_values": [
+        0.0,
+        0.25,
+        0.5,
+        0.75,
+        1.0
+      ],
+      "result_values": [
+        0.0,
+        0.3,
+        1.0,
+        0.6,
+        0.0
+      ],
+      "metadata": {
+        "quantity": "ux"
+      }
+    },
+    {
+      "id": "sec_ground_settlement",
+      "name": "Ground settlement control section",
+      "target_ids": [
+        "wall_west",
+        "wall_east",
+        "wall_south",
+        "wall_north"
+      ],
+      "station_values": [
+        -30.0,
+        -15.0,
+        0.0,
+        15.0,
+        30.0
+      ],
+      "result_values": [
+        0.0,
+        -2.0,
+        -5.0,
+        -2.0,
+        0.0
+      ],
+      "metadata": {
+        "quantity": "uz"
+      }
+    }
+  ],
+  "selected_field": {
+    "name": "displacement",
+    "stage_id": "initial",
+    "association": "node",
+    "values": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.0,
+      -0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.0,
+      -0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "entity_ids": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23"
+    ],
+    "components": 3,
+    "metadata": {
+      "unit": "m",
+      "components": [
+        "ux",
+        "uy",
+        "uz"
+      ]
+    }
+  },
+  "display_modes": [
+    "deformed_shape",
+    "contour",
+    "section_cut",
+    "probe",
+    "curve"
+  ],
+  "export_actions": [
+    "export_legacy_vtk",
+    "export_json_summary"
+  ]
+}

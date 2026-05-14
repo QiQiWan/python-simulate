@@ -1,0 +1,112 @@
+{
+  "contract": "geoai_simkit_demo_complete_calculation_pipeline_v1",
+  "ok": true,
+  "demo_id": "pile_soil_interaction_beta",
+  "steps": [
+    {
+      "key": "load_demo",
+      "label": "一键加载三维基坑 Demo",
+      "phase": "geology",
+      "status": "done",
+      "message": "Demo project document was created and bound to the phase workbench.",
+      "artifact_key": "",
+      "metadata": {
+        "project_name": "GeoAI SimKit 1.4.0 Beta-2 桩-土相互作用加载 Beta Demo",
+        "release": "1.4.1-geometry"
+      }
+    },
+    {
+      "key": "geology_structure",
+      "label": "生成地质体、开挖体、支护墙和支撑",
+      "phase": "geology/structures",
+      "status": "done",
+      "message": "Geology and structural semantic objects are available.",
+      "artifact_key": "",
+      "metadata": {
+        "volume_count": 4,
+        "plate_count": 4,
+        "beam_count": 2,
+        "anchor_count": 0
+      }
+    },
+    {
+      "key": "mesh",
+      "label": "生成 Tet4 网格与物理组标签",
+      "phase": "mesh",
+      "status": "done",
+      "message": "Project mesh is ready for phase compilation.",
+      "artifact_key": "",
+      "metadata": {
+        "node_count": 24,
+        "cell_count": 20,
+        "cell_types": [
+          "tet4"
+        ]
+      }
+    },
+    {
+      "key": "compile",
+      "label": "编译阶段施工求解输入",
+      "phase": "staging",
+      "status": "done",
+      "message": "Phase snapshots were compiled into compact active meshes.",
+      "artifact_key": "compiler_path",
+      "metadata": {
+        "phase_count": 5,
+        "compiled_phase_count": 5
+      }
+    },
+    {
+      "key": "solve",
+      "label": "运行全局 Mohr-Coulomb Newton 求解",
+      "phase": "solve",
+      "status": "done",
+      "message": "Global nonlinear solve finished and wrote phase results.",
+      "artifact_key": "global_newton_path",
+      "metadata": {
+        "accepted": true,
+        "iteration_count": 22,
+        "residual": 7.688671874999998e-07
+      }
+    },
+    {
+      "key": "hydro_contact",
+      "label": "运行固结耦合与界面开闭合迭代",
+      "phase": "solve/results",
+      "status": "done",
+      "message": "Pore-pressure, consolidation and contact-state fields are available.",
+      "artifact_key": "consolidation_path",
+      "metadata": {
+        "consolidation_ok": true,
+        "interface_ok": true
+      }
+    },
+    {
+      "key": "results_export",
+      "label": "生成结果查看、VTK、JSON 和工程报告",
+      "phase": "results",
+      "status": "done",
+      "message": "Result viewer payload and export artifacts are ready.",
+      "artifact_key": "vtk_path",
+      "metadata": {
+        "phase_count": 5,
+        "result_phase_count": 5,
+        "exported_artifacts": [
+          "compiler_path",
+          "global_newton_path",
+          "project_path",
+          "result_export_path",
+          "result_viewer_path",
+          "validation_path",
+          "vtk_path"
+        ]
+      }
+    }
+  ],
+  "artifact_count": 7,
+  "output_dir": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta",
+  "metadata": {
+    "phase_count": 5,
+    "result_phase_count": 5
+  }
+}

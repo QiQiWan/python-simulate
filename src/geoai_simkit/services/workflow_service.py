@@ -20,6 +20,8 @@ from geoai_simkit.contracts import (
 )
 from geoai_simkit.modules import fem_solver, meshing, postprocessing, stage_planning
 from geoai_simkit.services.production_meshing_validation import build_production_meshing_validation_report
+from geoai_simkit.services.complete_3d_mesh import build_complete_3d_mesh_report
+from geoai_simkit.services.geometry_kernel import build_geometry_kernel_report
 
 
 @dataclass(slots=True)
@@ -54,6 +56,7 @@ class ProjectWorkflowService:
                 context,
                 mesh_kind=request.mesh_kind,
                 attach=True,
+                options=dict(request.metadata.get("mesh_options", {}) or {}),
                 metadata={"workflow": "canonical_interop", **dict(request.metadata)},
             )
             artifacts["mesh"] = mesh_result
@@ -63,12 +66,30 @@ class ProjectWorkflowService:
             include_validation = bool(
                 request.metadata.get("include_mesh_validation_artifact")
                 or mesh_metadata.get("solid_readiness")
-                or str(mesh_result.mesh_kind).lower() in {"gmsh_tet4_from_stl", "conformal_tet4_from_stl_regions", "voxel_hex8_from_stl"}
+                or str(mesh_result.mesh_kind).lower() in {"gmsh_tet4_from_stl", "conformal_tet4_from_stl_regions", "voxel_hex8_from_stl", "soil_layered_volume_from_stl", "gmsh_occ_fragment_tet4_from_stl", "gmsh_occ_fragment_strata", "production_gmsh_occ_tet4", "occ_fragment_tet4_from_stl"}
             )
             if include_validation:
                 validation = build_production_meshing_validation_report(context, solver_backend=request.solver_backend)
                 artifacts["mesh_validation"] = validation
                 artifact_refs.append(workflow_artifact_ref_from_payload("mesh_validation", validation, producer="production_meshing_validation", kind="quality"))
+            include_mesh3d = bool(
+                request.metadata.get("include_complete_3d_mesh_artifact")
+                or mesh_metadata.get("complete_3d_mesh")
+                or str(mesh_result.mesh_kind).lower() in {"structured_hex8_box", "structured_tet4_box", "gmsh_tet4_from_stl", "conformal_tet4_from_stl_regions", "voxel_hex8_from_stl", "soil_layered_volume_from_stl", "stratigraphic_surface_volume_from_stl", "stl_stratigraphic_surfaces", "surface_layered_volume_from_stl", "surface_strata_tet4_from_stl", "surface_strata_hex8_from_stl", "gmsh_occ_fragment_tet4_from_stl", "gmsh_occ_fragment_strata", "production_gmsh_occ_tet4", "occ_fragment_tet4_from_stl"}
+            )
+            if include_mesh3d:
+                mesh3d_report = build_complete_3d_mesh_report(context, solver_backend=request.solver_backend)
+                artifacts["mesh3d"] = mesh3d_report
+                artifact_refs.append(workflow_artifact_ref_from_payload("mesh3d", mesh3d_report, producer="complete_3d_mesh", kind="mesh"))
+
+            include_geometry_kernel = bool(
+                request.metadata.get("include_geometry_kernel_artifact")
+                or str(mesh_result.mesh_kind).lower() in {"soil_layered_volume_from_stl", "stl_soil_layers", "layered_hex8_from_stl", "layered_tet4_from_stl", "stratigraphic_surface_volume_from_stl", "stl_stratigraphic_surfaces", "surface_layered_volume_from_stl", "surface_strata_tet4_from_stl", "surface_strata_hex8_from_stl", "gmsh_occ_fragment_tet4_from_stl", "gmsh_occ_fragment_strata", "production_gmsh_occ_tet4", "occ_fragment_tet4_from_stl"}
+            )
+            if include_geometry_kernel:
+                geometry_kernel_report = build_geometry_kernel_report(context, include_optimization=False)
+                artifacts["geometry_kernel"] = geometry_kernel_report
+                artifact_refs.append(workflow_artifact_ref_from_payload("geometry_kernel", geometry_kernel_report, producer="geometry_kernel", kind="mesh"))
         except Exception as exc:  # pragma: no cover - exercised by failure tests via messages
             add_step("meshing", False, status="error", diagnostics=(f"{type(exc).__name__}: {exc}",))
             if not self.continue_on_error:
@@ -144,6 +165,8 @@ class ProjectWorkflowService:
                 "workflow_artifacts_contract": "workflow_artifact_ref_v1",
                 "workflow_artifact_manifest_contract": "workflow_artifact_manifest_v2",
                 "production_meshing_validation_contract": "production_meshing_validation_report_v1",
+                "complete_3d_mesh_contract": "complete_3d_mesh_report_v1",
+                "geometry_kernel_contract": "geometry_kernel_report_v1",
                 **dict(request.metadata),
             },
         )

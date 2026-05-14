@@ -1,0 +1,40 @@
+{
+  "contract": "geoai_simkit_cad_shape_store_validation_v1",
+  "ok": true,
+  "blockers": [],
+  "warnings": [
+    "Serialized BRep surrogate references only; native BRep is not certified in this run."
+  ],
+  "summary": {
+    "contract": "geoproject_cad_shape_store_v1",
+    "shape_count": 5,
+    "serialized_ref_count": 5,
+    "topology_record_count": 135,
+    "entity_binding_count": 5,
+    "operation_count": 1,
+    "native_shape_count": 0,
+    "brep_serialized_count": 5,
+    "metadata": {
+      "release": "1.4.2d-cad-shape-store",
+      "created_by": "build_cad_shape_store",
+      "native_brep_certified": false,
+      "serialization_policy": "native BRep ref when present, brep_json surrogate otherwise",
+      "summary": {
+        "contract": "geoproject_cad_shape_store_v1",
+        "shape_count": 5,
+        "serialized_ref_count": 5,
+        "topology_record_count": 135,
+        "entity_binding_count": 5,
+        "operation_count": 1,
+        "native_shape_count": 0,
+        "brep_serialized_count": 5,
+        "metadata": {
+          "release": "1.4.2d-cad-shape-store",
+          "created_by": "build_cad_shape_store",
+          "native_brep_certified": false,
+          "serialization_policy": "native BRep ref when present, brep_json surrogate otherwise"
+        }
+      }
+    }
+  }
+}

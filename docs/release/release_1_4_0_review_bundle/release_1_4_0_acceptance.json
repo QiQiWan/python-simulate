@@ -1,0 +1,24 @@
+{
+  "contract": "geoai_simkit_release_1_4_0_acceptance_v1",
+  "status": "accepted_1_4_0_beta2",
+  "accepted": true,
+  "template_count": 3,
+  "completed_template_count": 3,
+  "exported_template_count": 3,
+  "required_demo_ids": [
+    "foundation_pit_3d_beta",
+    "slope_stability_beta",
+    "pile_soil_interaction_beta"
+  ],
+  "completed_demo_ids": [
+    "foundation_pit_3d_beta",
+    "pile_soil_interaction_beta",
+    "slope_stability_beta"
+  ],
+  "blocker_count": 0,
+  "warning_count": 0,
+  "findings": [],
+  "metadata": {
+    "release": "1.4.1-geometry"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "contract": "geoai_simkit_gmsh_occ_physical_group_roundtrip_manifest_v1",
+  "native_backend_used": false,
+  "backend": "deterministic_tet4_contract",
+  "node_count": 24,
+  "cell_count": 25,
+  "cell_types": [
+    "tet4"
+  ],
+  "physical_groups": [
+    {
+      "id": "cad_volume_005",
+      "dimension": 3,
+      "cell_ids": [
+        20,
+        21,
+        22,
+        23,
+        24
+      ],
+      "material_ids": [
+        "alpha_dense_sand"
+      ],
+      "source_volume_ids": [
+        "cad_volume_005"
+      ]
+    },
+    {
+      "id": "excavation_step_1",
+      "dimension": 3,
+      "cell_ids": [
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "material_ids": [
+        "alpha_soft_clay"
+      ],
+      "source_volume_ids": [
+        "excavation_step_1"
+      ]
+    },
+    {
+      "id": "excavation_step_2",
+      "dimension": 3,
+      "cell_ids": [
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "material_ids": [
+        "alpha_soft_clay"
+      ],
+      "source_volume_ids": [
+        "excavation_step_2"
+      ]
+    },
+    {
+      "id": "soil_lower",
+      "dimension": 3,
+      "cell_ids": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "material_ids": [
+        "alpha_dense_sand"
+      ],
+      "source_volume_ids": [
+        "soil_lower"
+      ]
+    },
+    {
+      "id": "soil_upper",
+      "dimension": 3,
+      "cell_ids": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "material_ids": [
+        "alpha_soft_clay"
+      ],
+      "source_volume_ids": [
+        "soil_upper"
+      ]
+    }
+  ]
+}

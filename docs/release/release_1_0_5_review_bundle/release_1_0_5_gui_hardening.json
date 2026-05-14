@@ -1,0 +1,35 @@
+{
+  "contract": "geoai_simkit_gui_desktop_hardening_v1",
+  "ok": true,
+  "display_mode": "desktop",
+  "phase_count": 6,
+  "tool_count": 52,
+  "routed_tool_count": 52,
+  "blocker_count": 0,
+  "warning_count": 2,
+  "optional_runtime": {
+    "PySide6": false,
+    "pyvista": false,
+    "pyvistaqt": false
+  },
+  "findings": [
+    {
+      "severity": "warning",
+      "code": "gui.qt.optional_missing",
+      "message": "PySide6 is not installed in this environment.",
+      "recommendation": "Install GUI extras for desktop validation.",
+      "metadata": {}
+    },
+    {
+      "severity": "warning",
+      "code": "gui.pyvista.optional_missing",
+      "message": "PyVista is not installed in this environment.",
+      "recommendation": "Install visualization extras for 3D viewport validation.",
+      "metadata": {}
+    }
+  ],
+  "metadata": {
+    "state_contract": "phase_workbench_ui_state_v1",
+    "active_phase": "geology"
+  }
+}

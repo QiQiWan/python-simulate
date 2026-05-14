@@ -1,0 +1,20 @@
+{
+  "contract": "geoai_simkit_cad_facade_capability_v1",
+  "ok": true,
+  "preferred_backend": "gmsh_occ",
+  "native_available": false,
+  "gmsh_available": false,
+  "gmsh_occ_available": false,
+  "pythonocc_available": false,
+  "ocp_available": false,
+  "fallback_available": true,
+  "selected_backend": "aabb_fallback",
+  "warnings": [
+    "Native gmsh.model.occ backend is unavailable; deterministic AABB fallback will be used unless native execution is required."
+  ],
+  "metadata": {
+    "gmsh_version": "",
+    "release_mode": "cad_facade",
+    "native_certified": false
+  }
+}

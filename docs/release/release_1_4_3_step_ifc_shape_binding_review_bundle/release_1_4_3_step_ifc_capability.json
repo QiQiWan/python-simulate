@@ -1,0 +1,17 @@
+{
+  "contract": "geoai_simkit_step_ifc_import_capability_v1",
+  "gmsh_available": false,
+  "gmsh_occ_import_shapes": false,
+  "ifcopenshell_available": false,
+  "ocp_available": false,
+  "pythonocc_available": false,
+  "native_step_possible": false,
+  "native_ifc_possible": false,
+  "errors": {
+    "gmsh": "ModuleNotFoundError: No module named 'gmsh'",
+    "ifcopenshell": "ModuleNotFoundError: No module named 'ifcopenshell'",
+    "OCP": "ModuleNotFoundError: No module named 'OCP'",
+    "OCC.Core": "ModuleNotFoundError: No module named 'OCC'"
+  },
+  "native_binding_policy": "native only when STEP/IFC runtime imports exact solids; surrogate imports are explicitly marked"
+}

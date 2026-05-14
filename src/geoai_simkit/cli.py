@@ -15,15 +15,21 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 
 def _cmd_gui(args: argparse.Namespace) -> int:
-    try:
-        from geoai_simkit.app.launch import launch_desktop_workbench
+    # All install-time GUI launches share the same canonical launcher as
+    # repository-root start_gui.py.  This prevents console scripts from entering
+    # historical Qt windows that do not contain the repaired import/assembly
+    # action dispatcher.
+    from geoai_simkit.app.launcher_entry import main as launcher_main
 
-        launch_desktop_workbench()
-        return 0
-    except Exception as exc:
-        print(f'[geoai-simkit] GUI launch failed: {exc}', file=sys.stderr)
-        print('Run `python -m geoai_simkit check` to inspect optional dependencies.', file=sys.stderr)
-        return 2
+    argv = []
+    if bool(getattr(args, "debug", False)):
+        argv.append("--debug")
+    log_dir = getattr(args, "log_dir", None)
+    if log_dir:
+        argv.extend(["--log-dir", str(log_dir)])
+    if bool(getattr(args, "qt_only", False)):
+        argv.append("--qt-only")
+    return int(launcher_main(argv, launcher_name="geoai-simkit gui"))
 
 
 def _cmd_demo(args: argparse.Namespace) -> int:
@@ -248,6 +254,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_check.set_defaults(func=_cmd_check)
 
     p_gui = sub.add_parser('gui', help='Launch the desktop workbench')
+    p_gui.add_argument('--debug', action='store_true', help='Enable geometry-kernel debug logging for this GUI run')
+    p_gui.add_argument('--log-dir', default=None, help='Debug log directory; defaults to ./log when --debug is used')
+    p_gui.add_argument('--qt-only', action='store_true', help='Disable the PyVista/VTK viewport adapter')
     p_gui.set_defaults(func=_cmd_gui)
 
     p_demo = sub.add_parser('demo', help='Run the built-in foundation pit smoke demo')

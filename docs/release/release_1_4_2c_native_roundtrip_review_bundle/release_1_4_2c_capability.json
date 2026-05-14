@@ -1,0 +1,18 @@
+{
+  "contract": "geoai_simkit_gmsh_occ_boolean_roundtrip_capability_v1",
+  "ok": true,
+  "gmsh_available": false,
+  "gmsh_occ_available": false,
+  "meshio_available": false,
+  "selected_backend": "deterministic_tet4_contract",
+  "native_roundtrip_possible": false,
+  "warnings": [
+    "Native gmsh.model.occ is unavailable; native boolean mesh roundtrip cannot execute in this environment.",
+    "meshio is unavailable; native .msh import/export verification will be limited to gmsh API/manifest data."
+  ],
+  "metadata": {
+    "gmsh_version": "",
+    "release_gate": "1.4.2c",
+    "native_required_for_certified_roundtrip": true
+  }
+}

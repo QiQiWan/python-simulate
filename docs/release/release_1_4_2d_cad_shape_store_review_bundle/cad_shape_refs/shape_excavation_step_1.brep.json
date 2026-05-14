@@ -1,0 +1,16 @@
+{
+  "contract": "geoai_simkit_brep_json_surrogate_v1",
+  "kind": "box_solid",
+  "source_entity_id": "excavation_step_1",
+  "bounds": [
+    -4.0,
+    4.0,
+    -3.0,
+    3.0,
+    -4.0,
+    0.0
+  ],
+  "role": "soil",
+  "material_id": "alpha_soft_clay",
+  "native_brep_certified": false
+}

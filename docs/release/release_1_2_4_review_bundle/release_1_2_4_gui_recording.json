@@ -1,0 +1,37 @@
+{
+  "contract": "geoai_simkit_gui_interaction_recording_v1",
+  "ok": true,
+  "launcher_default": "phase_qt_workbench",
+  "phase_count": 6,
+  "recorded_event_count": 58,
+  "phase_sequence": [
+    "geology",
+    "structures",
+    "mesh",
+    "staging",
+    "solve",
+    "results"
+  ],
+  "active_phase_labels": [
+    "地质",
+    "结构",
+    "网格",
+    "阶段配置",
+    "求解",
+    "结果查看"
+  ],
+  "toolbar_counts": {
+    "geology": 9,
+    "structures": 10,
+    "mesh": 8,
+    "staging": 9,
+    "solve": 7,
+    "results": 9
+  },
+  "old_gui_blocked": true,
+  "metadata": {
+    "required_default_launcher": "launch_phase_workbench_qt",
+    "legacy_entry_allowed_only_with_env": "GEOAI_SIMKIT_LEGACY_GUI=1",
+    "purpose": "Ensure startup shows six-phase computation workflow, not the old flat editor."
+  }
+}

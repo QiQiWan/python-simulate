@@ -1,0 +1,82 @@
+{
+  "contract": "geoai_simkit_release_1_4_0_multi_template_summary_v1",
+  "release": "1.4.1-geometry",
+  "template_count": 3,
+  "templates": {
+    "foundation_pit_3d_beta": {
+      "ok": true,
+      "status": "accepted_1_4_0_template",
+      "artifacts": {
+        "contract": "geoai_simkit_release_1_4_0_template_artifacts_v1",
+        "demo_id": "foundation_pit_3d_beta",
+        "project_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_project.geoproject.json",
+        "validation_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_validation.json",
+        "compiler_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_compiler.json",
+        "global_newton_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_global_newton.json",
+        "acceptance_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_acceptance.json",
+        "demo_run_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_demo_run.json",
+        "result_viewer_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_result_viewer.json",
+        "result_export_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_result_summary_export.json",
+        "vtk_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_results.vtk",
+        "report_markdown_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_engineering_report.md",
+        "report_json_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_engineering_report.json",
+        "tutorial_path": "docs/release/release_1_4_0_review_bundle/foundation_pit_3d_beta/release_1_4_0_foundation_pit_3d_beta_tutorial.md",
+        "metadata": {
+          "accepted": true,
+          "phase_count": 5,
+          "result_phase_count": 5
+        }
+      }
+    },
+    "slope_stability_beta": {
+      "ok": true,
+      "status": "accepted_1_4_0_template",
+      "artifacts": {
+        "contract": "geoai_simkit_release_1_4_0_template_artifacts_v1",
+        "demo_id": "slope_stability_beta",
+        "project_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_project.geoproject.json",
+        "validation_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_validation.json",
+        "compiler_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_compiler.json",
+        "global_newton_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_global_newton.json",
+        "acceptance_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_acceptance.json",
+        "demo_run_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_demo_run.json",
+        "result_viewer_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_result_viewer.json",
+        "result_export_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_result_summary_export.json",
+        "vtk_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_results.vtk",
+        "report_markdown_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_engineering_report.md",
+        "report_json_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_engineering_report.json",
+        "tutorial_path": "docs/release/release_1_4_0_review_bundle/slope_stability_beta/release_1_4_0_slope_stability_beta_tutorial.md",
+        "metadata": {
+          "accepted": true,
+          "phase_count": 5,
+          "result_phase_count": 5
+        }
+      }
+    },
+    "pile_soil_interaction_beta": {
+      "ok": true,
+      "status": "accepted_1_4_0_template",
+      "artifacts": {
+        "contract": "geoai_simkit_release_1_4_0_template_artifacts_v1",
+        "demo_id": "pile_soil_interaction_beta",
+        "project_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_project.geoproject.json",
+        "validation_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_validation.json",
+        "compiler_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_compiler.json",
+        "global_newton_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_global_newton.json",
+        "acceptance_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_acceptance.json",
+        "demo_run_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_demo_run.json",
+        "result_viewer_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_result_viewer.json",
+        "result_export_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_result_summary_export.json",
+        "vtk_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_results.vtk",
+        "report_markdown_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_engineering_report.md",
+        "report_json_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_engineering_report.json",
+        "tutorial_path": "docs/release/release_1_4_0_review_bundle/pile_soil_interaction_beta/release_1_4_0_pile_soil_interaction_beta_tutorial.md",
+        "metadata": {
+          "accepted": true,
+          "phase_count": 5,
+          "result_phase_count": 5
+        }
+      }
+    }
+  }
+}

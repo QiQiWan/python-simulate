@@ -1,0 +1,15 @@
+{
+  "contract": "geoai_simkit_gmsh_occ_native_exchange_v1",
+  "ok": true,
+  "native_available": false,
+  "export_path": "docs/release/release_1_2_4_review_bundle/gmsh_exchange/release_1_2_1_gmsh_occ.msh.json",
+  "manifest_path": "docs/release/release_1_2_4_review_bundle/gmsh_exchange/release_1_2_1_gmsh_occ_physical_groups.json",
+  "physical_group_count": 4,
+  "imported_group_count": 4,
+  "fallback_used": true,
+  "fallback_reason": "gmsh_python_runtime_unavailable",
+  "metadata": {
+    "exchange_mode": "headless_manifest_surrogate",
+    "stem": "release_1_2_1_gmsh_occ"
+  }
+}

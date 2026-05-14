@@ -1,0 +1,178 @@
+{
+  "contract": "geoai_simkit_staged_mohr_coulomb_solver_v1",
+  "accepted": true,
+  "phase_records": [
+    {
+      "phase_id": "initial",
+      "cell_count": 20,
+      "plastic_cell_count": 0,
+      "max_yield_function_before": 0.0,
+      "max_yield_function_after": 0.0,
+      "max_plastic_multiplier": 0.0,
+      "nonlinear_iterations": 1,
+      "converged": true,
+      "metadata": {
+        "field_count": 13,
+        "tolerance": 1e-06
+      }
+    },
+    {
+      "phase_id": "excavation_1",
+      "cell_count": 15,
+      "plastic_cell_count": 0,
+      "max_yield_function_before": 0.0,
+      "max_yield_function_after": 0.0,
+      "max_plastic_multiplier": 0.0,
+      "nonlinear_iterations": 1,
+      "converged": true,
+      "metadata": {
+        "field_count": 15,
+        "tolerance": 1e-06
+      }
+    },
+    {
+      "phase_id": "support_1",
+      "cell_count": 15,
+      "plastic_cell_count": 9,
+      "max_yield_function_before": 33.59876551538863,
+      "max_yield_function_after": 0.0,
+      "max_plastic_multiplier": 0.0005513372144204368,
+      "nonlinear_iterations": 2,
+      "converged": true,
+      "metadata": {
+        "field_count": 15,
+        "tolerance": 1e-06
+      }
+    },
+    {
+      "phase_id": "excavation_2",
+      "cell_count": 10,
+      "plastic_cell_count": 10,
+      "max_yield_function_before": 69.6245820139021,
+      "max_yield_function_after": 0.0,
+      "max_plastic_multiplier": 0.0015765351262563931,
+      "nonlinear_iterations": 2,
+      "converged": true,
+      "metadata": {
+        "field_count": 15,
+        "tolerance": 1e-06
+      }
+    },
+    {
+      "phase_id": "support_2",
+      "cell_count": 10,
+      "plastic_cell_count": 10,
+      "max_yield_function_before": 69.6245820139021,
+      "max_yield_function_after": 0.0,
+      "max_plastic_multiplier": 0.0015765351262563931,
+      "nonlinear_iterations": 2,
+      "converged": true,
+      "metadata": {
+        "field_count": 15,
+        "tolerance": 1e-06
+      }
+    }
+  ],
+  "base_solver_summary": {
+    "accepted": true,
+    "phase_records": [
+      {
+        "phase_id": "initial",
+        "active_cell_count": 20,
+        "active_interface_count": 0,
+        "total_dofs": 72,
+        "free_dofs": 44,
+        "constrained_dofs": 28,
+        "residual_norm": 0.0,
+        "relative_residual_norm": 0.0,
+        "convergence_tolerance": 1e-06,
+        "converged": true,
+        "max_displacement": 0.0,
+        "max_settlement": 0.0,
+        "max_von_mises_stress": 0.0,
+        "assembly_status": "ok",
+        "solve_status": "sparse_direct"
+      },
+      {
+        "phase_id": "excavation_1",
+        "active_cell_count": 15,
+        "active_interface_count": 4,
+        "total_dofs": 60,
+        "free_dofs": 32,
+        "constrained_dofs": 28,
+        "residual_norm": 0.0,
+        "relative_residual_norm": 0.0,
+        "convergence_tolerance": 1e-06,
+        "converged": true,
+        "max_displacement": 0.0,
+        "max_settlement": 0.0,
+        "max_von_mises_stress": 0.0,
+        "assembly_status": "ok",
+        "solve_status": "sparse_direct"
+      },
+      {
+        "phase_id": "support_1",
+        "active_cell_count": 15,
+        "active_interface_count": 4,
+        "total_dofs": 60,
+        "free_dofs": 32,
+        "constrained_dofs": 28,
+        "residual_norm": 1.4131049845964359e-12,
+        "relative_residual_norm": 2.453307264924368e-16,
+        "convergence_tolerance": 1e-06,
+        "converged": true,
+        "max_displacement": 0.012970584245712307,
+        "max_settlement": 0.012970584245712307,
+        "max_von_mises_stress": 23.350405631084865,
+        "assembly_status": "ok",
+        "solve_status": "sparse_direct"
+      },
+      {
+        "phase_id": "excavation_2",
+        "active_cell_count": 10,
+        "active_interface_count": 4,
+        "total_dofs": 36,
+        "free_dofs": 8,
+        "constrained_dofs": 28,
+        "residual_norm": 8.038873388460929e-13,
+        "relative_residual_norm": 1.3956377410522446e-16,
+        "convergence_tolerance": 1e-06,
+        "converged": true,
+        "max_displacement": 0.012970584245712305,
+        "max_settlement": 0.012970584245712305,
+        "max_von_mises_stress": 46.70081126216973,
+        "assembly_status": "ok",
+        "solve_status": "sparse_direct"
+      },
+      {
+        "phase_id": "support_2",
+        "active_cell_count": 10,
+        "active_interface_count": 4,
+        "total_dofs": 36,
+        "free_dofs": 8,
+        "constrained_dofs": 28,
+        "residual_norm": 8.038873388460929e-13,
+        "relative_residual_norm": 1.3956377410522446e-16,
+        "convergence_tolerance": 1e-06,
+        "converged": true,
+        "max_displacement": 0.012970584245712305,
+        "max_settlement": 0.012970584245712305,
+        "max_von_mises_stress": 46.70081126216973,
+        "assembly_status": "ok",
+        "solve_status": "sparse_direct"
+      }
+    ],
+    "result_phase_count": 5,
+    "cell_state_count": 20,
+    "interface_state_count": 4,
+    "metadata": {
+      "contract": "geoproject_incremental_solver_v1",
+      "write_results": true
+    }
+  },
+  "state_count": 70,
+  "metadata": {
+    "tolerance": 1e-06,
+    "max_iterations": 25
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "contract": "geoai_simkit_imported_step_ifc_shape_reference_v1",
+  "source_path": "docs/release/release_1_4_3_step_ifc_shape_binding_review_bundle/sample_step_import.step",
+  "source_format": "step",
+  "source_digest": "228a21fe9d8c8558f8b5",
+  "source_native_id": "",
+  "entity_id": "imported_step_step_solid_001",
+  "shape_id": "shape_imported_step_step_solid_001",
+  "bounds": [
+    -8.0,
+    8.0,
+    -5.0,
+    5.0,
+    -8.4,
+    0.0
+  ],
+  "native_brep_certified": false,
+  "backend": "step_topology_surrogate",
+  "record": {
+    "id": "step_solid_001",
+    "name": "Imported STEP solid",
+    "source_format": "step",
+    "bounds": [
+      -8.0,
+      8.0,
+      -5.0,
+      5.0,
+      -8.4,
+      0.0
+    ],
+    "role": "imported_solid",
+    "material_id": "",
+    "native_shape_available": false,
+    "native_brep_certified": false,
+    "source_native_id": "",
+    "metadata": {
+      "parsed_point_count": 2,
+      "surrogate_from_points": true
+    }
+  }
+}

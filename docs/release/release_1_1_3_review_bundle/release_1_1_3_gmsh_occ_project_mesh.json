@@ -1,0 +1,19 @@
+{
+  "contract": "geoai_simkit_gmsh_occ_project_mesh_v1",
+  "ok": true,
+  "selected_backend": "deterministic_occ_tet4_surrogate",
+  "requested_backend": "gmsh_occ_tet4",
+  "native_gmsh_available": false,
+  "fallback_used": true,
+  "fallback_reason": "native_gmsh_occ_unavailable",
+  "node_count": 24,
+  "cell_count": 20,
+  "physical_volume_count": 4,
+  "warnings": [
+    "Native Gmsh/OCC runtime is unavailable; deterministic Tet4 surrogate was used with explicit physical tags."
+  ],
+  "metadata": {
+    "element_size": null,
+    "cell_type": "tet4"
+  }
+}

@@ -20,7 +20,18 @@ from geoai_simkit.commands.geometry_commands import (
 )
 from geoai_simkit.commands.mesh_commands import GenerateLayeredVolumeMeshCommand, GeneratePreviewMeshCommand
 from geoai_simkit.commands.solve_commands import RunPreviewStageResultsCommand
-from geoai_simkit.commands.stage_commands import SetStageBlockActivationCommand
+from geoai_simkit.commands.semantic_commands import AssignGeometrySemanticCommand, AssignEntityMaterialCommand
+from geoai_simkit.commands.interactive_geometry_commands import (
+    BooleanGeometryCommand,
+    CopyGeometryCommand,
+    CutVolumeCommand,
+    ExtrudeSurfaceCommand,
+    SetEntityCoordinatesCommand,
+    TransformGeometryCommand,
+)
+from geoai_simkit.commands.cad_kernel_commands import BuildCadTopologyIndexCommand, ExecuteCadFeaturesCommand, ExecuteGmshOccBooleanMeshRoundtripCommand, BuildCadShapeStoreCommand, ImportStepIfcSolidTopologyCommand, BindTopologyMaterialPhaseCommand, AssignTopologyMaterialPhaseCommand
+from geoai_simkit.commands.topology_identity_commands import BuildTopologyIdentityIndexCommand
+from geoai_simkit.commands.stage_commands import SetStageBlockActivationCommand, AddPhaseCommand, SetPhaseStructureActivationCommand, SetPhaseInterfaceActivationCommand, SetPhaseLoadActivationCommand, SetPhaseWaterConditionCommand
 
 __all__ = [
     "Command",
@@ -46,4 +57,25 @@ __all__ = [
     "GenerateLayeredVolumeMeshCommand",
     "RunPreviewStageResultsCommand",
     "SetStageBlockActivationCommand",
+    "AssignGeometrySemanticCommand",
+    "AssignEntityMaterialCommand",
+    "AddPhaseCommand",
+    "SetPhaseWaterConditionCommand",
+    "SetPhaseLoadActivationCommand",
+    "SetPhaseInterfaceActivationCommand",
+    "SetPhaseStructureActivationCommand",
+    "TransformGeometryCommand",
+    "CopyGeometryCommand",
+    "ExtrudeSurfaceCommand",
+    "CutVolumeCommand",
+    "BooleanGeometryCommand",
+    "SetEntityCoordinatesCommand",
+    "ExecuteCadFeaturesCommand",
+    "BuildCadTopologyIndexCommand",
+    "ExecuteGmshOccBooleanMeshRoundtripCommand",
+    "BuildCadShapeStoreCommand",
+    "ImportStepIfcSolidTopologyCommand",
+    "BindTopologyMaterialPhaseCommand",
+    "AssignTopologyMaterialPhaseCommand",
+    "BuildTopologyIdentityIndexCommand",
 ]

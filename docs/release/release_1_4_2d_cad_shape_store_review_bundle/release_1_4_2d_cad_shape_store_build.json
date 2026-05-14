@@ -1,0 +1,19 @@
+{
+  "contract": true,
+  "ok": true,
+  "status": false,
+  "native_brep_available": true,
+  "brep_serialization_mode": 5,
+  "shape_count": 5,
+  "serialized_ref_count": 135,
+  "topology_record_count": 5,
+  "entity_binding_count": 1,
+  "operation_count": "docs/release/release_1_4_2d_cad_shape_store_review_bundle/cad_shape_store.json",
+  "exported_store_path": "docs/release/release_1_4_2d_cad_shape_store_review_bundle/cad_shape_refs",
+  "exported_reference_dir": [],
+  "warnings": [
+    "store_summary",
+    "release"
+  ],
+  "metadata": {}
+}

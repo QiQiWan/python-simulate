@@ -199,7 +199,17 @@ def _run_document(self, document, out_dir: str | Path | None = None, *args, **kw
     project = self.geo_project_document(document)
     project.populate_default_framework_content()
     compiled = project.compile_phase_models()
+    try:
+        from geoai_simkit.commands import CommandStack, RunPreviewStageResultsCommand
+        CommandStack().execute(RunPreviewStageResultsCommand(), project)
+    except Exception:
+        pass
     mark_geoproject_dirty(document, project)
+    try:
+        from geoai_simkit.app.panels.result_viewer import build_result_viewer
+        document.metadata['result_viewer'] = build_result_viewer(document)
+    except Exception:
+        pass
     document.dirty = False
     target = Path(out_dir or 'exports_nextgen_gui')
     target.mkdir(parents=True, exist_ok=True)
@@ -221,10 +231,10 @@ def _run_document(self, document, out_dir: str | Path | None = None, *args, **kw
     return run
 
 
-def _add_stage(self, document, stage_name: str, predecessor: str | None = None):
+def _add_stage(self, document, stage_name: str, predecessor: str | None = None, copy_from: str | None = None):
     from geoai_simkit.app.geoproject_source import mark_geoproject_dirty
     project = self.geo_project_document(document)
-    stage = project.add_phase(stage_name, name=stage_name, predecessor_id=predecessor)
+    stage = project.add_phase(stage_name, name=stage_name, predecessor_id=predecessor, copy_from=copy_from)
     mark_geoproject_dirty(document, project)
     return stage.to_dict()
 
@@ -287,6 +297,33 @@ def _import_stl_geology(self, document, path: str | Path, *, unit_scale: float =
     document.dirty = True
     self._refresh_workspace_contract(document)
     return stl.to_summary_dict()
+
+
+def _import_stl_pipeline(self, document, path: str | Path, *, options: dict[str, Any] | None = None):
+    from geoai_simkit.app.geoproject_source import mark_geoproject_dirty, set_geoproject_document
+    from geoai_simkit.services.stl_import_pipeline import STLImportWizardOptions, run_stl_import_pipeline
+
+    opts = STLImportWizardOptions.from_mapping(options or {})
+    summary = run_stl_import_pipeline(None if bool(opts.replace) else self.geo_project_document(document), path, opts)
+    project = summary.get('project')
+    if project is None:
+        raise RuntimeError('STL import pipeline did not return a GeoProjectDocument')
+    set_geoproject_document(document, project)
+    mark_geoproject_dirty(document, project)
+    document.metadata['stl_import_pipeline'] = {k: v for k, v in summary.items() if k != 'project'}
+    document.metadata['stl_geology'] = dict(summary.get('geometry', summary.get('surface_summary', {})) or {})
+    document.metadata['stl_mesh_readiness'] = dict(summary.get('solid_readiness', {}) or {})
+    if summary.get('mesh_result') is not None:
+        try:
+            self.sync_geoproject_mesh_to_workbench_model(document, project)
+        except Exception:
+            pass
+    document.messages.append(
+        f"STL pipeline imported {Path(path).name}: status={summary.get('status')} triangles={summary.get('geometry', {}).get('triangle_count', '?')} mesh_cells={(summary.get('current_mesh_summary', {}) or {}).get('cell_count', 0)}"
+    )
+    document.dirty = True
+    self._refresh_workspace_contract(document)
+    return summary
 
 
 def _mesh_document_to_simple_grid(mesh):
@@ -595,6 +632,7 @@ WorkbenchService.clone_stage = _clone_stage
 WorkbenchService.remove_stage = _remove_stage
 WorkbenchService.set_stage_predecessor = _set_stage_predecessor
 WorkbenchService.import_stl_geology = _import_stl_geology
+WorkbenchService.import_stl_pipeline = _import_stl_pipeline
 WorkbenchService.import_borehole_csv_geology = _import_borehole_csv_geology
 WorkbenchService.generate_layered_volume_mesh = _generate_layered_volume_mesh
 WorkbenchService.layered_mesh_preview_payload = _layered_mesh_preview_payload
@@ -603,7 +641,55 @@ WorkbenchService.object_tree_payload = _object_tree_payload
 WorkbenchService.property_panel_payload = _property_panel_payload
 WorkbenchService.stage_editor_payload = _stage_editor_payload
 WorkbenchService.material_editor_payload = _material_editor_payload
+
+
+def _semantic_assignment_payload(self, document):
+    from geoai_simkit.app.panels.semantic_assignment import build_semantic_assignment_panel
+    return build_semantic_assignment_panel(document)
+
+
+def _assign_geometry_semantic(self, document, entity_id: str, semantic_type: str, *, material_id: str | None = None, section_id: str | None = None, stage_id: str | None = None, metadata: dict[str, Any] | None = None):
+    from geoai_simkit.app.geoproject_source import mark_geoproject_dirty
+    project = self.geo_project_document(document)
+    payload = project.classify_geometry_entity(entity_id, semantic_type, material_id=material_id, section_id=section_id, stage_id=stage_id, metadata=dict(metadata or {}))
+    mark_geoproject_dirty(document, project)
+    document.dirty = True
+    document.messages.append(f"Assigned semantic {semantic_type} to {entity_id}")
+    self._refresh_workspace_contract(document)
+    return payload
+
+
+def _assign_entity_material(self, document, entity_id: str, material_id: str, *, category: str | None = None):
+    from geoai_simkit.app.geoproject_source import mark_geoproject_dirty
+    project = self.geo_project_document(document)
+    payload = project.assign_entity_material(entity_id, material_id, category=category)
+    mark_geoproject_dirty(document, project)
+    document.dirty = True
+    document.messages.append(f"Assigned material {material_id} to {entity_id}")
+    self._refresh_workspace_contract(document)
+    return payload
+
 WorkbenchService.solver_compiler_payload = _solver_compiler_payload
+WorkbenchService.semantic_assignment_payload = _semantic_assignment_payload
+WorkbenchService.assign_geometry_semantic = _assign_geometry_semantic
+WorkbenchService.assign_entity_material = _assign_entity_material
+
+
+def _result_viewer_payload(self, document, *, phase_id: str | None = None, field_name: str | None = None):
+    from geoai_simkit.app.panels.result_viewer import build_result_viewer
+    return build_result_viewer(document, phase_id=phase_id, field_name=field_name)
+
+
+def _generate_preview_results(self, document):
+    from geoai_simkit.app.panels.result_viewer import generate_preview_results
+    payload = generate_preview_results(document)
+    document.dirty = True
+    document.messages.append("Generated preview result fields for result-view phase")
+    self._refresh_workspace_contract(document)
+    return payload
+
+WorkbenchService.result_viewer_payload = _result_viewer_payload
+WorkbenchService.generate_preview_results = _generate_preview_results
 
 
 def _save_geoproject_document(self, document, path=None):

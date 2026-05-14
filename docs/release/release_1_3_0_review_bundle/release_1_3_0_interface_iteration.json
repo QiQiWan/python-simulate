@@ -1,0 +1,175 @@
+{
+  "contract": "geoai_simkit_interface_contact_iteration_v1",
+  "ok": true,
+  "interface_count": 4,
+  "phase_count": 5,
+  "open_count": 9,
+  "closed_count": 11,
+  "slip_count": 0,
+  "records": [
+    {
+      "phase_id": "initial",
+      "interface_id": "interface_wall_wall_west_soil_upper",
+      "normal_gap": -5.000000000000001e-05,
+      "shear_slip": 1.2500000000000002e-05,
+      "contact_state": "closed",
+      "iteration_count": 3
+    },
+    {
+      "phase_id": "initial",
+      "interface_id": "interface_wall_wall_east_soil_upper",
+      "normal_gap": -2.5000000000000005e-05,
+      "shear_slip": 7.500000000000001e-06,
+      "contact_state": "closed",
+      "iteration_count": 3
+    },
+    {
+      "phase_id": "initial",
+      "interface_id": "interface_wall_wall_south_soil_upper",
+      "normal_gap": 0.0,
+      "shear_slip": 0.0,
+      "contact_state": "closed",
+      "iteration_count": 3
+    },
+    {
+      "phase_id": "initial",
+      "interface_id": "interface_wall_wall_north_soil_upper",
+      "normal_gap": 2.4999999999999998e-05,
+      "shear_slip": 9.999999999999999e-06,
+      "contact_state": "closed",
+      "iteration_count": 3
+    },
+    {
+      "phase_id": "excavation_1",
+      "interface_id": "interface_wall_wall_west_soil_upper",
+      "normal_gap": -2.5000000000000005e-05,
+      "shear_slip": 6.250000000000001e-06,
+      "contact_state": "closed",
+      "iteration_count": 4
+    },
+    {
+      "phase_id": "excavation_1",
+      "interface_id": "interface_wall_wall_east_soil_upper",
+      "normal_gap": 2.4999999999999998e-05,
+      "shear_slip": 7.499999999999999e-06,
+      "contact_state": "closed",
+      "iteration_count": 4
+    },
+    {
+      "phase_id": "excavation_1",
+      "interface_id": "interface_wall_wall_south_soil_upper",
+      "normal_gap": 7.500000000000001e-05,
+      "shear_slip": 2.625e-05,
+      "contact_state": "closed",
+      "iteration_count": 4
+    },
+    {
+      "phase_id": "excavation_1",
+      "interface_id": "interface_wall_wall_north_soil_upper",
+      "normal_gap": 0.000125,
+      "shear_slip": 5e-05,
+      "contact_state": "open",
+      "iteration_count": 4
+    },
+    {
+      "phase_id": "support_1",
+      "interface_id": "interface_wall_wall_west_soil_upper",
+      "normal_gap": 0.0,
+      "shear_slip": 0.0,
+      "contact_state": "closed",
+      "iteration_count": 5
+    },
+    {
+      "phase_id": "support_1",
+      "interface_id": "interface_wall_wall_east_soil_upper",
+      "normal_gap": 7.500000000000001e-05,
+      "shear_slip": 2.25e-05,
+      "contact_state": "closed",
+      "iteration_count": 5
+    },
+    {
+      "phase_id": "support_1",
+      "interface_id": "interface_wall_wall_south_soil_upper",
+      "normal_gap": 0.00015000000000000001,
+      "shear_slip": 5.25e-05,
+      "contact_state": "open",
+      "iteration_count": 5
+    },
+    {
+      "phase_id": "support_1",
+      "interface_id": "interface_wall_wall_north_soil_upper",
+      "normal_gap": 0.00022500000000000002,
+      "shear_slip": 9.000000000000002e-05,
+      "contact_state": "open",
+      "iteration_count": 5
+    },
+    {
+      "phase_id": "excavation_2",
+      "interface_id": "interface_wall_wall_west_soil_upper",
+      "normal_gap": 2.4999999999999998e-05,
+      "shear_slip": 6.2499999999999995e-06,
+      "contact_state": "closed",
+      "iteration_count": 6
+    },
+    {
+      "phase_id": "excavation_2",
+      "interface_id": "interface_wall_wall_east_soil_upper",
+      "normal_gap": 0.000125,
+      "shear_slip": 3.75e-05,
+      "contact_state": "open",
+      "iteration_count": 6
+    },
+    {
+      "phase_id": "excavation_2",
+      "interface_id": "interface_wall_wall_south_soil_upper",
+      "normal_gap": 0.00022500000000000002,
+      "shear_slip": 7.875e-05,
+      "contact_state": "open",
+      "iteration_count": 6
+    },
+    {
+      "phase_id": "excavation_2",
+      "interface_id": "interface_wall_wall_north_soil_upper",
+      "normal_gap": 0.000325,
+      "shear_slip": 0.00013,
+      "contact_state": "open",
+      "iteration_count": 6
+    },
+    {
+      "phase_id": "support_2",
+      "interface_id": "interface_wall_wall_west_soil_upper",
+      "normal_gap": 4.9999999999999996e-05,
+      "shear_slip": 1.2499999999999999e-05,
+      "contact_state": "closed",
+      "iteration_count": 7
+    },
+    {
+      "phase_id": "support_2",
+      "interface_id": "interface_wall_wall_east_soil_upper",
+      "normal_gap": 0.000175,
+      "shear_slip": 5.2499999999999995e-05,
+      "contact_state": "open",
+      "iteration_count": 7
+    },
+    {
+      "phase_id": "support_2",
+      "interface_id": "interface_wall_wall_south_soil_upper",
+      "normal_gap": 0.00030000000000000003,
+      "shear_slip": 0.000105,
+      "contact_state": "open",
+      "iteration_count": 7
+    },
+    {
+      "phase_id": "support_2",
+      "interface_id": "interface_wall_wall_north_soil_upper",
+      "normal_gap": 0.00042500000000000003,
+      "shear_slip": 0.00017,
+      "contact_state": "open",
+      "iteration_count": 7
+    }
+  ],
+  "metadata": {
+    "gap_tolerance": 0.0001,
+    "solver_level": "1.2.3_basic_interface_iteration"
+  }
+}

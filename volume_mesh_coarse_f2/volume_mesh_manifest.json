@@ -1,0 +1,109 @@
+{
+  "package_type": "structured_label_volume_hex8",
+  "level": "Level 3B Prototype",
+  "mesh_type": "hex8",
+  "generated_at": "2026-05-08T09:30:52.413869+00:00",
+  "input_files": {
+    "grid_path": "outputs/model_optimized_final\\grid3d.json",
+    "labels_path": "outputs/model_optimized_final\\majority_labels_3d.npy",
+    "soil_map_path": "outputs/model_optimized_final\\soil_map.json"
+  },
+  "output_files": {
+    "nodes_csv": "outputs/model_optimized_final/volume_mesh_coarse_f2\\nodes.csv",
+    "elements_csv": "outputs/model_optimized_final/volume_mesh_coarse_f2\\elements.csv",
+    "boundary_faces_csv": "outputs/model_optimized_final/volume_mesh_coarse_f2\\boundary_faces.csv",
+    "interface_faces_csv": "outputs/model_optimized_final/volume_mesh_coarse_f2\\interface_faces.csv",
+    "material_map_csv": "outputs/model_optimized_final/volume_mesh_coarse_f2\\material_map.csv",
+    "material_map_json": "outputs/model_optimized_final/volume_mesh_coarse_f2\\material_map.json",
+    "quality_report_json": "outputs/model_optimized_final/volume_mesh_coarse_f2\\volume_mesh_quality_report.json",
+    "coarsening_report_json": "outputs/model_optimized_final/volume_mesh_coarse_f2\\coarsening_report.json",
+    "model_volume_vtu": "outputs/model_optimized_final/volume_mesh_coarse_f2\\model_volume.vtu",
+    "model_volume_msh": "outputs/model_optimized_final/volume_mesh_coarse_f2\\model_volume.msh",
+    "manifest_json": "outputs/model_optimized_final/volume_mesh_coarse_f2\\volume_mesh_manifest.json"
+  },
+  "input_grid_shape": [
+    77,
+    9,
+    39
+  ],
+  "label_shape": [
+    77,
+    9,
+    39
+  ],
+  "valid_voxel_count": 27027,
+  "invalid_voxel_count": 0,
+  "estimated_node_count": 31200,
+  "estimated_element_count": 27027,
+  "coarsen_factor": [
+    2,
+    2,
+    2
+  ],
+  "coarsening_method": "majority",
+  "original_label_shape": [
+    153,
+    17,
+    77
+  ],
+  "coarse_label_shape": [
+    77,
+    9,
+    39
+  ],
+  "original_estimated_element_count": 200277,
+  "coarse_element_count": 27027,
+  "reduction_ratio": 0.8650519031141868,
+  "coarsening_report": "coarsening_report.json",
+  "estimated_output_sizes": {
+    "nodes_csv_bytes": 1248020,
+    "elements_csv_bytes": 3243320,
+    "boundary_faces_csv_bytes": 2162240,
+    "interface_faces_csv_bytes": 2162240,
+    "material_map_json_bytes": 4096,
+    "volume_mesh_quality_report_json_bytes": 8192
+  },
+  "output_file_sizes": {
+    "nodes_csv": 1871825,
+    "elements_csv": 2951855,
+    "boundary_faces_csv": 447808,
+    "interface_faces_csv": 441906,
+    "material_map_csv": 814,
+    "material_map_json": 3396,
+    "quality_report_json": 3404,
+    "coarsening_report_json": 6222,
+    "model_volume_vtu": 4116392,
+    "model_volume_msh": 3621747,
+    "manifest_json": 3678
+  },
+  "node_count": 31200,
+  "element_count": 27027,
+  "material_count": 17,
+  "boundary_face_count": 8094,
+  "interface_face_count": 6196,
+  "material_index_map": {
+    "0": 0,
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    "6": 6,
+    "7": 7,
+    "8": 8,
+    "9": 9,
+    "10": 10,
+    "11": 11,
+    "12": 12,
+    "13": 13,
+    "14": 14,
+    "15": 15,
+    "16": 16
+  },
+  "write_vtu": true,
+  "write_msh": true,
+  "warnings": [
+    "Input shape is not divisible by factor; partial boundary blocks were used."
+  ],
+  "note": "Current output is a structured label-volume hex8 conforming mesh. Interfaces are voxel-stepped; this is not a DEM-prism smooth stratigraphic model. If coarsening is enabled, the coarse mesh uses block-majority downsampling; thin layers or small lens bodies may be simplified or removed."
+}

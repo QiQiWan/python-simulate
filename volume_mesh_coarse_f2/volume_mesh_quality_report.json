@@ -1,0 +1,123 @@
+{
+  "node_count": 31200,
+  "element_count": 27027,
+  "material_count": 17,
+  "soil_distribution": {
+    "10": {
+      "soil_name": "中风化泥质粉砂岩",
+      "material_id": "mat_soil_010",
+      "element_count": 2766,
+      "volume_sum": 40984.809406557215
+    },
+    "9": {
+      "soil_name": "强风化泥质粉砂岩",
+      "material_id": "mat_soil_009",
+      "element_count": 779,
+      "volume_sum": 11523.753738297797
+    },
+    "8": {
+      "soil_name": "圆砾",
+      "material_id": "mat_soil_008",
+      "element_count": 2893,
+      "volume_sum": 42846.17001038181
+    },
+    "14": {
+      "soil_name": "全风化泥质粉砂岩",
+      "material_id": "mat_soil_014",
+      "element_count": 51,
+      "volume_sum": 739.9591289311244
+    },
+    "6": {
+      "soil_name": "粉质黏土",
+      "material_id": "mat_soil_006",
+      "element_count": 4890,
+      "volume_sum": 72345.0284686829
+    },
+    "16": {
+      "soil_name": "粉细砂",
+      "material_id": "mat_soil_016",
+      "element_count": 1,
+      "volume_sum": 13.657782208353012
+    },
+    "15": {
+      "soil_name": "中砂",
+      "material_id": "mat_soil_015",
+      "element_count": 57,
+      "volume_sum": 878.0002848226943
+    },
+    "7": {
+      "soil_name": "细砂",
+      "material_id": "mat_soil_007",
+      "element_count": 249,
+      "volume_sum": 3863.2012532198455
+    },
+    "13": {
+      "soil_name": "含砂粉质黏土",
+      "material_id": "mat_soil_013",
+      "element_count": 49,
+      "volume_sum": 682.8891104176515
+    },
+    "5": {
+      "soil_name": "黏土",
+      "material_id": "mat_soil_005",
+      "element_count": 2983,
+      "volume_sum": 44216.82601057739
+    },
+    "2": {
+      "soil_name": "粉砂夹粉土",
+      "material_id": "mat_soil_002",
+      "element_count": 3031,
+      "volume_sum": 45115.06907974477
+    },
+    "12": {
+      "soil_name": "淤泥质粉质黏土夹粉土",
+      "material_id": "mat_soil_012",
+      "element_count": 2566,
+      "volume_sum": 37890.5900694613
+    },
+    "4": {
+      "soil_name": "淤泥质粉质黏土",
+      "material_id": "mat_soil_004",
+      "element_count": 543,
+      "volume_sum": 8026.385937087437
+    },
+    "3": {
+      "soil_name": "砂质粉土夹淤泥质粉质黏土",
+      "material_id": "mat_soil_003",
+      "element_count": 2336,
+      "volume_sum": 34651.98846330523
+    },
+    "1": {
+      "soil_name": "砂质粉土",
+      "material_id": "mat_soil_001",
+      "element_count": 2341,
+      "volume_sum": 34470.016807051645
+    },
+    "11": {
+      "soil_name": "杂填土",
+      "material_id": "mat_soil_011",
+      "element_count": 1155,
+      "volume_sum": 15334.45789115419
+    },
+    "0": {
+      "soil_name": "素填土",
+      "material_id": "mat_soil_000",
+      "element_count": 337,
+      "volume_sum": 4863.877688949697
+    }
+  },
+  "negative_volume_count": 0,
+  "zero_volume_count": 0,
+  "min_volume": 6.585002136170144,
+  "max_volume": 15.608893952403736,
+  "mean_volume": 14.742541944382735,
+  "boundary_face_count": 8094,
+  "interface_face_count": 6196,
+  "orphan_node_count": 0,
+  "duplicate_node_count": 0,
+  "elements_without_soil_id": 0,
+  "elements_without_material_id": 0,
+  "non_manifold_face_count": 0,
+  "warnings": [],
+  "recommended_action": "No action required."
+}

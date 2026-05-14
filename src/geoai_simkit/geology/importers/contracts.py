@@ -50,6 +50,8 @@ class GeologyImportRequest:
         suffix = Path(self.source).suffix.lower().lstrip(".")
         if suffix == "stl":
             return "stl_geology"
+        if suffix in {"msh", "vtu"}:
+            return f"{suffix}_geology"
         if suffix in {"json", "geojson"}:
             return "geology_json"
         if suffix == "csv":

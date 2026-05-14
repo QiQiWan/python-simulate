@@ -1,0 +1,35 @@
+{
+  "contract": "geoai_simkit_gmsh_occ_mesh_route_v1",
+  "ok": true,
+  "selected_backend": "shared_node_axis_aligned_hex8",
+  "requested_backend": "gmsh_occ_tet4",
+  "gmsh_available": false,
+  "occ_fragmentation_enabled": true,
+  "fallback_used": true,
+  "fallback_reason": "gmsh_or_meshio_runtime_unavailable",
+  "mesh_report": {
+    "contract": "geoai_simkit_production_hex8_mesh_v1",
+    "ok": true,
+    "mesher": "shared_node_axis_aligned_hex8",
+    "node_count": 24,
+    "cell_count": 4,
+    "region_count": 4,
+    "min_quality": 0.19900743804199783,
+    "max_aspect_ratio": 5.024937810560445,
+    "bad_cell_ids": [],
+    "warnings": [],
+    "metadata": {
+      "min_volume": 1e-12,
+      "max_aspect_ratio": 100.0,
+      "deduplicated_node_count": 24
+    }
+  },
+  "warnings": [
+    "Gmsh/OCC runtime is unavailable; using audited shared-node Hex8 production fallback."
+  ],
+  "metadata": {
+    "element_size": null,
+    "node_count": 24,
+    "cell_count": 4
+  }
+}

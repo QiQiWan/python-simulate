@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "checks": {
+    "layer_split": true,
+    "excavation_split": true,
+    "parametric_panel": true,
+    "feature_count": true
+  }
+}

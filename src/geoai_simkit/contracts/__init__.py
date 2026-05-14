@@ -11,7 +11,9 @@ from .boundary import ImportBoundaryRule, ImportBoundaryViolation, ModuleBoundar
 from .contact import ContactIterationReport, ContactMaterialParameters, ContactPairState, ContactSolverReport, InterfaceKinematics
 from .geology import GeologyImportPayload, GeologyImporter, GeologySource
 from .geometry import GeometryBuildRequest, GeometryBuildResult, GeometryBuilder
+from .geometry_kernel import GeometryKernelDependencyStatus, GeometryKernelReport, GmshMeshioValidationReport, GmshPhysicalGroupRecord, MeshQualityOptimizationReport, STLOptimizationAction, STLOptimizationReport, SoilLayerCutReport, SoilLayerDefinition, StratigraphicClosureReport, SurfaceStratigraphyDefinition
 from .gui import GuiFileSlimmingMetric, GuiSlimmingReport
+from .gui_workflow import PhaseCommandSpec, PhasePanelSpec, PhaseToolbarSpec, PhaseToolSpec, ViewportInteractionMode, WorkbenchPhase, WorkbenchPhaseKey, WorkbenchPhaseState
 from .geotechnical import AnalysisReadinessSummary, BoundaryConditionSummary, InterfaceSummary, LoadSummary, MaterialMappingSummary, SolidMeshSummary, StageActivationSummary, analysis_readiness_summary, boundary_condition_summary, interface_summary, load_summary, material_mapping_summary, solid_mesh_summary, stage_activation_summary
 from .material import MaterialModelProvider, MaterialModelProviderRegistry, MaterialModelRequest, MaterialModelResult
 from .payloads import JsonMap, JsonScalar, MaterialMappingPayload, MeshPayload, PluginRegistrationPayload, QualityGatePayload, SolverInputPayload, SolverOutputPayload, WorkflowArtifactPayload
@@ -20,18 +22,35 @@ from .optimization import ModuleOptimizationMetric, ModuleOptimizationPlan, Modu
 from .meshing_validation import InterfaceConformityReport, OptionalMesherDependencyStatus, ProductionMeshingValidationReport, RegionMeshQualitySummary, STLRepairAction, STLRepairReport
 from .modularity import CompleteModularizationReport, LegacyBoundaryMarker, ModuleDependencyEdge, ModuleInterfaceContract, ModuleLayerSpec, ModuleManifest
 from .mesh import MeshGenerator, MeshGeneratorRegistry, MeshRequest, MeshResult, SOLID_CELL_TYPES, SURFACE_CELL_TYPES, SolidAnalysisReadinessIssue, SolidAnalysisReadinessReport
+from .mesh3d import Complete3DMeshReport, Mesh3DBoundaryFace, Mesh3DBoundarySet, Mesh3DInterfacePair, Mesh3DRegion, Mesh3DTopologyReport
 from .registry import KeyedPlugin, PluginCapability, PluginDependencyStatus, PluginDescriptor, PluginHealth, PluginRegistry, describe_plugin, normalize_plugin_capability
 from .quality import ElementQualityMetric, GeotechnicalQualityGateReport, MaterialCompatibilityReport, MeshQualityGateReport, QualityGateIssue
 from .plugins import ExternalPluginEntryPoint, ExternalPluginGroupSpec, ExternalPluginLoadIssue, ExternalPluginLoadRecord, ExternalPluginLoadReport
 from .project import ProjectCompiledPhaseSummary, ProjectContext, ProjectGeometrySummary, ProjectMaterialSummary, ProjectMeshSummary, ProjectMutation, ProjectPortCapabilities, ProjectReadPort, ProjectRepository, ProjectResourceSummary, ProjectResultStoreSummary, ProjectSnapshot, ProjectStageSummary, ProjectTransaction, ProjectWritePort, is_project_port, project_compiled_phase_summary, project_document_from, project_geometry_summary, project_material_summary, project_mesh_summary, project_port_capabilities, project_result_store_summary, project_stage_summary
 from .project_state import ProjectBoundaryState, ProjectEngineeringState, ProjectGeometryState, ProjectInterfaceState, ProjectMaterialState, ProjectResultState, ProjectSolidMeshState, ProjectStageState, project_engineering_state
 from .results import PostProcessor, ResultRequest, ResultSink, ResultSummary
+from .viewport import ViewportEntityKind, ViewportPickResult, ViewportPreviewGeometry, ViewportSelectionItem, ViewportSelectionSet, ViewportToolOutput, WorkPlane
 from .runtime import RuntimeBundlePayload, RuntimeBundleStore, RuntimeCompileRequest, RuntimeCompilerBackend
 from .solver import SolveRequest, SolveResult, SolverBackend, SolverBackendRegistry, SolverCapabilities
 from .stage import StageCompileRequest, StageCompileResult, StageCompiler
 from .workflow import MeshWorkflowArtifact, ProjectWorkflowRequest, ProjectWorkflowReport, ResultWorkflowArtifact, SolveWorkflowArtifact, StageWorkflowArtifact, WorkflowArtifactLineage, WorkflowArtifactManifest, WorkflowArtifactRef, WorkflowStepReport, workflow_artifact_manifest_from_refs, workflow_artifact_ref_from_payload
 
 __all__ = [
+    "WorkPlane",
+    "ViewportToolOutput",
+    "ViewportSelectionSet",
+    "ViewportSelectionItem",
+    "ViewportPreviewGeometry",
+    "ViewportPickResult",
+    "ViewportEntityKind",
+    "WorkbenchPhaseState",
+    "WorkbenchPhaseKey",
+    "WorkbenchPhase",
+    "ViewportInteractionMode",
+    "PhaseToolSpec",
+    "PhaseToolbarSpec",
+    "PhasePanelSpec",
+    "PhaseCommandSpec",
     "ContactIterationReport",
     "ContactMaterialParameters",
     "ContactPairState",
@@ -60,6 +79,17 @@ __all__ = [
     "material_mapping_summary",
     "solid_mesh_summary",
     "stage_activation_summary",
+    "GeometryKernelDependencyStatus",
+    "GeometryKernelReport",
+    "GmshMeshioValidationReport",
+    "GmshPhysicalGroupRecord",
+    "MeshQualityOptimizationReport",
+    "StratigraphicClosureReport",
+    "SurfaceStratigraphyDefinition",
+    "STLOptimizationAction",
+    "STLOptimizationReport",
+    "SoilLayerCutReport",
+    "SoilLayerDefinition",
     "GeometryBuildRequest",
     "GeometryBuildResult",
     "GeometryBuilder",
@@ -73,6 +103,12 @@ __all__ = [
     "MaterialModelProviderRegistry",
     "MaterialModelRequest",
     "MaterialModelResult",
+    "Complete3DMeshReport",
+    "Mesh3DBoundaryFace",
+    "Mesh3DBoundarySet",
+    "Mesh3DInterfacePair",
+    "Mesh3DRegion",
+    "Mesh3DTopologyReport",
     "MeshGenerator",
     "MeshGeneratorRegistry",
     "MeshRequest",

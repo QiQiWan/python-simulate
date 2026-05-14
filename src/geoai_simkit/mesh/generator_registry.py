@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from geoai_simkit.adapters import LayeredMeshGeneratorAdapter, TaggedPreviewMeshGeneratorAdapter
 from geoai_simkit.mesh.stl_volume_generators import ConformalTet4FromSTLRegionsMeshGenerator, GmshTet4FromSTLMeshGenerator, VoxelHex8FromSTLMeshGenerator
+from geoai_simkit.mesh.structured_3d_generators import StructuredHex8BoxMeshGenerator, StructuredTet4BoxMeshGenerator
+from geoai_simkit.mesh.geometry_kernel_generators import GmshOCCFragmentTet4MeshGenerator, SoilLayeredVolumeFromSTLMeshGenerator, StratigraphicSurfaceVolumeFromSTLMeshGenerator
 from geoai_simkit.contracts import MeshGenerator, MeshGeneratorRegistry
 
 _DEFAULT_REGISTRY: MeshGeneratorRegistry | None = None
@@ -15,9 +17,14 @@ def get_default_mesh_generator_registry() -> MeshGeneratorRegistry:
         registry = MeshGeneratorRegistry()
         registry.register(LayeredMeshGeneratorAdapter())
         registry.register(TaggedPreviewMeshGeneratorAdapter())
+        registry.register(StructuredHex8BoxMeshGenerator())
+        registry.register(StructuredTet4BoxMeshGenerator())
         registry.register(VoxelHex8FromSTLMeshGenerator())
         registry.register(GmshTet4FromSTLMeshGenerator())
         registry.register(ConformalTet4FromSTLRegionsMeshGenerator())
+        registry.register(SoilLayeredVolumeFromSTLMeshGenerator())
+        registry.register(StratigraphicSurfaceVolumeFromSTLMeshGenerator())
+        registry.register(GmshOCCFragmentTet4MeshGenerator())
         _DEFAULT_REGISTRY = registry
     return _DEFAULT_REGISTRY
 

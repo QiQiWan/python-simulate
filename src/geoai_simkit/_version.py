@@ -1,3 +1,1 @@
-"""Package version."""
-
-__version__ = "0.8.73"
+__version__ = "1.7.5-fem-gui-stability-large-geology"

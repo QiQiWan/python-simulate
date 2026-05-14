@@ -1,0 +1,9 @@
+ISO-10303-21;
+HEADER;FILE_DESCRIPTION(('GeoAI 1.4.5 curved-face sample'),'2;1');ENDSEC;
+DATA;
+#1=CARTESIAN_POINT('',(-8.0,-5.0,-8.0));
+#2=CARTESIAN_POINT('',(8.0,5.0,0.0));
+#10=CYLINDRICAL_SURFACE('',#9,3.0);
+/* GEOAI_SIMKIT_SOLIDS: {"solids": [{"id": "curved_step_wall", "name": "Curved STEP Wall Reference", "bounds": [-8.0, -7.0, -5.0, 5.0, -8.0, 0.0], "role": "imported_wall", "material_id": "concrete", "metadata": {"curved_face_hint": true, "surface_types": ["plane", "cylinder"]}}, {"id": "curved_step_cap", "name": "Curved STEP Cap Reference", "bounds": [-8.0, 8.0, -5.0, 5.0, -0.3, 0.0], "role": "imported_cap", "material_id": "concrete"}]} */
+ENDSEC;
+END-ISO-10303-21;

@@ -1,0 +1,110 @@
+{
+  "contract": "geoproject_phase_solver_compiler_v1",
+  "ok": true,
+  "compiled_phase_count": 5,
+  "blocked": false,
+  "validation": {
+    "contract": "geoproject_model_validation_v1",
+    "ok": true,
+    "status": "ready",
+    "error_count": 0,
+    "warning_count": 0,
+    "issues": [],
+    "counts": {
+      "volume_count": 4,
+      "surface_count": 4,
+      "curve_count": 2,
+      "material_count": 9,
+      "phase_count": 5,
+      "mesh_cell_count": 20,
+      "result_phase_count": 5
+    },
+    "readiness": {
+      "geometry_ready": true,
+      "semantic_ready": true,
+      "phase_ready": true,
+      "mesh_ready": true,
+      "result_ready": true
+    },
+    "metadata": {
+      "require_mesh": true,
+      "require_results": false
+    }
+  },
+  "phase_summaries": [
+    {
+      "id": "compiled_initial",
+      "phase_id": "initial",
+      "active_cell_count": 20,
+      "active_dof_count": 72,
+      "material_state_count": 20,
+      "interface_count": 0,
+      "has_mesh_block": true,
+      "has_element_block": true,
+      "has_material_block": true,
+      "has_boundary_block": true,
+      "has_load_block": true,
+      "has_result_request_block": true
+    },
+    {
+      "id": "compiled_excavation_1",
+      "phase_id": "excavation_1",
+      "active_cell_count": 15,
+      "active_dof_count": 60,
+      "material_state_count": 15,
+      "interface_count": 4,
+      "has_mesh_block": true,
+      "has_element_block": true,
+      "has_material_block": true,
+      "has_boundary_block": true,
+      "has_load_block": true,
+      "has_result_request_block": true
+    },
+    {
+      "id": "compiled_support_1",
+      "phase_id": "support_1",
+      "active_cell_count": 15,
+      "active_dof_count": 60,
+      "material_state_count": 15,
+      "interface_count": 4,
+      "has_mesh_block": true,
+      "has_element_block": true,
+      "has_material_block": true,
+      "has_boundary_block": true,
+      "has_load_block": true,
+      "has_result_request_block": true
+    },
+    {
+      "id": "compiled_excavation_2",
+      "phase_id": "excavation_2",
+      "active_cell_count": 10,
+      "active_dof_count": 36,
+      "material_state_count": 10,
+      "interface_count": 4,
+      "has_mesh_block": true,
+      "has_element_block": true,
+      "has_material_block": true,
+      "has_boundary_block": true,
+      "has_load_block": true,
+      "has_result_request_block": true
+    },
+    {
+      "id": "compiled_support_2",
+      "phase_id": "support_2",
+      "active_cell_count": 10,
+      "active_dof_count": 36,
+      "material_state_count": 10,
+      "interface_count": 4,
+      "has_mesh_block": true,
+      "has_element_block": true,
+      "has_material_block": true,
+      "has_boundary_block": true,
+      "has_load_block": true,
+      "has_result_request_block": true
+    }
+  ],
+  "metadata": {
+    "block_on_errors": true,
+    "compiler": "GeoProjectDocument.compile_phase_models"
+  }
+}

@@ -36,6 +36,26 @@ class ScenePrimitive:
         }
 
 
+def _cad_topology_records_by_source(project: Any) -> dict[str, dict[str, list[Any]]]:
+    store = getattr(project, "cad_shape_store", None)
+    records = getattr(store, "topology_records", {}) or {}
+    shapes = getattr(store, "shapes", {}) or {}
+    out: dict[str, dict[str, list[Any]]] = {}
+    for topo in records.values():
+        kind = str(getattr(topo, "kind", "") or "")
+        if kind not in {"solid", "face", "edge"}:
+            continue
+        source = str(getattr(topo, "source_entity_id", "") or "")
+        if not source:
+            shape = shapes.get(str(getattr(topo, "shape_id", "") or ""))
+            source_ids = list(getattr(shape, "source_entity_ids", []) or []) if shape is not None else []
+            source = str(source_ids[0]) if source_ids else ""
+        if not source:
+            continue
+        out.setdefault(source, {}).setdefault(kind, []).append(topo)
+    return out
+
+
 @dataclass(slots=True)
 class ViewportState:
     primitives: dict[str, ScenePrimitive] = field(default_factory=dict)
@@ -102,8 +122,13 @@ class ViewportState:
                 style={"role": surface.kind, "active": True, "opacity": 0.35},
                 metadata={**surface.to_dict(), "points": [list(p) for p in pts]},
             )
+        cad_topology_by_source = _cad_topology_records_by_source(project)
         for volume_id, volume in project.geometry_model.volumes.items():
             is_active = volume_id in active_volumes
+            topology_for_volume = cad_topology_by_source.get(volume_id, {})
+            face_ids = [str(getattr(t, "id", "")) for t in topology_for_volume.get("face", []) if str(getattr(t, "id", ""))]
+            edge_ids = [str(getattr(t, "id", "")) for t in topology_for_volume.get("edge", []) if str(getattr(t, "id", ""))]
+            solid_ids = [str(getattr(t, "id", "")) for t in topology_for_volume.get("solid", []) if str(getattr(t, "id", ""))]
             self.primitives[f"primitive:block:{volume_id}"] = ScenePrimitive(
                 id=f"primitive:block:{volume_id}",
                 kind="block",
@@ -113,7 +138,17 @@ class ViewportState:
                 visible=bool(volume.metadata.get("visible", True)),
                 pickable=not bool(volume.metadata.get("locked", False)),
                 style={"role": volume.role, "active": is_active, "opacity": 1.0 if is_active else 0.18},
-                metadata={"material_id": volume.material_id, "role": volume.role, "surface_ids": list(volume.surface_ids)},
+                metadata={
+                    **dict(getattr(volume, "metadata", {}) or {}),
+                    "name": volume.name,
+                    "material_id": volume.material_id,
+                    "role": volume.role,
+                    "surface_ids": list(volume.surface_ids),
+                    "topology_face_ids": face_ids,
+                    "topology_edge_ids": edge_ids,
+                    "topology_solid_ids": solid_ids,
+                    "render_mode": "outline_only" if str(dict(getattr(volume, "metadata", {}) or {}).get("source") or "") == "meshio_geology_importer" else "solid",
+                },
             )
         for record in [*project.structure_model.plates.values(), *project.structure_model.beams.values(), *project.structure_model.embedded_beams.values(), *project.structure_model.anchors.values()]:
             curve = project.geometry_model.curves.get(record.geometry_ref)
@@ -152,7 +187,34 @@ class ViewportState:
                 style={"role": interface.contact_mode, "active": snapshot is None or interface.id in snapshot.active_interface_ids, "opacity": 0.9},
                 metadata=interface.to_dict(),
             )
-        self.metadata = {"primitive_count": len(self.primitives), "source": "GeoProjectDocument"}
+        for source_id, by_kind in cad_topology_by_source.items():
+            for kind in ("face", "edge"):
+                for topo in by_kind.get(kind, []):
+                    bounds = getattr(topo, "bounds", None)
+                    if bounds is None:
+                        continue
+                    topo_id = str(getattr(topo, "id", ""))
+                    primitive_id = f"primitive:cad_topology:{kind}:{topo_id}"
+                    self.primitives[primitive_id] = ScenePrimitive(
+                        id=primitive_id,
+                        kind=kind,
+                        entity_id=topo_id,
+                        label=str(getattr(topo, "persistent_name", "") or topo_id),
+                        bounds=tuple(float(v) for v in bounds),
+                        visible=True,
+                        pickable=True,
+                        style={"role": str(getattr(topo, "orientation", "") or kind), "active": True, "opacity": 0.22 if kind == "face" else 1.0},
+                        metadata={
+                            **topo.to_dict(),
+                            "topology_id": topo_id,
+                            "topology_kind": kind,
+                            "shape_id": str(getattr(topo, "shape_id", "") or ""),
+                            "source_entity_id": source_id,
+                            "topology_identity_key": f"topology:{kind}:{getattr(topo, 'shape_id', '')}:{topo_id}",
+                            "selection_key": f"topology:{kind}:{getattr(topo, 'shape_id', '')}:{topo_id}",
+                        },
+                    )
+        self.metadata = {"primitive_count": len(self.primitives), "source": "GeoProjectDocument", "cad_topology_pickable": bool(cad_topology_by_source)}
 
     def update_from_engineering_document(self, document: Any, *, stage_id: str | None = None) -> None:
         if hasattr(document, "geometry_model") and hasattr(document, "phase_manager"):

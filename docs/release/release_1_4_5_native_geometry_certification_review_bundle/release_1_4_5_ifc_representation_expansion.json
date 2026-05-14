@@ -1,0 +1,82 @@
+{
+  "contract": "geoai_simkit_ifc_representation_expansion_v1",
+  "ok": true,
+  "status": "expanded",
+  "source_path": "docs/release/release_1_4_5_native_geometry_certification_review_bundle/sample_ifc_representation_1_4_5.ifc",
+  "product_count": 1,
+  "representation_item_count": 3,
+  "exact_product_identity": false,
+  "exact_solid_body_extraction": false,
+  "native_brep_certified": false,
+  "product_records": [
+    {
+      "global_id": "text_scan_product_001",
+      "name": "sample_ifc_representation_1_4_5",
+      "ifc_type": "text_scan",
+      "representation_items": [
+        {
+          "item_type": "IfcExtrudedAreaSolid",
+          "count": 1
+        },
+        {
+          "item_type": "IfcBooleanResult",
+          "count": 1
+        },
+        {
+          "item_type": "IfcFacetedBrep",
+          "count": 1
+        }
+      ],
+      "has_swept_solid": true,
+      "has_csg": true,
+      "has_brep": true,
+      "scanned_entity_types": [
+        "IFCPROJECT",
+        "IFCCARTESIANPOINT",
+        "IFCDIRECTION",
+        "IFCAXIS2PLACEMENT3D",
+        "IFCARBITRARYCLOSEDPROFILEDEF",
+        "IFCEXTRUDEDAREASOLID",
+        "IFCBOOLEANRESULT",
+        "IFCFACETEDBREP",
+        "IFCWALL"
+      ]
+    }
+  ],
+  "representation_counts": {
+    "IfcExtrudedAreaSolid": 1,
+    "IfcRevolvedAreaSolid": 0,
+    "IfcSweptDiskSolid": 0,
+    "IfcFixedReferenceSweptAreaSolid": 0,
+    "IfcBooleanResult": 1,
+    "IfcCsgSolid": 0,
+    "IfcFacetedBrep": 1,
+    "IfcAdvancedBrep": 0,
+    "IfcShellBasedSurfaceModel": 0,
+    "IfcFaceBasedSurfaceModel": 0,
+    "IfcMappedItem": 0,
+    "IfcTriangulatedFaceSet": 0,
+    "IfcPolygonalFaceSet": 0
+  },
+  "warnings": [
+    "IfcOpenShell unavailable or failed to open IFC: ModuleNotFoundError: No module named 'ifcopenshell'",
+    "IfcOpenShell not used; representation expansion is based on text scan."
+  ],
+  "metadata": {
+    "representation_types": [
+      "IfcExtrudedAreaSolid",
+      "IfcRevolvedAreaSolid",
+      "IfcSweptDiskSolid",
+      "IfcFixedReferenceSweptAreaSolid",
+      "IfcBooleanResult",
+      "IfcCsgSolid",
+      "IfcFacetedBrep",
+      "IfcAdvancedBrep",
+      "IfcShellBasedSurfaceModel",
+      "IfcFaceBasedSurfaceModel",
+      "IfcMappedItem",
+      "IfcTriangulatedFaceSet",
+      "IfcPolygonalFaceSet"
+    ]
+  }
+}

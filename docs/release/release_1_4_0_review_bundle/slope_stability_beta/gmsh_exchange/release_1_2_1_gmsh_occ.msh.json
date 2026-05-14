@@ -1,0 +1,69 @@
+{
+  "mesh_exchange": {
+    "contract": "geoai_simkit_gmsh_occ_physical_group_manifest_v1",
+    "native_available": false,
+    "physical_groups": [
+      {
+        "id": "soil_lower",
+        "dimension": 3,
+        "cell_ids": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "material_ids": [
+          "alpha_dense_sand"
+        ]
+      },
+      {
+        "id": "soil_upper",
+        "dimension": 3,
+        "cell_ids": [
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "material_ids": [
+          "alpha_soft_clay"
+        ]
+      },
+      {
+        "id": "excavation_step_1",
+        "dimension": 3,
+        "cell_ids": [
+          10,
+          11,
+          12,
+          13,
+          14
+        ],
+        "material_ids": [
+          "alpha_soft_clay"
+        ]
+      },
+      {
+        "id": "excavation_step_2",
+        "dimension": 3,
+        "cell_ids": [
+          15,
+          16,
+          17,
+          18,
+          19
+        ],
+        "material_ids": [
+          "alpha_soft_clay"
+        ]
+      }
+    ],
+    "cell_type": [
+      "tet4"
+    ],
+    "project_name": "GeoAI SimKit 1.4.0 Beta-2 边坡稳定分阶段降雨 Beta Demo"
+  },
+  "note": "Native .msh export placeholder in headless CI; physical-group contract is preserved."
+}

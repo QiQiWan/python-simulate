@@ -1,0 +1,195 @@
+{
+  "contract": "geoai_simkit_boolean_topology_lineage_v1",
+  "ok": true,
+  "status": "lineage_built",
+  "operation_count": 1,
+  "lineage_count": 19,
+  "face_lineage_count": 6,
+  "split_count": 0,
+  "merge_count": 0,
+  "native_lineage_count": 0,
+  "blockers": [],
+  "warnings": [],
+  "metadata": {
+    "cad_shape_store_summary": {
+      "contract": "geoproject_cad_shape_store_v2",
+      "shape_count": 7,
+      "serialized_ref_count": 7,
+      "topology_record_count": 189,
+      "entity_binding_count": 7,
+      "topology_binding_count": 133,
+      "operation_count": 2,
+      "topology_lineage_count": 19,
+      "native_shape_count": 0,
+      "brep_serialized_count": 7,
+      "native_brep_certified_count": 0,
+      "face_binding_count": 42,
+      "edge_binding_count": 84,
+      "metadata": {
+        "release": "1.4.5-native-geometry-certification",
+        "created_by": "build_cad_shape_store",
+        "native_brep_certified": false,
+        "serialization_policy": "native BRep ref when present, brep_json surrogate otherwise",
+        "summary": {
+          "contract": "geoproject_cad_shape_store_v2",
+          "shape_count": 7,
+          "serialized_ref_count": 7,
+          "topology_record_count": 189,
+          "entity_binding_count": 7,
+          "topology_binding_count": 0,
+          "operation_count": 2,
+          "topology_lineage_count": 0,
+          "native_shape_count": 0,
+          "brep_serialized_count": 7,
+          "native_brep_certified_count": 0,
+          "face_binding_count": 0,
+          "edge_binding_count": 0,
+          "metadata": {
+            "release": "1.4.5-native-geometry-certification",
+            "created_by": "build_cad_shape_store",
+            "native_brep_certified": false,
+            "serialization_policy": "native BRep ref when present, brep_json surrogate otherwise",
+            "summary": {
+              "contract": "geoproject_cad_shape_store_v2",
+              "shape_count": 5,
+              "serialized_ref_count": 5,
+              "topology_record_count": 135,
+              "entity_binding_count": 5,
+              "topology_binding_count": 0,
+              "operation_count": 1,
+              "topology_lineage_count": 0,
+              "native_shape_count": 0,
+              "brep_serialized_count": 5,
+              "native_brep_certified_count": 0,
+              "face_binding_count": 0,
+              "edge_binding_count": 0,
+              "metadata": {
+                "release": "1.4.5-native-geometry-certification",
+                "created_by": "build_cad_shape_store",
+                "native_brep_certified": false,
+                "serialization_policy": "native BRep ref when present, brep_json surrogate otherwise"
+              }
+            },
+            "last_step_ifc_import": {
+              "source_path": "docs/release/release_1_4_5_native_geometry_certification_review_bundle/sample_curved_step_1_4_5.step",
+              "source_format": "step",
+              "shape_ids": [
+                "shape_imported_step_curved_step_wall",
+                "shape_imported_step_curved_step_cap"
+              ],
+              "native_brep_certified": false
+            }
+          }
+        },
+        "last_step_ifc_import": {
+          "source_path": "docs/release/release_1_4_5_native_geometry_certification_review_bundle/sample_curved_step_1_4_5.step",
+          "source_format": "step",
+          "shape_ids": [
+            "shape_imported_step_curved_step_wall",
+            "shape_imported_step_curved_step_cap"
+          ],
+          "native_brep_certified": false
+        },
+        "last_topology_material_phase_binding": {
+          "contract": "geoai_simkit_face_edge_material_phase_binding_v1",
+          "binding_count": 133,
+          "summary": {
+            "contract": "geoproject_cad_shape_store_v2",
+            "shape_count": 7,
+            "serialized_ref_count": 7,
+            "topology_record_count": 189,
+            "entity_binding_count": 7,
+            "topology_binding_count": 133,
+            "operation_count": 2,
+            "topology_lineage_count": 0,
+            "native_shape_count": 0,
+            "brep_serialized_count": 7,
+            "native_brep_certified_count": 0,
+            "face_binding_count": 42,
+            "edge_binding_count": 84,
+            "metadata": {
+              "release": "1.4.5-native-geometry-certification",
+              "created_by": "build_cad_shape_store",
+              "native_brep_certified": false,
+              "serialization_policy": "native BRep ref when present, brep_json surrogate otherwise",
+              "summary": {
+                "contract": "geoproject_cad_shape_store_v2",
+                "shape_count": 7,
+                "serialized_ref_count": 7,
+                "topology_record_count": 189,
+                "entity_binding_count": 7,
+                "topology_binding_count": 0,
+                "operation_count": 2,
+                "topology_lineage_count": 0,
+                "native_shape_count": 0,
+                "brep_serialized_count": 7,
+                "native_brep_certified_count": 0,
+                "face_binding_count": 0,
+                "edge_binding_count": 0,
+                "metadata": {
+                  "release": "1.4.5-native-geometry-certification",
+                  "created_by": "build_cad_shape_store",
+                  "native_brep_certified": false,
+                  "serialization_policy": "native BRep ref when present, brep_json surrogate otherwise",
+                  "summary": {
+                    "contract": "geoproject_cad_shape_store_v2",
+                    "shape_count": 5,
+                    "serialized_ref_count": 5,
+                    "topology_record_count": 135,
+                    "entity_binding_count": 5,
+                    "topology_binding_count": 0,
+                    "operation_count": 1,
+                    "topology_lineage_count": 0,
+                    "native_shape_count": 0,
+                    "brep_serialized_count": 5,
+                    "native_brep_certified_count": 0,
+                    "face_binding_count": 0,
+                    "edge_binding_count": 0,
+                    "metadata": {
+                      "release": "1.4.5-native-geometry-certification",
+                      "created_by": "build_cad_shape_store",
+                      "native_brep_certified": false,
+                      "serialization_policy": "native BRep ref when present, brep_json surrogate otherwise"
+                    }
+                  },
+                  "last_step_ifc_import": {
+                    "source_path": "docs/release/release_1_4_5_native_geometry_certification_review_bundle/sample_curved_step_1_4_5.step",
+                    "source_format": "step",
+                    "shape_ids": [
+                      "shape_imported_step_curved_step_wall",
+                      "shape_imported_step_curved_step_cap"
+                    ],
+                    "native_brep_certified": false
+                  }
+                }
+              },
+              "last_step_ifc_import": {
+                "source_path": "docs/release/release_1_4_5_native_geometry_certification_review_bundle/sample_curved_step_1_4_5.step",
+                "source_format": "step",
+                "shape_ids": [
+                  "shape_imported_step_curved_step_wall",
+                  "shape_imported_step_curved_step_cap"
+                ],
+                "native_brep_certified": false
+              }
+            }
+          }
+        },
+        "last_direct_topology_assignment": {
+          "topology_id": "shape_soil_lower:face:xmin",
+          "binding_id": "binding:shape_soil_lower:face:xmin",
+          "material_id": "concrete",
+          "phase_ids": [
+            "initial",
+            "support_1"
+          ]
+        },
+        "last_boolean_topology_lineage": {
+          "contract": "geoai_simkit_boolean_topology_lineage_v1",
+          "lineage_count": 19,
+          "operation_count": 1
+        }
+      }
+    }
+  }
+}

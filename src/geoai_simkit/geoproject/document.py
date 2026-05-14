@@ -20,6 +20,7 @@ from geoai_simkit.document.selection import SelectionSet
 from geoai_simkit.mesh.mesh_document import MeshDocument, MeshQualityReport
 from geoai_simkit.mesh.multi_region_stl import combine_mesh_documents
 from geoai_simkit.mesh.mesh_entity_map import MeshEntityMap
+from geoai_simkit.geoproject.cad_shape_store import CadShapeStore
 from geoai_simkit.results.result_package import ResultFieldRecord, ResultPackage, StageResult
 from geoai_simkit.stage.stage_plan import Stage, StagePlan
 
@@ -599,7 +600,7 @@ class AnchorRecord(StructureRecord):
     prestress: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
-        row = super().to_dict()
+        row = StructureRecord.to_dict(self)
         row.update({"bonded_length": float(self.bonded_length), "free_length": float(self.free_length), "prestress": float(self.prestress)})
         return row
 
@@ -1397,6 +1398,7 @@ class GeoProjectDocument:
     phase_manager: PhaseManager = field(default_factory=PhaseManager)
     solver_model: SolverModel = field(default_factory=SolverModel)
     result_store: ResultStore = field(default_factory=ResultStore)
+    cad_shape_store: CadShapeStore = field(default_factory=CadShapeStore)
     selection: SelectionSet = field(default_factory=SelectionSet)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -1627,6 +1629,7 @@ class GeoProjectDocument:
             phase_manager=PhaseManager.from_dict(data.get("PhaseManager", data.get("phase_manager", {}))),
             solver_model=SolverModel.from_dict(data.get("SolverModel", data.get("solver_model", {}))),
             result_store=ResultStore.from_dict(data.get("ResultStore", data.get("result_store", {}))),
+            cad_shape_store=CadShapeStore.from_dict(data.get("CadShapeStore", data.get("cad_shape_store", {}))),
             metadata=dict(data.get("metadata", {}) or {}),
         )
 
@@ -1888,6 +1891,203 @@ class GeoProjectDocument:
         self.metadata["dirty"] = True
         return volume
 
+
+    def classify_geometry_entity(
+        self,
+        entity_id: str,
+        semantic_type: str,
+        *,
+        material_id: str | None = None,
+        section_id: str | None = None,
+        stage_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Assign engineering semantics to a raw point/curve/surface/volume.
+
+        This is the P2 bridge from direct 3D sketching to PLAXIS-like engineering
+        modeling: geometry stays editable, while the semantic layer creates soil
+        clusters, plates/walls/beams/anchors/interfaces and material bindings.
+        """
+
+        semantic = str(semantic_type or "").strip().lower().replace(" ", "_")
+        if not semantic:
+            raise ValueError("semantic_type is required")
+        extra = dict(metadata or {})
+        extra.setdefault("semantic_type", semantic)
+        if section_id:
+            extra["section_id"] = str(section_id)
+        target_stage = stage_id or self.phase_manager.active_phase_id or self.phase_manager.initial_phase.id
+
+        def _activate_structure(record_id: str) -> None:
+            if target_stage:
+                try:
+                    self.set_phase_structure_activation(target_stage, record_id, True)
+                except Exception:
+                    pass
+
+        if entity_id in self.geometry_model.volumes:
+            volume = self.geometry_model.volumes[entity_id]
+            volume.role = {
+                "soil_volume": "soil",
+                "geological_volume": "soil",
+                "stratum": "soil",
+                "soil": "soil",
+                "rock": "rock",
+                "excavation": "excavation",
+                "concrete_block": "structure",
+            }.get(semantic, semantic)
+            volume.metadata.update(extra)
+            if material_id:
+                self.set_volume_material(entity_id, material_id)
+            if volume.role in {"soil", "rock", "geology", "geological_volume"}:
+                cluster_id = str(extra.get("cluster_id") or f"cluster_{entity_id}")
+                cluster = self.soil_model.soil_clusters.get(cluster_id)
+                if cluster is None:
+                    cluster = SoilCluster(
+                        id=cluster_id,
+                        name=str(extra.get("cluster_name") or f"Cluster {volume.name}"),
+                        volume_ids=[entity_id],
+                        material_id=volume.material_id or material_id or "soil",
+                        layer_id=str(extra.get("layer_id") or entity_id),
+                        drainage=str(extra.get("drainage") or "drained"),
+                        active_stage_ids=[target_stage] if target_stage else [],
+                        metadata={"created_by": "classify_geometry_entity", **extra},
+                    )
+                    self.soil_model.soil_clusters[cluster_id] = cluster
+                elif entity_id not in cluster.volume_ids:
+                    cluster.volume_ids.append(entity_id)
+                if material_id:
+                    cluster.material_id = material_id
+                self.topology_graph.add_node(cluster_id, "cluster", label=cluster.name, role="soil_cluster", material_id=cluster.material_id)
+                self.topology_graph.add_edge(cluster_id, entity_id, "owns", relation_group="soil_cluster_volume")
+            self.topology_graph.add_node(entity_id, "volume", label=volume.name, role=volume.role, material_id=volume.material_id)
+            self.mark_changed(["geometry", "soil", "material", "topology"], action="classify_geometry_entity", affected_entities=[entity_id])
+            return {"ok": True, "entity_type": "volume", "entity_id": entity_id, "semantic_type": semantic, "volume": volume.to_dict()}
+
+        if entity_id in self.geometry_model.surfaces:
+            surface = self.geometry_model.surfaces[entity_id]
+            surface.kind = semantic
+            surface.metadata.update(extra)
+            if semantic in {"wall", "diaphragm_wall", "retaining_wall", "plate", "slab", "liner"}:
+                structure_id = str(extra.get("structure_id") or f"{semantic}_{entity_id}")
+                record = StructureRecord(
+                    id=structure_id,
+                    name=str(extra.get("name") or structure_id),
+                    geometry_ref=entity_id,
+                    material_id=material_id or "",
+                    active_stage_ids=[target_stage] if target_stage else [],
+                    metadata={"semantic_type": semantic, "source_entity_type": "surface", **extra},
+                )
+                self.structure_model.plates[structure_id] = record
+                self.topology_graph.add_node(structure_id, "structure", label=record.name, role=semantic)
+                self.topology_graph.add_edge(structure_id, entity_id, "generated_by", relation_group="structure_geometry")
+                if material_id:
+                    self.set_structure_material(structure_id, material_id, category="plate")
+                _activate_structure(structure_id)
+                self.mark_changed(["geometry", "structure", "material", "topology"], action="classify_geometry_entity", affected_entities=[entity_id, structure_id])
+                return {"ok": True, "entity_type": "surface", "entity_id": entity_id, "semantic_type": semantic, "structure": record.to_dict()}
+            if semantic in {"interface", "soil_structure_interface", "contact_interface"}:
+                interface_id = str(extra.get("interface_id") or f"interface_{entity_id}")
+                interface = StructuralInterfaceRecord(
+                    id=interface_id,
+                    name=str(extra.get("name") or interface_id),
+                    master_ref=str(extra.get("master_ref") or entity_id),
+                    slave_ref=str(extra.get("slave_ref") or ""),
+                    material_id=material_id or "",
+                    contact_mode=str(extra.get("contact_mode") or "frictional"),
+                    active_stage_ids=[target_stage] if target_stage else [],
+                    metadata={"semantic_type": semantic, "source_entity_type": "surface", **extra},
+                )
+                self.structure_model.structural_interfaces[interface_id] = interface
+                self.topology_graph.add_node(interface_id, "interface", label=interface.name, contact_mode=interface.contact_mode)
+                self.topology_graph.add_edge(interface_id, entity_id, "generated_by", relation_group="interface_geometry")
+                if material_id:
+                    self.set_interface_material(interface_id, material_id)
+                if target_stage:
+                    self.set_phase_interface_activation(target_stage, interface_id, True)
+                self.mark_changed(["geometry", "structure", "material", "topology"], action="classify_geometry_entity", affected_entities=[entity_id, interface_id])
+                return {"ok": True, "entity_type": "surface", "entity_id": entity_id, "semantic_type": semantic, "interface": interface.to_dict()}
+            self.mark_changed(["geometry", "topology"], action="classify_geometry_entity", affected_entities=[entity_id])
+            return {"ok": True, "entity_type": "surface", "entity_id": entity_id, "semantic_type": semantic, "surface": surface.to_dict()}
+
+        if entity_id in self.geometry_model.curves:
+            curve = self.geometry_model.curves[entity_id]
+            curve.kind = semantic
+            curve.metadata.update(extra)
+            if semantic in {"beam", "strut", "support", "pile", "embedded_beam", "anchor"}:
+                structure_id = str(extra.get("structure_id") or f"{semantic}_{entity_id}")
+                if semantic == "anchor":
+                    record = AnchorRecord(
+                        id=structure_id,
+                        name=str(extra.get("name") or structure_id),
+                        geometry_ref=entity_id,
+                        material_id=material_id or "",
+                        active_stage_ids=[target_stage] if target_stage else [],
+                        bonded_length=float(extra.get("bonded_length", 0.0) or 0.0),
+                        free_length=float(extra.get("free_length", 0.0) or 0.0),
+                        prestress=float(extra.get("prestress", 0.0) or 0.0),
+                        metadata={"semantic_type": semantic, "source_entity_type": "curve", **extra},
+                    )
+                    self.structure_model.anchors[structure_id] = record
+                else:
+                    record = StructureRecord(
+                        id=structure_id,
+                        name=str(extra.get("name") or structure_id),
+                        geometry_ref=entity_id,
+                        material_id=material_id or "",
+                        active_stage_ids=[target_stage] if target_stage else [],
+                        metadata={"semantic_type": semantic, "source_entity_type": "curve", **extra},
+                    )
+                    if semantic in {"pile", "embedded_beam"}:
+                        self.structure_model.embedded_beams[structure_id] = record
+                    else:
+                        self.structure_model.beams[structure_id] = record
+                self.topology_graph.add_node(structure_id, "structure", label=record.name, role=semantic)
+                self.topology_graph.add_edge(structure_id, entity_id, "generated_by", relation_group="structure_geometry")
+                if material_id:
+                    self.set_structure_material(structure_id, material_id, category="beam")
+                _activate_structure(structure_id)
+                self.mark_changed(["geometry", "structure", "material", "topology"], action="classify_geometry_entity", affected_entities=[entity_id, structure_id])
+                return {"ok": True, "entity_type": "curve", "entity_id": entity_id, "semantic_type": semantic, "structure": record.to_dict()}
+            self.mark_changed(["geometry", "topology"], action="classify_geometry_entity", affected_entities=[entity_id])
+            return {"ok": True, "entity_type": "curve", "entity_id": entity_id, "semantic_type": semantic, "curve": curve.to_dict()}
+
+        if entity_id in self.geometry_model.points:
+            point = self.geometry_model.points[entity_id]
+            point.metadata.update(extra)
+            point.metadata["semantic_type"] = semantic
+            self.mark_changed(["geometry", "topology"], action="classify_geometry_entity", affected_entities=[entity_id])
+            return {"ok": True, "entity_type": "point", "entity_id": entity_id, "semantic_type": semantic, "point": point.to_dict()}
+
+        raise KeyError(f"Geometry entity not found: {entity_id}")
+
+    def assign_entity_material(self, entity_id: str, material_id: str, *, category: str | None = None) -> dict[str, Any]:
+        """Assign material to a volume, structure, interface or raw semantic entity."""
+
+        if entity_id in self.geometry_model.volumes:
+            volume = self.set_volume_material(entity_id, material_id)
+            self.mark_changed(["material", "geometry"], action="assign_entity_material", affected_entities=[entity_id, material_id])
+            return {"ok": True, "entity_type": "volume", "entity_id": entity_id, "material_id": material_id, "volume": volume.to_dict()}
+        record = self.get_structure_record(entity_id)
+        if record is not None:
+            record = self.set_structure_material(entity_id, material_id, category=category)
+            self.mark_changed(["material", "structure"], action="assign_entity_material", affected_entities=[entity_id, material_id])
+            return {"ok": True, "entity_type": "structure", "entity_id": entity_id, "material_id": material_id, "structure": record.to_dict()}
+        if entity_id in self.structure_model.structural_interfaces:
+            interface = self.set_interface_material(entity_id, material_id)
+            self.mark_changed(["material", "structure"], action="assign_entity_material", affected_entities=[entity_id, material_id])
+            return {"ok": True, "entity_type": "interface", "entity_id": entity_id, "material_id": material_id, "interface": interface.to_dict()}
+        # Raw surfaces/curves can carry a semantic material before being promoted.
+        if entity_id in self.geometry_model.surfaces:
+            self.geometry_model.surfaces[entity_id].metadata["material_id"] = material_id
+            self.mark_changed(["material", "geometry"], action="assign_entity_material", affected_entities=[entity_id, material_id])
+            return {"ok": True, "entity_type": "surface", "entity_id": entity_id, "material_id": material_id}
+        if entity_id in self.geometry_model.curves:
+            self.geometry_model.curves[entity_id].metadata["material_id"] = material_id
+            self.mark_changed(["material", "geometry"], action="assign_entity_material", affected_entities=[entity_id, material_id])
+            return {"ok": True, "entity_type": "curve", "entity_id": entity_id, "material_id": material_id}
+        raise KeyError(f"Entity not found for material assignment: {entity_id}")
+
     def upsert_material(self, category: str, material: MaterialRecord) -> MaterialRecord:
         bucket = str(category).lower().strip()
         if bucket in {"soil", "soilmaterial", "soil_material", "soil_materials"}:
@@ -2051,15 +2251,30 @@ class GeoProjectDocument:
                 active_cell_ids = candidate_cell_ids
                 surface_cell_ids = []
 
+            phase_node_rows = node_rows
+            original_node_ids: list[int] = list(range(len(node_rows)))
+            node_id_map: dict[int, int] = {idx: idx for idx in range(len(node_rows))}
             if mesh is not None:
+                # 1.0 production compiler gate: each construction phase receives a
+                # compact active-node mesh.  Earlier Alpha builds passed the full
+                # project mesh to every phase, leaving orphan nodes from excavated
+                # or inactive regions in the global stiffness matrix.  Those zero
+                # rows made otherwise valid staged cases look singular.
+                active_node_ids = sorted({int(nid) for cid in active_cell_ids if cid < len(cell_rows) for nid in cell_rows[cid]})
+                node_id_map = {old_id: new_id for new_id, old_id in enumerate(active_node_ids)}
+                phase_node_rows = [node_rows[old_id] for old_id in active_node_ids]
+                original_node_ids = active_node_ids
                 element_rows = []
                 for cell_id in active_cell_ids:
                     block_id = block_tags[cell_id] if cell_id < len(block_tags) else ""
                     volume = self.geometry_model.volumes.get(block_id)
                     material_id = volume.material_id if volume is not None else None
+                    original_conn = cell_rows[cell_id] if cell_id < len(cell_rows) else []
+                    remapped_conn = [node_id_map[int(nid)] for nid in original_conn if int(nid) in node_id_map]
                     element_rows.append({
                         "cell_id": int(cell_id),
-                        "connectivity": cell_rows[cell_id] if cell_id < len(cell_rows) else [],
+                        "connectivity": remapped_conn,
+                        "original_connectivity": list(original_conn),
                         "cell_type": cell_types[cell_id] if cell_id < len(cell_types) else self.mesh_model.mesh_settings.element_family,
                         "volume_id": block_id,
                         "material_id": material_id,
@@ -2085,7 +2300,7 @@ class GeoProjectDocument:
             material_rows = [all_materials[mid].to_dict() if mid in all_materials else {"id": mid, "missing": True} for mid in used_material_ids]
             active_structures = [record for record in self.iter_structure_records() if (not record.active_stage_ids or phase_id in record.active_stage_ids or record.id in snapshot.active_structure_ids)]
 
-            node_count = len(node_rows)
+            node_count = len(phase_node_rows)
             active_dof_count = node_count * 3 if node_count else max(len(active_cell_ids), 1) * 3
             compiled = CompiledPhaseModel(
                 id=f"compiled_{phase_id}",
@@ -2095,8 +2310,10 @@ class GeoProjectDocument:
                 material_state_count=int(max(len(active_cell_ids), 1)),
                 interface_count=len(active_interfaces),
                 mesh_block={
-                    "node_coordinates": node_rows,
+                    "node_coordinates": phase_node_rows,
                     "active_cell_ids": [int(v) for v in active_cell_ids],
+                    "original_node_ids": [int(v) for v in original_node_ids],
+                    "node_id_map": {str(k): int(v) for k, v in node_id_map.items()},
                     "entity_map": self.mesh_model.mesh_entity_map.to_dict(),
                     "mesh_settings": self.mesh_model.mesh_settings.to_dict(),
                     "source": "MeshModel.MeshDocument" if mesh is not None else "GeometryModel.Volumes",
@@ -2140,8 +2357,10 @@ class GeoProjectDocument:
                 },
                 metadata={
                     "backend": self.solver_model.runtime_settings.backend,
-                    "contract": "compiled_phase_model_input_skeleton_v2",
+                    "contract": "compiled_phase_model_input_skeleton_v3",
                     "active_structure_ids": [record.id for record in active_structures],
+                    "active_node_count": int(node_count),
+                    "compact_active_mesh": bool(mesh is not None),
                     "solid_cell_count": int(len(active_cell_ids)),
                     "surface_cell_count": int(len(surface_cell_ids)),
                     "skipped_surface_cell_ids": [int(v) for v in surface_cell_ids],
@@ -2222,6 +2441,8 @@ class GeoProjectDocument:
                 "compiled_phase_models": len(self.solver_model.compiled_phase_models),
                 "phase_results": len(self.result_store.phase_results),
                 "engineering_metrics": len(self.result_store.engineering_metrics),
+                "cad_shapes": len(self.cad_shape_store.shapes),
+                "cad_topology_records": len(self.cad_shape_store.topology_records),
             },
             "missing_material_refs": missing_material_refs,
             "snapshot_without_phase": snapshot_without_phase,
@@ -2240,6 +2461,7 @@ class GeoProjectDocument:
             "PhaseManager": self.phase_manager.to_dict(),
             "SolverModel": self.solver_model.to_dict(),
             "ResultStore": self.result_store.to_dict(),
+            "CadShapeStore": self.cad_shape_store.to_dict(),
             "metadata": _jsonable_metadata(self.metadata),
         }
 

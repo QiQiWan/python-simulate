@@ -1,0 +1,190 @@
+{
+  "contract": "release_1_4_0_multi_template_gui_payload_v1",
+  "release": "1.4.1-geometry",
+  "demo_center": {
+    "title": "工程 Beta-2 多模板中心",
+    "default_demo_id": "foundation_pit_3d_beta",
+    "active_demo_id": "foundation_pit_3d_beta",
+    "template_count": 3,
+    "templates": [
+      {
+        "demo_id": "foundation_pit_3d_beta",
+        "label": "三维基坑分阶段施工 Beta Demo",
+        "short_label": "基坑",
+        "release": "1.4.1-geometry",
+        "template_family": "foundation_pit",
+        "description": "围护墙、支撑、开挖失活、地下水和结果导出的六阶段基坑模板。",
+        "primary_engineering_question": "分阶段开挖和支护激活后，墙体位移、沉降和孔压响应是否可接受？",
+        "phase_sequence": [
+          "geology",
+          "structures",
+          "mesh",
+          "staging",
+          "solve",
+          "results"
+        ],
+        "phase_names": {
+          "initial": "初始地应力",
+          "excavation_1": "第一次开挖",
+          "support_1": "第一道支撑",
+          "excavation_2": "第二次开挖",
+          "support_2": "第二道支撑"
+        },
+        "expected_outputs": [
+          "墙体水平位移",
+          "地表沉降",
+          "支撑轴力",
+          "孔压变化",
+          "VTK 云图"
+        ],
+        "result_targets": [
+          "max_displacement",
+          "max_settlement",
+          "plastic_point",
+          "pore_pressure",
+          "interface_contact_state"
+        ],
+        "one_click_load": true,
+        "complete_calculation": true,
+        "tags": [
+          "excavation",
+          "retaining_wall",
+          "strut",
+          "groundwater"
+        ],
+        "metadata": {
+          "recommended_template": true,
+          "geometry_basis": "axis_aligned_foundation_pit"
+        }
+      },
+      {
+        "demo_id": "slope_stability_beta",
+        "label": "边坡稳定分阶段降雨 Beta Demo",
+        "short_label": "边坡",
+        "release": "1.4.1-geometry",
+        "template_family": "slope_stability",
+        "description": "边坡土体、坡脚开挖、降雨/水位条件和安全响应检查的六阶段模板。",
+        "primary_engineering_question": "坡脚扰动和水位变化后，塑性区、位移和有效应力响应是否提示失稳风险？",
+        "phase_sequence": [
+          "geology",
+          "structures",
+          "mesh",
+          "staging",
+          "solve",
+          "results"
+        ],
+        "phase_names": {
+          "initial": "边坡初始应力",
+          "excavation_1": "坡脚扰动",
+          "support_1": "抗滑桩/加固激活",
+          "excavation_2": "降雨工况",
+          "support_2": "长期稳定校核"
+        },
+        "expected_outputs": [
+          "潜在滑动区",
+          "坡顶位移",
+          "孔压上升",
+          "有效应力降低",
+          "安全审查摘要"
+        ],
+        "result_targets": [
+          "plastic_point",
+          "degree_of_consolidation",
+          "effective_stress_zz",
+          "max_displacement"
+        ],
+        "one_click_load": true,
+        "complete_calculation": true,
+        "tags": [
+          "slope",
+          "rainfall",
+          "stability",
+          "reinforcement"
+        ],
+        "metadata": {
+          "template_role": "stability_screening",
+          "geometry_basis": "surrogate_slope_mass"
+        }
+      },
+      {
+        "demo_id": "pile_soil_interaction_beta",
+        "label": "桩-土相互作用加载 Beta Demo",
+        "short_label": "桩土",
+        "release": "1.4.1-geometry",
+        "template_family": "pile_soil_interaction",
+        "description": "桩基、桩周土、界面接触和加载响应的六阶段模板。",
+        "primary_engineering_question": "竖向/水平加载后，桩顶位移、桩周界面状态和土体塑性响应是否满足要求？",
+        "phase_sequence": [
+          "geology",
+          "structures",
+          "mesh",
+          "staging",
+          "solve",
+          "results"
+        ],
+        "phase_names": {
+          "initial": "桩周土初始应力",
+          "excavation_1": "成桩/安装阶段",
+          "support_1": "桩土界面激活",
+          "excavation_2": "竖向加载",
+          "support_2": "水平加载与服务性校核"
+        },
+        "expected_outputs": [
+          "桩顶位移",
+          "桩周界面滑移",
+          "土体塑性区",
+          "桩身受力指标",
+          "VTK 云图"
+        ],
+        "result_targets": [
+          "interface_gap",
+          "interface_shear_slip",
+          "plastic_point",
+          "max_displacement"
+        ],
+        "one_click_load": true,
+        "complete_calculation": true,
+        "tags": [
+          "pile",
+          "soil_structure_interaction",
+          "contact",
+          "loading"
+        ],
+        "metadata": {
+          "template_role": "soil_structure_interaction",
+          "geometry_basis": "surrogate_pile_cluster"
+        }
+      }
+    ],
+    "one_click_load": true,
+    "complete_calculation": true,
+    "actions": [
+      "load_demo_project",
+      "run_complete_calculation",
+      "export_demo_bundle",
+      "run_all_templates"
+    ],
+    "button_labels": {
+      "load_demo_project": "一键加载模板",
+      "run_complete_calculation": "运行当前模板完整流程",
+      "export_demo_bundle": "导出当前模板审查包",
+      "run_all_templates": "运行全部 1.4 模板"
+    }
+  },
+  "template_ids": [
+    "foundation_pit_3d_beta",
+    "slope_stability_beta",
+    "pile_soil_interaction_beta"
+  ],
+  "actions": [
+    "load_demo_project",
+    "run_complete_calculation",
+    "export_demo_bundle",
+    "run_all_templates"
+  ],
+  "quality_gate": {
+    "all_templates_must_load": true,
+    "all_templates_must_complete_pipeline": true,
+    "all_templates_must_export_bundle": true
+  }
+}

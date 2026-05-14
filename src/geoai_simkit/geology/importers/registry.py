@@ -94,9 +94,11 @@ def get_default_geology_importer_registry() -> GeologyImporterRegistry:
         from geoai_simkit.geology.importers.csv_importer import BoreholeCSVImporter
         from geoai_simkit.geology.importers.json_importer import JSONGeologyImporter
         from geoai_simkit.geology.importers.stl_importer import STLGeologyImporter
+        from geoai_simkit.geology.importers.meshio_importer import MeshioGeologyImporter
 
         registry = GeologyImporterRegistry()
         registry.register(STLGeologyImporter())
+        registry.register(MeshioGeologyImporter())
         registry.register(JSONGeologyImporter())
         registry.register(BoreholeCSVImporter())
         _DEFAULT_REGISTRY = registry

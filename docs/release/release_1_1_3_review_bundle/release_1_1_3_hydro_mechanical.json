@@ -1,0 +1,70 @@
+{
+  "contract": "geoai_simkit_hydro_mechanical_state_v1",
+  "phase_count": 5,
+  "phase_records": [
+    {
+      "phase_id": "initial",
+      "water_condition_id": "",
+      "water_level": null,
+      "cell_count": 20,
+      "max_pore_pressure": 0.0,
+      "min_effective_stress_zz": 0.0,
+      "metadata": {
+        "water_metadata": {}
+      }
+    },
+    {
+      "phase_id": "excavation_1",
+      "water_condition_id": "drawdown_1",
+      "water_level": -2.0,
+      "cell_count": 15,
+      "max_pore_pressure": 117.72,
+      "min_effective_stress_zz": 0.0,
+      "metadata": {
+        "water_metadata": {
+          "created_by": "set_phase_water_condition"
+        }
+      }
+    },
+    {
+      "phase_id": "support_1",
+      "water_condition_id": "drawdown_2",
+      "water_level": -4.0,
+      "cell_count": 15,
+      "max_pore_pressure": 98.10000000000001,
+      "min_effective_stress_zz": -28.64080625152095,
+      "metadata": {
+        "water_metadata": {
+          "created_by": "set_phase_water_condition"
+        }
+      }
+    },
+    {
+      "phase_id": "excavation_2",
+      "water_condition_id": "drawdown_3",
+      "water_level": -6.0,
+      "cell_count": 10,
+      "max_pore_pressure": 78.48,
+      "min_effective_stress_zz": -57.2816125030419,
+      "metadata": {
+        "water_metadata": {
+          "created_by": "set_phase_water_condition"
+        }
+      }
+    },
+    {
+      "phase_id": "support_2",
+      "water_condition_id": "drawdown_4",
+      "water_level": -8.0,
+      "cell_count": 10,
+      "max_pore_pressure": 58.86,
+      "min_effective_stress_zz": -57.2816125030419,
+      "metadata": {
+        "water_metadata": {
+          "created_by": "set_phase_water_condition"
+        }
+      }
+    }
+  ],
+  "gamma_water": 9.81
+}

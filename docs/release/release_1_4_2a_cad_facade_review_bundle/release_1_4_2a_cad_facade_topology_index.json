@@ -1,0 +1,2486 @@
+{
+  "contract": "geoai_simkit_cad_facade_topology_index_v1",
+  "ok": true,
+  "solid_count": 5,
+  "face_count": 30,
+  "edge_count": 60,
+  "vertex_count": 40,
+  "records": [
+    {
+      "kind": "solid",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/solid",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        8.0,
+        -16.0,
+        0.0
+      ],
+      "role": "soil",
+      "material_id": "alpha_dense_sand",
+      "topology_hash": "d1453957a45b92f9"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/face/xmin",
+      "side": "xmin",
+      "bounds": [
+        -18.0,
+        -18.0,
+        -8.0,
+        8.0,
+        -16.0,
+        0.0
+      ],
+      "normal": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "area": 256.0,
+      "topology_hash": "18ee8c73f5079517"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/face/xmax",
+      "side": "xmax",
+      "bounds": [
+        18.0,
+        18.0,
+        -8.0,
+        8.0,
+        -16.0,
+        0.0
+      ],
+      "normal": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "area": 256.0,
+      "topology_hash": "b27a92c141af0b85"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/face/ymin",
+      "side": "ymin",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        -8.0,
+        -16.0,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "area": 576.0,
+      "topology_hash": "a7b77daa0284ac96"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/face/ymax",
+      "side": "ymax",
+      "bounds": [
+        -18.0,
+        18.0,
+        8.0,
+        8.0,
+        -16.0,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "area": 576.0,
+      "topology_hash": "f0d31c7802de885c"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/face/zmin",
+      "side": "zmin",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        8.0,
+        -16.0,
+        -16.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "area": 576.0,
+      "topology_hash": "cc20ced887259ca9"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/face/zmax",
+      "side": "zmax",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        8.0,
+        0.0,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "area": 576.0,
+      "topology_hash": "644199e31797ca39"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/0",
+      "vertex_names": [
+        "cad_volume_005/vertex/0",
+        "cad_volume_005/vertex/1"
+      ],
+      "points": [
+        [
+          -18.0,
+          -8.0,
+          -16.0
+        ],
+        [
+          18.0,
+          -8.0,
+          -16.0
+        ]
+      ],
+      "topology_hash": "a365a3d566c9e7d2"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/1",
+      "vertex_names": [
+        "cad_volume_005/vertex/1",
+        "cad_volume_005/vertex/2"
+      ],
+      "points": [
+        [
+          18.0,
+          -8.0,
+          -16.0
+        ],
+        [
+          18.0,
+          8.0,
+          -16.0
+        ]
+      ],
+      "topology_hash": "46e646d9c47d8278"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/2",
+      "vertex_names": [
+        "cad_volume_005/vertex/2",
+        "cad_volume_005/vertex/3"
+      ],
+      "points": [
+        [
+          18.0,
+          8.0,
+          -16.0
+        ],
+        [
+          -18.0,
+          8.0,
+          -16.0
+        ]
+      ],
+      "topology_hash": "9f6c94befc59398d"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/3",
+      "vertex_names": [
+        "cad_volume_005/vertex/3",
+        "cad_volume_005/vertex/0"
+      ],
+      "points": [
+        [
+          -18.0,
+          8.0,
+          -16.0
+        ],
+        [
+          -18.0,
+          -8.0,
+          -16.0
+        ]
+      ],
+      "topology_hash": "d22a85d62dfd29b6"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/4",
+      "vertex_names": [
+        "cad_volume_005/vertex/4",
+        "cad_volume_005/vertex/5"
+      ],
+      "points": [
+        [
+          -18.0,
+          -8.0,
+          0.0
+        ],
+        [
+          18.0,
+          -8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "a82864ede12014e7"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/5",
+      "vertex_names": [
+        "cad_volume_005/vertex/5",
+        "cad_volume_005/vertex/6"
+      ],
+      "points": [
+        [
+          18.0,
+          -8.0,
+          0.0
+        ],
+        [
+          18.0,
+          8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "ac8848a34bedc2df"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/6",
+      "vertex_names": [
+        "cad_volume_005/vertex/6",
+        "cad_volume_005/vertex/7"
+      ],
+      "points": [
+        [
+          18.0,
+          8.0,
+          0.0
+        ],
+        [
+          -18.0,
+          8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "5dd0112d040143d0"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/7",
+      "vertex_names": [
+        "cad_volume_005/vertex/7",
+        "cad_volume_005/vertex/4"
+      ],
+      "points": [
+        [
+          -18.0,
+          8.0,
+          0.0
+        ],
+        [
+          -18.0,
+          -8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "cde88b5f28645821"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/8",
+      "vertex_names": [
+        "cad_volume_005/vertex/0",
+        "cad_volume_005/vertex/4"
+      ],
+      "points": [
+        [
+          -18.0,
+          -8.0,
+          -16.0
+        ],
+        [
+          -18.0,
+          -8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "0deca243b69418bf"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/9",
+      "vertex_names": [
+        "cad_volume_005/vertex/1",
+        "cad_volume_005/vertex/5"
+      ],
+      "points": [
+        [
+          18.0,
+          -8.0,
+          -16.0
+        ],
+        [
+          18.0,
+          -8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "3776d843720bd32c"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/10",
+      "vertex_names": [
+        "cad_volume_005/vertex/2",
+        "cad_volume_005/vertex/6"
+      ],
+      "points": [
+        [
+          18.0,
+          8.0,
+          -16.0
+        ],
+        [
+          18.0,
+          8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "5aa73b06d55c7555"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/edge/11",
+      "vertex_names": [
+        "cad_volume_005/vertex/3",
+        "cad_volume_005/vertex/7"
+      ],
+      "points": [
+        [
+          -18.0,
+          8.0,
+          -16.0
+        ],
+        [
+          -18.0,
+          8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "b838e5ec35692525"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/vertex/0",
+      "xyz": [
+        -18.0,
+        -8.0,
+        -16.0
+      ],
+      "topology_hash": "7caade75ab0dea91"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/vertex/1",
+      "xyz": [
+        18.0,
+        -8.0,
+        -16.0
+      ],
+      "topology_hash": "05aac401769fc31d"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/vertex/2",
+      "xyz": [
+        18.0,
+        8.0,
+        -16.0
+      ],
+      "topology_hash": "dcc0893d8afced65"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/vertex/3",
+      "xyz": [
+        -18.0,
+        8.0,
+        -16.0
+      ],
+      "topology_hash": "c487537fcc51fb74"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/vertex/4",
+      "xyz": [
+        -18.0,
+        -8.0,
+        0.0
+      ],
+      "topology_hash": "f5371f2d9521c1d7"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/vertex/5",
+      "xyz": [
+        18.0,
+        -8.0,
+        0.0
+      ],
+      "topology_hash": "431e2617ab8060ef"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/vertex/6",
+      "xyz": [
+        18.0,
+        8.0,
+        0.0
+      ],
+      "topology_hash": "aac831259a1e9446"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "cad_volume_005",
+      "stable_name": "cad_volume_005/vertex/7",
+      "xyz": [
+        -18.0,
+        8.0,
+        0.0
+      ],
+      "topology_hash": "c4c3fc635308ddd2"
+    },
+    {
+      "kind": "solid",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/solid",
+      "bounds": [
+        -4.0,
+        4.0,
+        -3.0,
+        3.0,
+        -4.0,
+        0.0
+      ],
+      "role": "soil",
+      "material_id": "alpha_soft_clay",
+      "topology_hash": "cf69ed936db1181e"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/face/xmin",
+      "side": "xmin",
+      "bounds": [
+        -4.0,
+        -4.0,
+        -3.0,
+        3.0,
+        -4.0,
+        0.0
+      ],
+      "normal": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "area": 24.0,
+      "topology_hash": "c2237cde0bd7c003"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/face/xmax",
+      "side": "xmax",
+      "bounds": [
+        4.0,
+        4.0,
+        -3.0,
+        3.0,
+        -4.0,
+        0.0
+      ],
+      "normal": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "area": 24.0,
+      "topology_hash": "b3a4c894cff7481c"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/face/ymin",
+      "side": "ymin",
+      "bounds": [
+        -4.0,
+        4.0,
+        -3.0,
+        -3.0,
+        -4.0,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "area": 32.0,
+      "topology_hash": "ccfcbc35af68c1dd"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/face/ymax",
+      "side": "ymax",
+      "bounds": [
+        -4.0,
+        4.0,
+        3.0,
+        3.0,
+        -4.0,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "area": 32.0,
+      "topology_hash": "90dcb63c11b8039f"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/face/zmin",
+      "side": "zmin",
+      "bounds": [
+        -4.0,
+        4.0,
+        -3.0,
+        3.0,
+        -4.0,
+        -4.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "area": 48.0,
+      "topology_hash": "50816c1807005a58"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/face/zmax",
+      "side": "zmax",
+      "bounds": [
+        -4.0,
+        4.0,
+        -3.0,
+        3.0,
+        0.0,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "area": 48.0,
+      "topology_hash": "e052c11b835431e8"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/0",
+      "vertex_names": [
+        "excavation_step_1/vertex/0",
+        "excavation_step_1/vertex/1"
+      ],
+      "points": [
+        [
+          -4.0,
+          -3.0,
+          -4.0
+        ],
+        [
+          4.0,
+          -3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "347aefaaea4b89e8"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/1",
+      "vertex_names": [
+        "excavation_step_1/vertex/1",
+        "excavation_step_1/vertex/2"
+      ],
+      "points": [
+        [
+          4.0,
+          -3.0,
+          -4.0
+        ],
+        [
+          4.0,
+          3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "b9873aad28f88713"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/2",
+      "vertex_names": [
+        "excavation_step_1/vertex/2",
+        "excavation_step_1/vertex/3"
+      ],
+      "points": [
+        [
+          4.0,
+          3.0,
+          -4.0
+        ],
+        [
+          -4.0,
+          3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "5bc3f9e7a553a3a1"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/3",
+      "vertex_names": [
+        "excavation_step_1/vertex/3",
+        "excavation_step_1/vertex/0"
+      ],
+      "points": [
+        [
+          -4.0,
+          3.0,
+          -4.0
+        ],
+        [
+          -4.0,
+          -3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "ad93992b9152f78b"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/4",
+      "vertex_names": [
+        "excavation_step_1/vertex/4",
+        "excavation_step_1/vertex/5"
+      ],
+      "points": [
+        [
+          -4.0,
+          -3.0,
+          0.0
+        ],
+        [
+          4.0,
+          -3.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "031254d85a9c0364"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/5",
+      "vertex_names": [
+        "excavation_step_1/vertex/5",
+        "excavation_step_1/vertex/6"
+      ],
+      "points": [
+        [
+          4.0,
+          -3.0,
+          0.0
+        ],
+        [
+          4.0,
+          3.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "f18f172192abed24"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/6",
+      "vertex_names": [
+        "excavation_step_1/vertex/6",
+        "excavation_step_1/vertex/7"
+      ],
+      "points": [
+        [
+          4.0,
+          3.0,
+          0.0
+        ],
+        [
+          -4.0,
+          3.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "bee6759335da81e4"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/7",
+      "vertex_names": [
+        "excavation_step_1/vertex/7",
+        "excavation_step_1/vertex/4"
+      ],
+      "points": [
+        [
+          -4.0,
+          3.0,
+          0.0
+        ],
+        [
+          -4.0,
+          -3.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "ea78c511f0677f9b"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/8",
+      "vertex_names": [
+        "excavation_step_1/vertex/0",
+        "excavation_step_1/vertex/4"
+      ],
+      "points": [
+        [
+          -4.0,
+          -3.0,
+          -4.0
+        ],
+        [
+          -4.0,
+          -3.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "39e6d89777f35ec2"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/9",
+      "vertex_names": [
+        "excavation_step_1/vertex/1",
+        "excavation_step_1/vertex/5"
+      ],
+      "points": [
+        [
+          4.0,
+          -3.0,
+          -4.0
+        ],
+        [
+          4.0,
+          -3.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "2b8d43962a6a509b"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/10",
+      "vertex_names": [
+        "excavation_step_1/vertex/2",
+        "excavation_step_1/vertex/6"
+      ],
+      "points": [
+        [
+          4.0,
+          3.0,
+          -4.0
+        ],
+        [
+          4.0,
+          3.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "0e29da9ad8eb8939"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/edge/11",
+      "vertex_names": [
+        "excavation_step_1/vertex/3",
+        "excavation_step_1/vertex/7"
+      ],
+      "points": [
+        [
+          -4.0,
+          3.0,
+          -4.0
+        ],
+        [
+          -4.0,
+          3.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "a75cb92cfd7a3774"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/vertex/0",
+      "xyz": [
+        -4.0,
+        -3.0,
+        -4.0
+      ],
+      "topology_hash": "da190e88f71fe9ff"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/vertex/1",
+      "xyz": [
+        4.0,
+        -3.0,
+        -4.0
+      ],
+      "topology_hash": "37535faa27f7b9f9"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/vertex/2",
+      "xyz": [
+        4.0,
+        3.0,
+        -4.0
+      ],
+      "topology_hash": "c5d4eb890a05138e"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/vertex/3",
+      "xyz": [
+        -4.0,
+        3.0,
+        -4.0
+      ],
+      "topology_hash": "0dda647d6e447d39"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/vertex/4",
+      "xyz": [
+        -4.0,
+        -3.0,
+        0.0
+      ],
+      "topology_hash": "d002e8b5c748b056"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/vertex/5",
+      "xyz": [
+        4.0,
+        -3.0,
+        0.0
+      ],
+      "topology_hash": "ddd0444fcc523995"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/vertex/6",
+      "xyz": [
+        4.0,
+        3.0,
+        0.0
+      ],
+      "topology_hash": "f2d95cc4eaed2ac0"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_1",
+      "stable_name": "excavation_step_1/vertex/7",
+      "xyz": [
+        -4.0,
+        3.0,
+        0.0
+      ],
+      "topology_hash": "ed2cd85f5ff7df7b"
+    },
+    {
+      "kind": "solid",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/solid",
+      "bounds": [
+        -4.0,
+        4.0,
+        -3.0,
+        3.0,
+        -8.0,
+        -4.0
+      ],
+      "role": "soil",
+      "material_id": "alpha_soft_clay",
+      "topology_hash": "04d880579d967d5a"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/face/xmin",
+      "side": "xmin",
+      "bounds": [
+        -4.0,
+        -4.0,
+        -3.0,
+        3.0,
+        -8.0,
+        -4.0
+      ],
+      "normal": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "area": 24.0,
+      "topology_hash": "46aa5690ad20eb23"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/face/xmax",
+      "side": "xmax",
+      "bounds": [
+        4.0,
+        4.0,
+        -3.0,
+        3.0,
+        -8.0,
+        -4.0
+      ],
+      "normal": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "area": 24.0,
+      "topology_hash": "2cf5ddc16c644f74"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/face/ymin",
+      "side": "ymin",
+      "bounds": [
+        -4.0,
+        4.0,
+        -3.0,
+        -3.0,
+        -8.0,
+        -4.0
+      ],
+      "normal": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "area": 32.0,
+      "topology_hash": "e980c6af3cfa955c"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/face/ymax",
+      "side": "ymax",
+      "bounds": [
+        -4.0,
+        4.0,
+        3.0,
+        3.0,
+        -8.0,
+        -4.0
+      ],
+      "normal": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "area": 32.0,
+      "topology_hash": "6864321b6de6c97f"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/face/zmin",
+      "side": "zmin",
+      "bounds": [
+        -4.0,
+        4.0,
+        -3.0,
+        3.0,
+        -8.0,
+        -8.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "area": 48.0,
+      "topology_hash": "639fa2453688795e"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/face/zmax",
+      "side": "zmax",
+      "bounds": [
+        -4.0,
+        4.0,
+        -3.0,
+        3.0,
+        -4.0,
+        -4.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "area": 48.0,
+      "topology_hash": "30b57fba9431392b"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/0",
+      "vertex_names": [
+        "excavation_step_2/vertex/0",
+        "excavation_step_2/vertex/1"
+      ],
+      "points": [
+        [
+          -4.0,
+          -3.0,
+          -8.0
+        ],
+        [
+          4.0,
+          -3.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "ec84dcdd20910692"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/1",
+      "vertex_names": [
+        "excavation_step_2/vertex/1",
+        "excavation_step_2/vertex/2"
+      ],
+      "points": [
+        [
+          4.0,
+          -3.0,
+          -8.0
+        ],
+        [
+          4.0,
+          3.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "d7d73882fd9f2841"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/2",
+      "vertex_names": [
+        "excavation_step_2/vertex/2",
+        "excavation_step_2/vertex/3"
+      ],
+      "points": [
+        [
+          4.0,
+          3.0,
+          -8.0
+        ],
+        [
+          -4.0,
+          3.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "8d1ecf82dd95bada"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/3",
+      "vertex_names": [
+        "excavation_step_2/vertex/3",
+        "excavation_step_2/vertex/0"
+      ],
+      "points": [
+        [
+          -4.0,
+          3.0,
+          -8.0
+        ],
+        [
+          -4.0,
+          -3.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "9718d81e3bd79f65"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/4",
+      "vertex_names": [
+        "excavation_step_2/vertex/4",
+        "excavation_step_2/vertex/5"
+      ],
+      "points": [
+        [
+          -4.0,
+          -3.0,
+          -4.0
+        ],
+        [
+          4.0,
+          -3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "caf76df2e2b2dd99"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/5",
+      "vertex_names": [
+        "excavation_step_2/vertex/5",
+        "excavation_step_2/vertex/6"
+      ],
+      "points": [
+        [
+          4.0,
+          -3.0,
+          -4.0
+        ],
+        [
+          4.0,
+          3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "c324c8866e6bcb0e"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/6",
+      "vertex_names": [
+        "excavation_step_2/vertex/6",
+        "excavation_step_2/vertex/7"
+      ],
+      "points": [
+        [
+          4.0,
+          3.0,
+          -4.0
+        ],
+        [
+          -4.0,
+          3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "caa7e5b8bb0dacca"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/7",
+      "vertex_names": [
+        "excavation_step_2/vertex/7",
+        "excavation_step_2/vertex/4"
+      ],
+      "points": [
+        [
+          -4.0,
+          3.0,
+          -4.0
+        ],
+        [
+          -4.0,
+          -3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "9575394b29fff036"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/8",
+      "vertex_names": [
+        "excavation_step_2/vertex/0",
+        "excavation_step_2/vertex/4"
+      ],
+      "points": [
+        [
+          -4.0,
+          -3.0,
+          -8.0
+        ],
+        [
+          -4.0,
+          -3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "87975a335007b81f"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/9",
+      "vertex_names": [
+        "excavation_step_2/vertex/1",
+        "excavation_step_2/vertex/5"
+      ],
+      "points": [
+        [
+          4.0,
+          -3.0,
+          -8.0
+        ],
+        [
+          4.0,
+          -3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "3d347408cdadb625"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/10",
+      "vertex_names": [
+        "excavation_step_2/vertex/2",
+        "excavation_step_2/vertex/6"
+      ],
+      "points": [
+        [
+          4.0,
+          3.0,
+          -8.0
+        ],
+        [
+          4.0,
+          3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "a977a1bd6700a751"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/edge/11",
+      "vertex_names": [
+        "excavation_step_2/vertex/3",
+        "excavation_step_2/vertex/7"
+      ],
+      "points": [
+        [
+          -4.0,
+          3.0,
+          -8.0
+        ],
+        [
+          -4.0,
+          3.0,
+          -4.0
+        ]
+      ],
+      "topology_hash": "e5bebda3fc08f9ec"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/vertex/0",
+      "xyz": [
+        -4.0,
+        -3.0,
+        -8.0
+      ],
+      "topology_hash": "9323cdab10629f61"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/vertex/1",
+      "xyz": [
+        4.0,
+        -3.0,
+        -8.0
+      ],
+      "topology_hash": "73411a3a840e4cf3"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/vertex/2",
+      "xyz": [
+        4.0,
+        3.0,
+        -8.0
+      ],
+      "topology_hash": "dda10e4f08efaa84"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/vertex/3",
+      "xyz": [
+        -4.0,
+        3.0,
+        -8.0
+      ],
+      "topology_hash": "c644f186b7807d5a"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/vertex/4",
+      "xyz": [
+        -4.0,
+        -3.0,
+        -4.0
+      ],
+      "topology_hash": "807f9106d4e673fd"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/vertex/5",
+      "xyz": [
+        4.0,
+        -3.0,
+        -4.0
+      ],
+      "topology_hash": "7944f6a0cd0e2414"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/vertex/6",
+      "xyz": [
+        4.0,
+        3.0,
+        -4.0
+      ],
+      "topology_hash": "39ba4923de243aea"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "excavation_step_2",
+      "stable_name": "excavation_step_2/vertex/7",
+      "xyz": [
+        -4.0,
+        3.0,
+        -4.0
+      ],
+      "topology_hash": "35d948ec090fb139"
+    },
+    {
+      "kind": "solid",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/solid",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        8.0,
+        -16.0,
+        -8.0
+      ],
+      "role": "soil",
+      "material_id": "alpha_dense_sand",
+      "topology_hash": "22c0a6de4ac33466"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/face/xmin",
+      "side": "xmin",
+      "bounds": [
+        -18.0,
+        -18.0,
+        -8.0,
+        8.0,
+        -16.0,
+        -8.0
+      ],
+      "normal": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "area": 128.0,
+      "topology_hash": "4ae5c88522aaf7fe"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/face/xmax",
+      "side": "xmax",
+      "bounds": [
+        18.0,
+        18.0,
+        -8.0,
+        8.0,
+        -16.0,
+        -8.0
+      ],
+      "normal": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "area": 128.0,
+      "topology_hash": "74f241de31b0c473"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/face/ymin",
+      "side": "ymin",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        -8.0,
+        -16.0,
+        -8.0
+      ],
+      "normal": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "area": 288.0,
+      "topology_hash": "4ce837b86b146872"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/face/ymax",
+      "side": "ymax",
+      "bounds": [
+        -18.0,
+        18.0,
+        8.0,
+        8.0,
+        -16.0,
+        -8.0
+      ],
+      "normal": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "area": 288.0,
+      "topology_hash": "a10d6318229789f3"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/face/zmin",
+      "side": "zmin",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        8.0,
+        -16.0,
+        -16.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "area": 576.0,
+      "topology_hash": "6609efa760c2d413"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/face/zmax",
+      "side": "zmax",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        8.0,
+        -8.0,
+        -8.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "area": 576.0,
+      "topology_hash": "20dacce262bab696"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/0",
+      "vertex_names": [
+        "soil_lower/vertex/0",
+        "soil_lower/vertex/1"
+      ],
+      "points": [
+        [
+          -18.0,
+          -8.0,
+          -16.0
+        ],
+        [
+          18.0,
+          -8.0,
+          -16.0
+        ]
+      ],
+      "topology_hash": "4c971d5a25b292b6"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/1",
+      "vertex_names": [
+        "soil_lower/vertex/1",
+        "soil_lower/vertex/2"
+      ],
+      "points": [
+        [
+          18.0,
+          -8.0,
+          -16.0
+        ],
+        [
+          18.0,
+          8.0,
+          -16.0
+        ]
+      ],
+      "topology_hash": "5fe67838ac7f30ba"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/2",
+      "vertex_names": [
+        "soil_lower/vertex/2",
+        "soil_lower/vertex/3"
+      ],
+      "points": [
+        [
+          18.0,
+          8.0,
+          -16.0
+        ],
+        [
+          -18.0,
+          8.0,
+          -16.0
+        ]
+      ],
+      "topology_hash": "aa2e5710697cdf6a"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/3",
+      "vertex_names": [
+        "soil_lower/vertex/3",
+        "soil_lower/vertex/0"
+      ],
+      "points": [
+        [
+          -18.0,
+          8.0,
+          -16.0
+        ],
+        [
+          -18.0,
+          -8.0,
+          -16.0
+        ]
+      ],
+      "topology_hash": "483f957811685b70"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/4",
+      "vertex_names": [
+        "soil_lower/vertex/4",
+        "soil_lower/vertex/5"
+      ],
+      "points": [
+        [
+          -18.0,
+          -8.0,
+          -8.0
+        ],
+        [
+          18.0,
+          -8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "f4745bc892f30f6b"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/5",
+      "vertex_names": [
+        "soil_lower/vertex/5",
+        "soil_lower/vertex/6"
+      ],
+      "points": [
+        [
+          18.0,
+          -8.0,
+          -8.0
+        ],
+        [
+          18.0,
+          8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "877f629d49634e66"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/6",
+      "vertex_names": [
+        "soil_lower/vertex/6",
+        "soil_lower/vertex/7"
+      ],
+      "points": [
+        [
+          18.0,
+          8.0,
+          -8.0
+        ],
+        [
+          -18.0,
+          8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "e301dd2511287c74"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/7",
+      "vertex_names": [
+        "soil_lower/vertex/7",
+        "soil_lower/vertex/4"
+      ],
+      "points": [
+        [
+          -18.0,
+          8.0,
+          -8.0
+        ],
+        [
+          -18.0,
+          -8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "7cb43fe244452a95"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/8",
+      "vertex_names": [
+        "soil_lower/vertex/0",
+        "soil_lower/vertex/4"
+      ],
+      "points": [
+        [
+          -18.0,
+          -8.0,
+          -16.0
+        ],
+        [
+          -18.0,
+          -8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "872d1718ddddf48c"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/9",
+      "vertex_names": [
+        "soil_lower/vertex/1",
+        "soil_lower/vertex/5"
+      ],
+      "points": [
+        [
+          18.0,
+          -8.0,
+          -16.0
+        ],
+        [
+          18.0,
+          -8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "8a7d5e25356b80ad"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/10",
+      "vertex_names": [
+        "soil_lower/vertex/2",
+        "soil_lower/vertex/6"
+      ],
+      "points": [
+        [
+          18.0,
+          8.0,
+          -16.0
+        ],
+        [
+          18.0,
+          8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "6d4b845ea557d39e"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/edge/11",
+      "vertex_names": [
+        "soil_lower/vertex/3",
+        "soil_lower/vertex/7"
+      ],
+      "points": [
+        [
+          -18.0,
+          8.0,
+          -16.0
+        ],
+        [
+          -18.0,
+          8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "eb46e8bc30b3e13a"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/vertex/0",
+      "xyz": [
+        -18.0,
+        -8.0,
+        -16.0
+      ],
+      "topology_hash": "d85cfff4470d6583"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/vertex/1",
+      "xyz": [
+        18.0,
+        -8.0,
+        -16.0
+      ],
+      "topology_hash": "51a91b47afba142f"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/vertex/2",
+      "xyz": [
+        18.0,
+        8.0,
+        -16.0
+      ],
+      "topology_hash": "5d1cdc5c32f33b9d"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/vertex/3",
+      "xyz": [
+        -18.0,
+        8.0,
+        -16.0
+      ],
+      "topology_hash": "e272511135aca02b"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/vertex/4",
+      "xyz": [
+        -18.0,
+        -8.0,
+        -8.0
+      ],
+      "topology_hash": "03e1709de79208fe"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/vertex/5",
+      "xyz": [
+        18.0,
+        -8.0,
+        -8.0
+      ],
+      "topology_hash": "e26adc165ab129d0"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/vertex/6",
+      "xyz": [
+        18.0,
+        8.0,
+        -8.0
+      ],
+      "topology_hash": "a052c22e754810e9"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_lower",
+      "stable_name": "soil_lower/vertex/7",
+      "xyz": [
+        -18.0,
+        8.0,
+        -8.0
+      ],
+      "topology_hash": "038619b75dd80632"
+    },
+    {
+      "kind": "solid",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/solid",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        8.0,
+        -8.0,
+        0.0
+      ],
+      "role": "soil",
+      "material_id": "alpha_soft_clay",
+      "topology_hash": "b120560d46378b37"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/face/xmin",
+      "side": "xmin",
+      "bounds": [
+        -18.0,
+        -18.0,
+        -8.0,
+        8.0,
+        -8.0,
+        0.0
+      ],
+      "normal": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "area": 128.0,
+      "topology_hash": "02150ab731449f3b"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/face/xmax",
+      "side": "xmax",
+      "bounds": [
+        18.0,
+        18.0,
+        -8.0,
+        8.0,
+        -8.0,
+        0.0
+      ],
+      "normal": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "area": 128.0,
+      "topology_hash": "f6edbeea082158b2"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/face/ymin",
+      "side": "ymin",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        -8.0,
+        -8.0,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "area": 288.0,
+      "topology_hash": "f45cf960c5e9396b"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/face/ymax",
+      "side": "ymax",
+      "bounds": [
+        -18.0,
+        18.0,
+        8.0,
+        8.0,
+        -8.0,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "area": 288.0,
+      "topology_hash": "05c0c0924c3d37b7"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/face/zmin",
+      "side": "zmin",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        8.0,
+        -8.0,
+        -8.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "area": 576.0,
+      "topology_hash": "156b4d8bf6969697"
+    },
+    {
+      "kind": "face",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/face/zmax",
+      "side": "zmax",
+      "bounds": [
+        -18.0,
+        18.0,
+        -8.0,
+        8.0,
+        0.0,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "area": 576.0,
+      "topology_hash": "7c93232134d3df7c"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/0",
+      "vertex_names": [
+        "soil_upper/vertex/0",
+        "soil_upper/vertex/1"
+      ],
+      "points": [
+        [
+          -18.0,
+          -8.0,
+          -8.0
+        ],
+        [
+          18.0,
+          -8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "f038dd7540bfaa73"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/1",
+      "vertex_names": [
+        "soil_upper/vertex/1",
+        "soil_upper/vertex/2"
+      ],
+      "points": [
+        [
+          18.0,
+          -8.0,
+          -8.0
+        ],
+        [
+          18.0,
+          8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "af2891a34585953b"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/2",
+      "vertex_names": [
+        "soil_upper/vertex/2",
+        "soil_upper/vertex/3"
+      ],
+      "points": [
+        [
+          18.0,
+          8.0,
+          -8.0
+        ],
+        [
+          -18.0,
+          8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "31e378a139643c6f"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/3",
+      "vertex_names": [
+        "soil_upper/vertex/3",
+        "soil_upper/vertex/0"
+      ],
+      "points": [
+        [
+          -18.0,
+          8.0,
+          -8.0
+        ],
+        [
+          -18.0,
+          -8.0,
+          -8.0
+        ]
+      ],
+      "topology_hash": "80bbfa588c6af091"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/4",
+      "vertex_names": [
+        "soil_upper/vertex/4",
+        "soil_upper/vertex/5"
+      ],
+      "points": [
+        [
+          -18.0,
+          -8.0,
+          0.0
+        ],
+        [
+          18.0,
+          -8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "9d68a30f5f90d94b"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/5",
+      "vertex_names": [
+        "soil_upper/vertex/5",
+        "soil_upper/vertex/6"
+      ],
+      "points": [
+        [
+          18.0,
+          -8.0,
+          0.0
+        ],
+        [
+          18.0,
+          8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "47b73c9135092156"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/6",
+      "vertex_names": [
+        "soil_upper/vertex/6",
+        "soil_upper/vertex/7"
+      ],
+      "points": [
+        [
+          18.0,
+          8.0,
+          0.0
+        ],
+        [
+          -18.0,
+          8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "a7adeb6d897b1b44"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/7",
+      "vertex_names": [
+        "soil_upper/vertex/7",
+        "soil_upper/vertex/4"
+      ],
+      "points": [
+        [
+          -18.0,
+          8.0,
+          0.0
+        ],
+        [
+          -18.0,
+          -8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "0fc7bf8f93ac4edb"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/8",
+      "vertex_names": [
+        "soil_upper/vertex/0",
+        "soil_upper/vertex/4"
+      ],
+      "points": [
+        [
+          -18.0,
+          -8.0,
+          -8.0
+        ],
+        [
+          -18.0,
+          -8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "db5d6d546bbe0ccf"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/9",
+      "vertex_names": [
+        "soil_upper/vertex/1",
+        "soil_upper/vertex/5"
+      ],
+      "points": [
+        [
+          18.0,
+          -8.0,
+          -8.0
+        ],
+        [
+          18.0,
+          -8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "edc5511f8af72e55"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/10",
+      "vertex_names": [
+        "soil_upper/vertex/2",
+        "soil_upper/vertex/6"
+      ],
+      "points": [
+        [
+          18.0,
+          8.0,
+          -8.0
+        ],
+        [
+          18.0,
+          8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "4f55b77f4cad4970"
+    },
+    {
+      "kind": "edge",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/edge/11",
+      "vertex_names": [
+        "soil_upper/vertex/3",
+        "soil_upper/vertex/7"
+      ],
+      "points": [
+        [
+          -18.0,
+          8.0,
+          -8.0
+        ],
+        [
+          -18.0,
+          8.0,
+          0.0
+        ]
+      ],
+      "topology_hash": "b0e6282d41077d38"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/vertex/0",
+      "xyz": [
+        -18.0,
+        -8.0,
+        -8.0
+      ],
+      "topology_hash": "d79217f102e3751d"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/vertex/1",
+      "xyz": [
+        18.0,
+        -8.0,
+        -8.0
+      ],
+      "topology_hash": "0ee9b2de4e897a7e"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/vertex/2",
+      "xyz": [
+        18.0,
+        8.0,
+        -8.0
+      ],
+      "topology_hash": "d54ce3800ccc260e"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/vertex/3",
+      "xyz": [
+        -18.0,
+        8.0,
+        -8.0
+      ],
+      "topology_hash": "082db52b01c15b91"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/vertex/4",
+      "xyz": [
+        -18.0,
+        -8.0,
+        0.0
+      ],
+      "topology_hash": "af613a5447cd71a7"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/vertex/5",
+      "xyz": [
+        18.0,
+        -8.0,
+        0.0
+      ],
+      "topology_hash": "42f23884f79f23d4"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/vertex/6",
+      "xyz": [
+        18.0,
+        8.0,
+        0.0
+      ],
+      "topology_hash": "dc0e1b8a0ae1d128"
+    },
+    {
+      "kind": "vertex",
+      "source_entity_id": "soil_upper",
+      "stable_name": "soil_upper/vertex/7",
+      "xyz": [
+        -18.0,
+        8.0,
+        0.0
+      ],
+      "topology_hash": "47d5e566862f638f"
+    }
+  ],
+  "metadata": {
+    "naming_scheme": "source_entity_id/topology_kind/index_or_side",
+    "hash_precision": 9,
+    "topology_source": "aabb_facade_or_imported_bounds",
+    "native_brep_topology": false
+  }
+}

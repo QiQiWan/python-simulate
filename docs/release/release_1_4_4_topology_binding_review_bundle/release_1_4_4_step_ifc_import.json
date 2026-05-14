@@ -1,0 +1,104 @@
+{
+  "contract": "geoai_simkit_step_ifc_solid_topology_import_v1",
+  "ok": true,
+  "status": "step_ifc_solid_topology_bound",
+  "source_path": "/mnt/data/work_144/docs/release/release_1_4_4_topology_binding_review_bundle/sample_step_import_1_4_4.step",
+  "source_format": "step",
+  "backend": "step_topology_surrogate",
+  "native_backend_used": false,
+  "fallback_used": true,
+  "native_brep_certified": false,
+  "imported_solid_count": 2,
+  "imported_volume_ids": [
+    "imported_step_step_demo_wall",
+    "imported_step_step_demo_slab"
+  ],
+  "shape_ids": [
+    "shape_imported_step_step_demo_wall",
+    "shape_imported_step_step_demo_slab"
+  ],
+  "topology_record_count": 54,
+  "serialized_ref_count": 2,
+  "reference_dir": "/mnt/data/work_144/docs/release/release_1_4_4_topology_binding_review_bundle/cad_import_refs",
+  "warnings": [
+    "Native STEP importer unavailable; imported explicit STEP topology surrogate and bound it to CadShapeStore."
+  ],
+  "metadata": {
+    "capability": {
+      "contract": "geoai_simkit_step_ifc_import_capability_v1",
+      "gmsh_available": false,
+      "gmsh_occ_import_shapes": false,
+      "ifcopenshell_available": false,
+      "ocp_available": false,
+      "pythonocc_available": false,
+      "native_step_possible": false,
+      "native_ifc_possible": false,
+      "native_brep_serialization_possible": false,
+      "native_topology_enumeration_possible": false,
+      "errors": {
+        "gmsh": "ModuleNotFoundError: No module named 'gmsh'",
+        "ifcopenshell": "ModuleNotFoundError: No module named 'ifcopenshell'",
+        "OCP": "ModuleNotFoundError: No module named 'OCP'",
+        "OCC.Core": "ModuleNotFoundError: No module named 'OCC'",
+        "native_brep.OCP.TopoDS": "ModuleNotFoundError: No module named 'OCP'",
+        "native_brep.OCC.Core.TopoDS": "ModuleNotFoundError: No module named 'OCC'",
+        "native_brep.OCP.BRepTools": "ModuleNotFoundError: No module named 'OCP'",
+        "native_brep.OCC.Core.BRepTools": "ModuleNotFoundError: No module named 'OCC'",
+        "native_brep.OCP.TopExp": "ModuleNotFoundError: No module named 'OCP'",
+        "native_brep.OCC.Core.TopExp": "ModuleNotFoundError: No module named 'OCC'",
+        "native_brep.ifcopenshell.geom": "ModuleNotFoundError: No module named 'ifcopenshell'"
+      },
+      "native_binding_policy": "native only when STEP/IFC runtime imports exact solids; surrogate imports are explicitly marked"
+    },
+    "cad_shape_store_summary": {
+      "contract": "geoproject_cad_shape_store_v2",
+      "shape_count": 2,
+      "serialized_ref_count": 2,
+      "topology_record_count": 54,
+      "entity_binding_count": 2,
+      "topology_binding_count": 0,
+      "operation_count": 1,
+      "native_shape_count": 0,
+      "brep_serialized_count": 2,
+      "native_brep_certified_count": 0,
+      "face_binding_count": 0,
+      "edge_binding_count": 0,
+      "metadata": {
+        "last_step_ifc_import": {
+          "source_path": "/mnt/data/work_144/docs/release/release_1_4_4_topology_binding_review_bundle/sample_step_import_1_4_4.step",
+          "source_format": "step",
+          "shape_ids": [
+            "shape_imported_step_step_demo_wall",
+            "shape_imported_step_step_demo_slab"
+          ],
+          "native_brep_certified": false
+        },
+        "summary": {
+          "contract": "geoproject_cad_shape_store_v2",
+          "shape_count": 2,
+          "serialized_ref_count": 2,
+          "topology_record_count": 54,
+          "entity_binding_count": 2,
+          "topology_binding_count": 0,
+          "operation_count": 1,
+          "native_shape_count": 0,
+          "brep_serialized_count": 2,
+          "native_brep_certified_count": 0,
+          "face_binding_count": 0,
+          "edge_binding_count": 0,
+          "metadata": {
+            "last_step_ifc_import": {
+              "source_path": "/mnt/data/work_144/docs/release/release_1_4_4_topology_binding_review_bundle/sample_step_import_1_4_4.step",
+              "source_format": "step",
+              "shape_ids": [
+                "shape_imported_step_step_demo_wall",
+                "shape_imported_step_step_demo_slab"
+              ],
+              "native_brep_certified": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

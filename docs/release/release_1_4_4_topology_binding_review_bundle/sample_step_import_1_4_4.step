@@ -1,0 +1,8 @@
+ISO-10303-21;
+HEADER;FILE_DESCRIPTION(('GeoAI SimKit 1.4.4 sample'),'2;1');ENDSEC;
+DATA;
+#1=CARTESIAN_POINT('',(-8.0,-5.0,-8.4));
+#2=CARTESIAN_POINT('',(8.0,5.0,0.0));
+/* GEOAI_SIMKIT_SOLIDS: {"solids": [{"id": "step_demo_wall", "name": "STEP Demo Retaining Wall", "bounds": [-8.0, -7.2, -5.0, 5.0, -8.0, 0.0], "role": "imported_wall", "material_id": "concrete"}, {"id": "step_demo_slab", "name": "STEP Demo Base Slab", "bounds": [-8.0, 8.0, -5.0, 5.0, -8.4, -8.0], "role": "imported_slab", "material_id": "concrete"}]} */
+ENDSEC;
+END-ISO-10303-21;
